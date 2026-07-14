@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
       secure: true,
     });
     const date = new Date().toISOString().slice(0, 10).replaceAll("-", "/");
-    const objectName = `home-inventory/items/${date}/${randomUUID()}.${extension}`;
+    const objectName = `${config.directory}/items/${date}/${randomUUID()}.${extension}`;
     const result = await client.put(objectName, Buffer.from(await file.arrayBuffer()), {
       headers: { "Content-Type": file.type, "Cache-Control": "public, max-age=31536000, immutable" },
     });

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiError } from "@/lib/api";
-import { chatCompletionsUrl, getAiConfig } from "@/lib/ai";
+import { anthropicMessagesUrl, chatCompletionsUrl, getAiConfig } from "@/lib/ai";
 import { aiAnalyzeSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -55,7 +55,7 @@ function extractAnalysis(result: unknown) {
   if (parsed) return parsed;
   const directContent = asRecord(message?.content);
   if (directContent) return directContent;
-  const text = contentText(message?.content) || contentText(choice?.text) || contentText(root?.output_text) || contentText(root?.output);
+  const text = contentText(message?.content) || contentText(choice?.text) || contentText(root?.content) || contentText(root?.output_text) || contentText(root?.output);
   if (!text) throw new AiRequestError("AI 接口未返回可解析内容，请确认该渠道支持 Chat Completions 格式");
   return extractJson(text);
 }
@@ -105,26 +105,32 @@ export async function POST(request: NextRequest) {
     const userContent = input.imageUrl
       ? [{ type: "text", text }, { type: "image_url", image_url: { url: input.imageUrl, detail: "low" } }]
       : text;
-    let body: JsonRecord = {
+    const system = "你是家庭物品管理助手，擅长识别日用品、推断合理分类、保质期风险和存储方式。所有结论要保守，并明确不确定性。";
+    let body: JsonRecord = config.protocol === "anthropic" ? {
       model: config.model,
-      messages: [
-        { role: "system", content: "你是家庭物品管理助手，擅长识别日用品、推断合理分类、保质期风险和存储方式。所有结论要保守，并明确不确定性。" },
-        { role: "user", content: userContent },
-      ],
+      max_tokens: 1400,
+      system,
+      messages: [{ role: "user", content: input.imageUrl ? [{ type: "text", text }, { type: "image", source: { type: "url", url: input.imageUrl } }] : text }],
+      temperature: 0.2,
+    } : {
+      model: config.model,
+      messages: [{ role: "system", content: system }, { role: "user", content: userContent }],
       temperature: 0.2,
       response_format: { type: "json_object" },
     };
 
-    const call = (payload: Record<string, unknown>) => fetch(chatCompletionsUrl(config.baseUrl), {
+    const call = (payload: Record<string, unknown>) => fetch(config.protocol === "anthropic" ? anthropicMessagesUrl(config.baseUrl) : chatCompletionsUrl(config.baseUrl), {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` },
+      headers: config.protocol === "anthropic"
+        ? { "Content-Type": "application/json", "x-api-key": config.apiKey, "anthropic-version": "2023-06-01" }
+        : { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(60000),
     });
     let response: Response;
     try {
       response = await call(body);
-      for (let attempt = 0; !response.ok && attempt < 2 && [400, 422].includes(response.status); attempt += 1) {
+      for (let attempt = 0; config.protocol === "openai" && !response.ok && attempt < 2 && [400, 422].includes(response.status); attempt += 1) {
         const detail = providerErrorDetail(await response.text());
         const fallback = { ...body };
         let changed = false;

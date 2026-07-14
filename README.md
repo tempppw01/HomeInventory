@@ -53,9 +53,10 @@ docker compose down
 
 进入应用的“设置”页面，可以配置：
 
-- OpenAI 兼容接口：用于物品名称补全、图片识别和保质期分析
-- 阿里云 OSS：用于保存物品图片
-- 浅色、深色或跟随系统主题
+- AI 模型接口：可快捷选择 OpenAI、DeepSeek、火山引擎、阿里千问、Gemini 或 Claude 官方端点
+- 阿里云 OSS：用于保存物品图片，并可指定 Bucket 内的存储目录
+
+浅色、深色或跟随系统主题可直接在页面右上角切换。
 
 如果 AI 接口运行在宿主机，而应用运行在 Docker 中，请使用 `host.docker.internal`，不要填写 `localhost`。
 

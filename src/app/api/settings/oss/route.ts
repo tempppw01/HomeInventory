@@ -15,6 +15,7 @@ export async function GET() {
       region: config?.region ?? "",
       endpoint: config?.endpoint ?? "",
       bucket: config?.bucket ?? "",
+      directory: config?.directory ?? "home-inventory",
       accessKeyId: config?.accessKeyId ?? "",
       accessKeySecretConfigured: Boolean(config?.accessKeySecret),
       publicBaseUrl: config?.publicBaseUrl ?? "",

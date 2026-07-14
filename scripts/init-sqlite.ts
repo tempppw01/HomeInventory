@@ -26,6 +26,10 @@ const statements = [
     "expiryDate" DATETIME,
     "imageUrl" TEXT,
     "notes" TEXT,
+    "aiSummary" TEXT,
+    "aiStorageAdvice" TEXT,
+    "aiUsageAdvice" TEXT,
+    "aiReplenishmentAdvice" TEXT,
     "locationId" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
@@ -48,6 +52,7 @@ const statements = [
     "region" TEXT NOT NULL,
     "endpoint" TEXT,
     "bucket" TEXT NOT NULL,
+    "directory" TEXT NOT NULL DEFAULT 'home-inventory',
     "accessKeyId" TEXT NOT NULL,
     "accessKeySecret" TEXT NOT NULL,
     "publicBaseUrl" TEXT,
@@ -107,6 +112,15 @@ async function main() {
   }
   if (!columns.some((column) => column.name === "remainingPercent")) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "Item" ADD COLUMN "remainingPercent" REAL NOT NULL DEFAULT 100`);
+  }
+  for (const column of ["aiSummary", "aiStorageAdvice", "aiUsageAdvice", "aiReplenishmentAdvice"]) {
+    if (!columns.some((existing) => existing.name === column)) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Item" ADD COLUMN "${column}" TEXT`);
+    }
+  }
+  const ossColumns = await prisma.$queryRawUnsafe<Array<{ name: string }>>(`PRAGMA table_info("OssSetting")`);
+  if (!ossColumns.some((column) => column.name === "directory")) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "OssSetting" ADD COLUMN "directory" TEXT NOT NULL DEFAULT 'home-inventory'`);
   }
   await prisma.$executeRawUnsafe(`UPDATE "Item" SET "expiryDate" = NULL WHERE "type" = 'DURABLE' AND "expiryDate" IS NOT NULL`);
   await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Item_itemCode_key" ON "Item"("itemCode")`);

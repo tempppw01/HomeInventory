@@ -19,6 +19,10 @@ export const itemSchema = z.object({
   imageUrl: z.union([z.string().url().max(1000), z.literal(""), z.null()]).optional().transform((value) => value || null),
   locationId: z.union([z.string(), z.literal(""), z.null()]).optional().transform((value) => value || null),
   notes: z.union([z.string().max(500), z.null()]).optional().transform((value) => value || null),
+  aiSummary: z.union([z.string().max(800), z.null()]).optional().transform((value) => value || null),
+  aiStorageAdvice: z.union([z.string().max(800), z.null()]).optional().transform((value) => value || null),
+  aiUsageAdvice: z.union([z.string().max(800), z.null()]).optional().transform((value) => value || null),
+  aiReplenishmentAdvice: z.union([z.string().max(800), z.null()]).optional().transform((value) => value || null),
   recordPurchase: z.boolean().optional().default(false),
   purchaseStore: z.union([z.string().trim().max(80), z.literal(""), z.null()]).optional().transform((value) => value || null),
 });
@@ -44,6 +48,7 @@ export const ossSettingSchema = z.object({
   region: z.string().trim().min(1, "请输入 OSS Region").max(80),
   endpoint: z.union([z.string().trim().max(200), z.literal(""), z.null()]).optional().transform((value) => value || null),
   bucket: z.string().trim().min(1, "请输入 Bucket").max(100),
+  directory: z.string().trim().min(1, "请输入 OSS 存储目录").max(120).regex(/^[a-zA-Z0-9/_-]+$/, "目录只能包含字母、数字、斜杠、下划线和短横线").refine((value) => value.replace(/^\/+|\/+$/g, "").length > 0, "请输入 OSS 存储目录").refine((value) => !value.split("/").includes(".."), "目录不能包含 ..").transform((value) => value.replace(/^\/+|\/+$/g, "")),
   accessKeyId: z.string().trim().min(1, "请输入 AccessKey ID").max(200),
   accessKeySecret: z.string().max(300).optional(),
   publicBaseUrl: z.union([z.string().url().max(500), z.literal(""), z.null()]).optional().transform((value) => value ? value.replace(/\/$/, "") : null),

@@ -23,6 +23,10 @@ export interface Item {
   purchaseDate: string | null;
   expiryDate: string | null;
   notes: string | null;
+  aiSummary: string | null;
+  aiStorageAdvice: string | null;
+  aiUsageAdvice: string | null;
+  aiReplenishmentAdvice: string | null;
   imageUrl: string | null;
   locationId: string | null;
   location: Location | null;

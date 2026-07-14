@@ -28,25 +28,29 @@ model Location {
 }
 
 model Item {
-  id               String        @id @default(cuid())
-  itemCode         String?       @unique
-  name             String
-  category         String
-  type             ItemType      @default(DURABLE)
-  quantity         Float         @default(1)
-  minQuantity      Float         @default(0)
-  remainingPercent Float         @default(100)
-  unit             String        @default("件")
-  price            Float?
-  purchaseDate     DateTime?
-  expiryDate       DateTime?
-  imageUrl         String?       @db.Text
-  notes            String?       @db.Text
-  locationId       String?
-  location         Location?     @relation(fields: [locationId], references: [id], onDelete: SetNull)
-  priceRecords     PriceRecord[]
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  id                    String        @id @default(cuid())
+  itemCode              String?       @unique
+  name                  String
+  category              String
+  type                  ItemType      @default(DURABLE)
+  quantity              Float         @default(1)
+  minQuantity           Float         @default(0)
+  remainingPercent      Float         @default(100)
+  unit                  String        @default("件")
+  price                 Float?
+  purchaseDate          DateTime?
+  expiryDate            DateTime?
+  imageUrl              String?       @db.Text
+  notes                 String?       @db.Text
+  aiSummary             String?       @db.Text
+  aiStorageAdvice       String?       @db.Text
+  aiUsageAdvice         String?       @db.Text
+  aiReplenishmentAdvice String?       @db.Text
+  locationId            String?
+  location              Location?     @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  priceRecords          PriceRecord[]
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
 
   @@index([type])
   @@index([category])
@@ -95,6 +99,7 @@ model OssSetting {
   region          String
   endpoint        String?
   bucket          String
+  directory       String   @default("home-inventory")
   accessKeyId     String
   accessKeySecret String
   publicBaseUrl   String?  @db.Text

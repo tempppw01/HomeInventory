@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiError } from "@/lib/api";
 import { modelsUrl } from "@/lib/ai";
+import { providerForBaseUrl } from "@/lib/ai-providers";
 import { prisma } from "@/lib/prisma";
 import { aiModelsSchema } from "@/lib/validation";
 
@@ -39,10 +40,13 @@ export async function POST(request: NextRequest) {
 
     if (!apiKey) return NextResponse.json({ error: "请先填写 API Key，再展开模型列表" }, { status: 400 });
 
+    const provider = providerForBaseUrl(baseUrl);
     let response: Response;
     try {
       response = await fetch(modelsUrl(baseUrl), {
-        headers: { Accept: "application/json", Authorization: `Bearer ${apiKey}` },
+        headers: provider.protocol === "anthropic"
+          ? { Accept: "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" }
+          : { Accept: "application/json", Authorization: `Bearer ${apiKey}` },
         cache: "no-store",
         signal: AbortSignal.timeout(20000),
       });
