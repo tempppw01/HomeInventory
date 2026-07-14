@@ -50,9 +50,11 @@ export const ossSettingSchema = z.object({
 
 export const aiSettingSchema = z.object({
   baseUrl: z.string().trim().url("请输入有效的接口地址").max(500).transform((value) => value.replace(/\/$/, "")),
-  apiKey: z.string().max(500).optional(),
+  apiKey: z.string().trim().max(500).optional(),
   model: z.string().trim().min(1, "请输入模型名称").max(120),
 });
+
+export const aiModelsSchema = aiSettingSchema.pick({ baseUrl: true, apiKey: true });
 
 export const aiAnalyzeSchema = z.object({
   action: z.enum(["identify", "shelf_life", "full"]).default("full"),

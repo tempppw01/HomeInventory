@@ -4,6 +4,8 @@
 
 适合部署在家用服务器、NAS 或普通电脑上。默认使用 SQLite，无需单独安装数据库。
 
+👉 [在线体验 HomeInventory](https://homeinventory-test.up.railway.app/)
+
 ## 能做什么
 
 - 记录物品、数量、分类、位置、图片和保质期

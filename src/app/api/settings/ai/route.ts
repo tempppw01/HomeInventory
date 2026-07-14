@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiError } from "@/lib/api";
-import { aiIsManagedByEnvironment, getAiConfig } from "@/lib/ai";
+import { aiIsManagedByEnvironment, DEFAULT_AI_MODEL, getAiConfig } from "@/lib/ai";
 import { prisma } from "@/lib/prisma";
 import { aiSettingSchema } from "@/lib/validation";
 
@@ -13,7 +13,7 @@ export async function GET() {
       configured: Boolean(config),
       managedByEnvironment: aiIsManagedByEnvironment(),
       baseUrl: config?.baseUrl ?? "https://api.openai.com/v1",
-      model: config?.model ?? "gpt-4.1-mini",
+      model: config?.model ?? DEFAULT_AI_MODEL,
       apiKeyConfigured: Boolean(config?.apiKey),
     });
   } catch (error) {

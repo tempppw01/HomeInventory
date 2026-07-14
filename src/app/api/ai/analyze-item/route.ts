@@ -72,6 +72,13 @@ function providerErrorDetail(raw: string) {
   return raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 400) || "上游接口未提供错误详情";
 }
 
+function providerFailure(status: number, raw: string) {
+  const detail = providerErrorDetail(raw);
+  if (status === 401) return `API Key 无效或已过期，请在设置中重新填写后再试。上游返回：${detail}`;
+  if (status === 403) return `API Key 没有访问当前模型的权限。上游返回：${detail}`;
+  return `AI 接口请求失败（${status}）：${detail}`;
+}
+
 function connectionError(error: unknown, baseUrl: string) {
   const name = error instanceof Error ? error.name : "";
   if (name === "TimeoutError" || name === "AbortError") return "AI 接口连接超时，请检查接口地址、网络和渠道状态";
@@ -136,7 +143,7 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       return NextResponse.json({ error: connectionError(error, config.baseUrl) }, { status: 502 });
     }
-    if (!response.ok) return NextResponse.json({ error: `AI 接口请求失败（${response.status}）：${providerErrorDetail(await response.text())}` }, { status: 502 });
+    if (!response.ok) return NextResponse.json({ error: providerFailure(response.status, await response.text()) }, { status: 502 });
     const raw = await response.text();
     let result: JsonRecord;
     try {
