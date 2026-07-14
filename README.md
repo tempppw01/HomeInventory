@@ -103,6 +103,8 @@ docker compose up -d
 | `SEED_DEMO_DATA` | `false` | 容器启动时是否写入演示数据 |
 | `HOME_INVENTORY_IMAGE` | `home-inventory:local` | Compose 使用的应用镜像 |
 
+直接运行 Docker 镜像且未设置数据库变量时，会自动使用 `file:/app/data/home-inventory.db`。请挂载 `/app/data` 目录，否则删除容器后 SQLite 数据也会丢失。
+
 ## 数据备份
 
 SQLite 部署只需定期备份 `home_inventory_data` 卷中的 `home-inventory.db`。MySQL 部署建议使用 `mysqldump` 定期导出，并将备份保存在容器卷之外。
