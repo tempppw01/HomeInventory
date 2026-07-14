@@ -17,6 +17,7 @@ export interface Item {
   type: ItemType;
   quantity: number;
   minQuantity: number;
+  remainingPercent: number;
   unit: string;
   price: number | null;
   purchaseDate: string | null;

@@ -11,6 +11,7 @@ export const itemSchema = z.object({
   type: z.enum(["DURABLE", "CONSUMABLE"]),
   quantity: z.coerce.number().min(0).max(999999),
   minQuantity: z.coerce.number().min(0).max(999999).default(0),
+  remainingPercent: z.coerce.number().min(0).max(100).default(100),
   unit: z.string().trim().min(1).max(12),
   price: z.union([z.coerce.number().min(0), z.literal(""), z.null()]).optional().transform((value) => value === "" || value == null ? null : value),
   purchaseDate: optionalDate,

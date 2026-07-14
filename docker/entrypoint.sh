@@ -41,5 +41,6 @@ case "${SEED_DEMO_DATA:-auto}" in
 esac
 
 npx tsx /app/scripts/backfill-item-codes.ts
+npx tsx /app/scripts/normalize-items.ts
 
 exec npm start

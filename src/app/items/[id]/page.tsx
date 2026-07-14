@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Archive, CalendarDays, MapPin, Package } from "lucide-react";
+import { Archive, CalendarDays, Droplets, MapPin, Package, WalletCards } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { dailyUsageCost, isLiquidConsumable } from "@/lib/item-metrics";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,8 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
     include: { location: true },
   });
   if (!item) notFound();
+  const dailyCost = dailyUsageCost(item);
+  const showRemaining = isLiquidConsumable(item);
 
   return (
     <main className="mx-auto min-h-screen max-w-2xl px-4 py-8 sm:py-14">
@@ -28,10 +31,12 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
           <div className="mb-3 text-xs font-bold tracking-wider muted">{item.itemCode || item.id}</div>
           <h1 className="m-0 text-3xl font-black">{item.name}</h1>
           <p className="mt-2 text-sm muted">{item.category} · {item.type === "CONSUMABLE" ? "消耗品" : "耐用品"}</p>
-          <div className="mt-7 grid gap-3 sm:grid-cols-3">
+          <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Info icon={Package} label="当前数量" value={`${item.quantity} ${item.unit}`} />
             <Info icon={MapPin} label="存放位置" value={item.location?.name || "未设置"} />
             <Info icon={CalendarDays} label="录入时间" value={item.createdAt.toLocaleDateString("zh-CN")} />
+            {dailyCost && <Info icon={WalletCards} label="日均使用成本" value={`¥${dailyCost.cost.toFixed(dailyCost.cost >= 10 ? 0 : 2)} / 天`} />}
+            {showRemaining && <Info icon={Droplets} label="当前剩余量" value={`${Math.round(item.remainingPercent)}%`} />}
           </div>
           {item.notes && <div className="mt-6 rounded-2xl p-4 text-sm leading-6" style={{ background: "var(--surface-soft)" }}>{item.notes}</div>}
         </div>

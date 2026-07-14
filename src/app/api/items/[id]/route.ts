@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { itemPatchSchema } from "@/lib/validation";
 import { apiError } from "@/lib/api";
+import { isLiquidConsumable } from "@/lib/item-metrics";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -22,8 +23,11 @@ export async function GET(_: NextRequest, { params }: Context) {
 export async function PATCH(request: NextRequest, { params }: Context) {
   try {
     const { id } = await params;
-    const { recordPurchase, purchaseStore, ...data } = itemPatchSchema.parse(await request.json());
+    const { recordPurchase, purchaseStore, ...parsed } = itemPatchSchema.parse(await request.json());
     const item = await prisma.$transaction(async (tx) => {
+      const existing = await tx.item.findUniqueOrThrow({ where: { id } });
+      const nextType = parsed.type ?? existing.type;
+      const data = nextType === "DURABLE" ? { ...parsed, expiryDate: null } : parsed;
       const updated = await tx.item.update({ where: { id }, data, include: { location: true } });
       if (recordPurchase && updated.price != null) {
         const quantity = Math.max(data.quantity ?? updated.quantity, 1);
@@ -32,7 +36,8 @@ export async function PATCH(request: NextRequest, { params }: Context) {
       return updated;
     });
 
-    if (item.type === "CONSUMABLE" && item.minQuantity > 0 && item.quantity <= item.minQuantity) {
+    const needsRestock = item.type === "CONSUMABLE" && ((item.minQuantity > 0 && item.quantity <= item.minQuantity) || (isLiquidConsumable(item) && item.remainingPercent <= 20));
+    if (needsRestock) {
       const existing = await prisma.shoppingItem.findFirst({ where: { name: item.name, status: "PENDING" } });
       if (!existing) {
         await prisma.shoppingItem.create({

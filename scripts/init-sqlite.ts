@@ -19,6 +19,7 @@ const statements = [
     "type" TEXT NOT NULL DEFAULT 'DURABLE',
     "quantity" REAL NOT NULL DEFAULT 1,
     "minQuantity" REAL NOT NULL DEFAULT 0,
+    "remainingPercent" REAL NOT NULL DEFAULT 100,
     "unit" TEXT NOT NULL DEFAULT '件',
     "price" REAL,
     "purchaseDate" DATETIME,
@@ -104,6 +105,10 @@ async function main() {
   if (!columns.some((column) => column.name === "itemCode")) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "Item" ADD COLUMN "itemCode" TEXT`);
   }
+  if (!columns.some((column) => column.name === "remainingPercent")) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Item" ADD COLUMN "remainingPercent" REAL NOT NULL DEFAULT 100`);
+  }
+  await prisma.$executeRawUnsafe(`UPDATE "Item" SET "expiryDate" = NULL WHERE "type" = 'DURABLE' AND "expiryDate" IS NOT NULL`);
   await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Item_itemCode_key" ON "Item"("itemCode")`);
   console.log("SQLite schema is ready.");
 }

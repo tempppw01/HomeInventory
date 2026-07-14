@@ -1,6 +1,6 @@
 {
   "name": "home-inventory",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "private": true,
   "engines": {
     "node": ">=22"
@@ -16,7 +16,8 @@
     "db:init:sqlite": "tsx scripts/init-sqlite.ts",
     "db:seed": "tsx prisma/seed.ts",
     "db:backfill": "tsx scripts/backfill-item-codes.ts",
-    "db:setup": "npm run db:generate && npm run db:init:sqlite && npm run db:seed && npm run db:backfill"
+    "db:normalize": "tsx scripts/normalize-items.ts",
+    "db:setup": "npm run db:generate && npm run db:init:sqlite && npm run db:seed && npm run db:backfill && npm run db:normalize"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",

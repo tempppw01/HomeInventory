@@ -37,8 +37,8 @@ async function main() {
 
     const [rice, milk, detergent] = await Promise.all([
       tx.item.create({ data: { itemCode: "INV-DEMO-001", name: "大米", category: "食品", type: "CONSUMABLE", quantity: 3.5, minQuantity: 2, unit: "kg", price: 32.8, purchaseDate: daysFromNow(-6), expiryDate: daysFromNow(120), locationId: kitchen.id, notes: "示范数据，可直接编辑或删除" } }),
-      tx.item.create({ data: { itemCode: "INV-DEMO-002", name: "牛奶", category: "饮品", type: "CONSUMABLE", quantity: 2, minQuantity: 3, unit: "盒", price: 14.9, purchaseDate: daysFromNow(-2), expiryDate: daysFromNow(5), locationId: kitchen.id, notes: "用于体验临期与低库存提醒" } }),
-      tx.item.create({ data: { itemCode: "INV-DEMO-003", name: "洗衣液", category: "清洁", type: "CONSUMABLE", quantity: 0.6, minQuantity: 1, unit: "瓶", price: 39, purchaseDate: daysFromNow(-18), locationId: bathroom.id, notes: "用于体验消耗品补货提醒" } }),
+      tx.item.create({ data: { itemCode: "INV-DEMO-002", name: "牛奶", category: "饮品", type: "CONSUMABLE", quantity: 2, minQuantity: 3, remainingPercent: 70, unit: "盒", price: 14.9, purchaseDate: daysFromNow(-2), expiryDate: daysFromNow(5), locationId: kitchen.id, notes: "用于体验临期、低库存和剩余量调节" } }),
+      tx.item.create({ data: { itemCode: "INV-DEMO-003", name: "洗衣液", category: "清洁", type: "CONSUMABLE", quantity: 0.6, minQuantity: 1, remainingPercent: 60, unit: "瓶", price: 39, purchaseDate: daysFromNow(-18), locationId: bathroom.id, notes: "拖动卡片上的瓶身可以调整剩余量" } }),
       tx.item.create({ data: { itemCode: "INV-DEMO-004", name: "投影仪", category: "家电", type: "DURABLE", quantity: 1, unit: "台", price: 3299, purchaseDate: daysFromNow(-120), locationId: livingRoom.id } }),
       tx.item.create({ data: { itemCode: "INV-DEMO-005", name: "露营帐篷", category: "户外", type: "DURABLE", quantity: 1, unit: "顶", price: 699, purchaseDate: daysFromNow(-45), locationId: storage.id } }),
     ]);

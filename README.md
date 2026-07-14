@@ -133,4 +133,4 @@ docker compose up -d
 
 项目使用 Next.js、React、TypeScript、Prisma 和 Tailwind CSS，可部署到 `linux/amd64` 与 `linux/arm64` 设备。
 
-当前版本：`0.0.3`
+当前版本：`0.0.4`
