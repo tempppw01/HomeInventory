@@ -45,3 +45,27 @@ export const ossSettingSchema = z.object({
   accessKeySecret: z.string().max(300).optional(),
   publicBaseUrl: z.union([z.string().url().max(500), z.literal(""), z.null()]).optional().transform((value) => value ? value.replace(/\/$/, "") : null),
 });
+
+export const aiSettingSchema = z.object({
+  baseUrl: z.string().trim().url("请输入有效的接口地址").max(500).transform((value) => value.replace(/\/$/, "")),
+  apiKey: z.string().max(500).optional(),
+  model: z.string().trim().min(1, "请输入模型名称").max(120),
+});
+
+export const aiAnalyzeSchema = z.object({
+  action: z.enum(["identify", "shelf_life", "full"]).default("full"),
+  item: z.object({
+    id: z.string().optional(),
+    name: z.string().max(100).optional(),
+    category: z.string().max(50).optional(),
+    type: z.enum(["DURABLE", "CONSUMABLE"]).optional(),
+    quantity: z.number().optional(),
+    minQuantity: z.number().optional(),
+    unit: z.string().max(20).optional(),
+    purchaseDate: z.string().nullable().optional(),
+    expiryDate: z.string().nullable().optional(),
+    notes: z.string().nullable().optional(),
+  }).optional(),
+  imageUrl: z.string().url().nullable().optional(),
+  hint: z.string().max(500).optional(),
+});

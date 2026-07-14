@@ -7,6 +7,8 @@
 - 物品录入、编辑、删除、搜索和分类筛选
 - 物品图片上传至阿里云 OSS、可见物品编号与二维码详情
 - 搜索快捷联想、提醒中心和跟随系统主题
+- 物品多选与 A4/自定义规格二维码标签批量打印
+- OpenAI 兼容 AI 助手：图片识别、名称补全、保质期、存储与补货建议
 - 耐用品 / 消耗品两类库存模型
 - 消耗品快速扣减，低于阈值时自动加入采购清单
 - 采购清单手动添加、完成和删除
@@ -110,6 +112,9 @@ docker compose up -d
 | `OSS_ACCESS_KEY_ID` | 空 | OSS AccessKey ID |
 | `OSS_ACCESS_KEY_SECRET` | 空 | OSS AccessKey Secret |
 | `OSS_PUBLIC_BASE_URL` | 空 | Bucket 或 CDN 的公开访问域名 |
+| `OPENAI_BASE_URL` | 空 | OpenAI Chat Completions 兼容接口地址 |
+| `OPENAI_API_KEY` | 空 | AI 接口密钥 |
+| `OPENAI_MODEL` | 空 | 支持文本或视觉输入的模型名称 |
 
 直接运行 Docker 镜像且未设置数据库变量时，会自动使用 `file:/app/data/home-inventory.db`。请挂载 `/app/data` 目录，否则删除容器后 SQLite 数据也会丢失。
 

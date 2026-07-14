@@ -63,6 +63,14 @@ model OssSetting {
   updatedAt       DateTime @updatedAt
 }
 
+model AiSetting {
+  id        String   @id @default("default")
+  baseUrl   String   @db.Text
+  apiKey    String   @db.Text
+  model     String
+  updatedAt DateTime @updatedAt
+}
+
 model ShoppingItem {
   id        String         @id @default(cuid())
   name      String

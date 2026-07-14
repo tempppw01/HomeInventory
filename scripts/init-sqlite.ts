@@ -52,6 +52,13 @@ const statements = [
     "publicBaseUrl" TEXT,
     "updatedAt" DATETIME NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS "AiSetting" (
+    "id" TEXT NOT NULL PRIMARY KEY DEFAULT 'default',
+    "baseUrl" TEXT NOT NULL,
+    "apiKey" TEXT NOT NULL,
+    "model" TEXT NOT NULL,
+    "updatedAt" DATETIME NOT NULL
+  )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "Location_name_key" ON "Location"("name")`,
   `CREATE INDEX IF NOT EXISTS "Item_type_idx" ON "Item"("type")`,
   `CREATE INDEX IF NOT EXISTS "Item_category_idx" ON "Item"("category")`,
