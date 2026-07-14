@@ -1,0 +1,28 @@
+services:
+  home-inventory:
+    environment:
+      DATABASE_PROVIDER: mysql
+      DATABASE_URL: mysql://${MYSQL_USER:-homeinventory}:${MYSQL_PASSWORD:-change-me}@mysql:3306/${MYSQL_DATABASE:-homeinventory}
+    depends_on:
+      mysql:
+        condition: service_healthy
+  mysql:
+    image: mysql:8.4
+    container_name: home-inventory-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-homeinventory}
+      MYSQL_USER: ${MYSQL_USER:-homeinventory}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change-root-password}
+    volumes:
+      - home_inventory_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-change-root-password}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  home_inventory_mysql:

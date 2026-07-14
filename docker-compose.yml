@@ -1,0 +1,18 @@
+services:
+  home-inventory:
+    image: ${HOME_INVENTORY_IMAGE:-home-inventory:local}
+    build:
+      context: .
+    container_name: home-inventory
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    environment:
+      DATABASE_PROVIDER: sqlite
+      DATABASE_URL: file:/app/data/home-inventory.db
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
+    volumes:
+      - home_inventory_data:/app/data
+
+volumes:
+  home_inventory_data:
