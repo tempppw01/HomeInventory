@@ -41,8 +41,28 @@ export interface ShoppingItem {
   createdAt: string;
 }
 
+export interface PriceRecord {
+  id: string;
+  itemId: string | null;
+  itemName: string;
+  category: string;
+  unitPrice: number;
+  quantity: number;
+  totalPrice: number;
+  purchasedAt: string;
+  store: string | null;
+}
+
+export interface FridgeSummary {
+  setting: { enabled: boolean; targetMin: number; targetMax: number };
+  latest: { id: string; temperature: number; note: string | null; recordedAt: string } | null;
+  status: "DISABLED" | "UNKNOWN" | "TOO_COLD" | "TOO_WARM" | "NORMAL";
+}
+
 export interface DashboardData {
   items: Item[];
   locations: Location[];
   shopping: ShoppingItem[];
+  finance: { currentMonthTotal: number; averageMonthly: number; recordCount: number; recent: PriceRecord[] };
+  fridge: FridgeSummary;
 }

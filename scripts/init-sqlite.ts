@@ -59,12 +59,43 @@ const statements = [
     "model" TEXT NOT NULL,
     "updatedAt" DATETIME NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS "PriceRecord" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "itemId" TEXT,
+    "itemName" TEXT NOT NULL,
+    "category" TEXT NOT NULL,
+    "unitPrice" REAL NOT NULL,
+    "quantity" REAL NOT NULL DEFAULT 1,
+    "totalPrice" REAL NOT NULL,
+    "purchasedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "store" TEXT,
+    "notes" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "PriceRecord_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS "FridgeSetting" (
+    "id" TEXT NOT NULL PRIMARY KEY DEFAULT 'default',
+    "enabled" BOOLEAN NOT NULL DEFAULT true,
+    "targetMin" REAL NOT NULL DEFAULT 2,
+    "targetMax" REAL NOT NULL DEFAULT 8,
+    "updatedAt" DATETIME NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS "FridgeReading" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "temperature" REAL NOT NULL,
+    "note" TEXT,
+    "recordedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "Location_name_key" ON "Location"("name")`,
   `CREATE INDEX IF NOT EXISTS "Item_type_idx" ON "Item"("type")`,
   `CREATE INDEX IF NOT EXISTS "Item_category_idx" ON "Item"("category")`,
   `CREATE INDEX IF NOT EXISTS "Item_locationId_idx" ON "Item"("locationId")`,
   `CREATE INDEX IF NOT EXISTS "Item_expiryDate_idx" ON "Item"("expiryDate")`,
   `CREATE INDEX IF NOT EXISTS "ShoppingItem_status_idx" ON "ShoppingItem"("status")`,
+  `CREATE INDEX IF NOT EXISTS "PriceRecord_itemId_idx" ON "PriceRecord"("itemId")`,
+  `CREATE INDEX IF NOT EXISTS "PriceRecord_purchasedAt_idx" ON "PriceRecord"("purchasedAt")`,
+  `CREATE INDEX IF NOT EXISTS "PriceRecord_category_idx" ON "PriceRecord"("category")`,
+  `CREATE INDEX IF NOT EXISTS "FridgeReading_recordedAt_idx" ON "FridgeReading"("recordedAt")`,
 ];
 
 async function main() {

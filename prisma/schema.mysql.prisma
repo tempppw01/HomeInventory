@@ -43,6 +43,7 @@ model Item {
   notes        String?   @db.Text
   locationId   String?
   location     Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  priceRecords PriceRecord[]
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -50,6 +51,42 @@ model Item {
   @@index([category])
   @@index([locationId])
   @@index([expiryDate])
+}
+
+model PriceRecord {
+  id          String   @id @default(cuid())
+  itemId      String?
+  item        Item?    @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  itemName    String
+  category    String
+  unitPrice   Float
+  quantity    Float    @default(1)
+  totalPrice  Float
+  purchasedAt DateTime @default(now())
+  store       String?
+  notes       String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  @@index([itemId])
+  @@index([purchasedAt])
+  @@index([category])
+}
+
+model FridgeSetting {
+  id        String   @id @default("default")
+  enabled   Boolean  @default(true)
+  targetMin Float    @default(2)
+  targetMax Float    @default(8)
+  updatedAt DateTime @updatedAt
+}
+
+model FridgeReading {
+  id          String   @id @default(cuid())
+  temperature Float
+  note        String?  @db.Text
+  recordedAt  DateTime @default(now())
+
+  @@index([recordedAt])
 }
 
 model OssSetting {

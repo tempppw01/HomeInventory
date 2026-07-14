@@ -22,8 +22,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const data = itemSchema.parse(await request.json());
-    const item = await prisma.item.create({ data: { ...data, itemCode: createItemCode() }, include: { location: true } });
+    const { recordPurchase, purchaseStore, ...data } = itemSchema.parse(await request.json());
+    const item = await prisma.$transaction(async (tx) => {
+      const created = await tx.item.create({ data: { ...data, itemCode: createItemCode() }, include: { location: true } });
+      if (recordPurchase && data.price != null) {
+        await tx.priceRecord.create({ data: { itemId: created.id, itemName: created.name, category: created.category, unitPrice: data.price, quantity: Math.max(data.quantity, 1), totalPrice: data.price * Math.max(data.quantity, 1), purchasedAt: data.purchaseDate || new Date(), store: purchaseStore } });
+      }
+      return created;
+    });
 
     if (item.type === "CONSUMABLE" && item.minQuantity > 0 && item.quantity <= item.minQuantity) {
       await prisma.shoppingItem.create({

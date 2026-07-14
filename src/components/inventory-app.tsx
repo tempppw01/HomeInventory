@@ -3,18 +3,19 @@
 import { AnimatePresence, motion } from "motion/react";
 import { QRCodeSVG } from "qrcode.react";
 import {
-  Archive, Bath, Bell, Bot, Boxes, Check, CheckSquare, ChevronDown, ChevronRight, CircleAlert, Cloud, CookingPot,
-  Grid2X2, ImagePlus, LayoutDashboard, MapPin, Minus, Monitor, Moon,
+  AlertTriangle, Archive, Bath, Bell, Bot, Boxes, Check, CheckSquare, ChevronDown, ChevronRight, CircleAlert, Cloud, CookingPot,
+  Grid2X2, ImagePlus, Info, LayoutDashboard, MapPin, Minus, Monitor, Moon,
   Package, Plus, Printer, QrCode, Search, Settings, ShoppingBasket, Sofa, Sparkles,
-  Sun, Trash2, Warehouse, X, Zap,
+  Snowflake, Sun, Thermometer, Trash2, WalletCards, Warehouse, X, Zap,
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import type { DashboardData, Item, ItemType, Location, ShoppingItem } from "@/types";
+import type { DashboardData, FridgeSummary, Item, ItemType, Location, ShoppingItem } from "@/types";
 import { AiSettings } from "@/components/ai-settings";
 import { AiAssistantModal, analyzeItem, type AiAnalysis } from "@/components/ai-assistant-modal";
 import { PrintStudio } from "@/components/print-studio";
+import { APP_VERSION } from "@/lib/version";
 
-type View = "dashboard" | "items" | "shopping" | "locations" | "settings";
+type View = "dashboard" | "items" | "shopping" | "locations" | "settings" | "about";
 type ThemeMode = "light" | "dark" | "system";
 type ItemDraft = {
   name: string; category: string; type: ItemType; quantity: number; minQuantity: number;
@@ -32,6 +33,7 @@ const navItems = [
   { id: "shopping" as View, label: "采购", icon: ShoppingBasket },
   { id: "locations" as View, label: "空间", icon: MapPin },
 ];
+const mobileNavItems = [...navItems, { id: "settings" as View, label: "设置", icon: Settings }];
 
 const iconMap = { Package, CookingPot, Sofa, Bath, Warehouse };
 const categories = ["日用", "食品", "饮品", "清洁", "家电", "数码", "衣物", "医药", "户外", "其他"];
@@ -62,7 +64,7 @@ export function InventoryApp() {
   const [view, setView] = useState<View>("dashboard");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"ALL" | ItemType>("ALL");
-  const [modal, setModal] = useState<"item" | "shopping" | "location" | "notifications" | null>(null);
+  const [modal, setModal] = useState<"item" | "shopping" | "location" | "notifications" | "fridge" | null>(null);
   const [editing, setEditing] = useState<Item | null>(null);
   const [qrItem, setQrItem] = useState<Item | null>(null);
   const [printItems, setPrintItems] = useState<Item[] | null>(null);
@@ -70,6 +72,7 @@ export function InventoryApp() {
   const [toast, setToast] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState<ThemeMode>("system");
+  const [showWelcome, setShowWelcome] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -88,6 +91,11 @@ export function InventoryApp() {
       .catch((error) => { if (active) setToast(error instanceof Error ? error.message : "载入失败"); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
+  }, []);
+  useEffect(() => {
+    if (localStorage.getItem(`home-inventory-welcome-${APP_VERSION}`)) return;
+    const frame = requestAnimationFrame(() => setShowWelcome(true));
+    return () => cancelAnimationFrame(frame);
   }, []);
   useEffect(() => {
     const saved = localStorage.getItem("home-inventory-theme") as ThemeMode | null;
@@ -127,6 +135,7 @@ export function InventoryApp() {
   const lowStock = (data?.items ?? []).filter((item) => item.type === "CONSUMABLE" && item.minQuantity > 0 && item.quantity <= item.minQuantity);
   const pendingShopping = (data?.shopping ?? []).filter((item) => item.status === "PENDING");
   const expiring = (data?.items ?? []).filter((item) => item.expiryDate && new Date(item.expiryDate).getTime() - appStartedAt < 14 * 86400000 && new Date(item.expiryDate).getTime() > appStartedAt);
+  const expired = (data?.items ?? []).filter((item) => item.expiryDate && new Date(item.expiryDate).getTime() <= appStartedAt);
   const totalValue = (data?.items ?? []).reduce((sum, item) => sum + (item.price ?? 0) * item.quantity, 0);
 
   const openEdit = (item: Item) => { setEditing(item); setModal("item"); };
@@ -164,9 +173,10 @@ export function InventoryApp() {
           ))}
         </nav>
         <div className="absolute bottom-5 left-4 right-4">
-          <button onClick={() => setView("settings")} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold muted hover:bg-[var(--surface-soft)]">
+          <button onClick={() => setView("settings")} className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold muted hover:bg-[var(--surface-soft)]">
             <Settings size={19} /> 设置
           </button>
+          <button onClick={() => setView("about")} className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold muted hover:bg-[var(--surface-soft)]"><Info size={19} />关于 <span className="ml-auto text-[10px]">v{APP_VERSION}</span></button>
           <div className="mt-3 rounded-2xl p-3" style={{ background: "linear-gradient(135deg, var(--primary-soft), var(--surface-soft))" }}>
             <div className="flex items-center gap-2 text-sm font-bold"><Sparkles size={16} style={{ color: "var(--primary)" }} /> 今日小结</div>
             <p className="mb-0 mt-2 text-xs leading-5 muted">{lowStock.length ? `${lowStock.length} 件消耗品需要补充` : "库存充足，家里井井有条"}</p>
@@ -181,52 +191,54 @@ export function InventoryApp() {
             <SearchBox items={data?.items ?? []} value={search} onChange={setSearch} onSelect={(item) => { setSearch(item.name); setView("items"); }} onFocus={() => setView("items")} placeholder="搜索名称、编号、分类或位置…" />
           </div>
           <button onClick={cycleTheme} className="btn-ghost ml-auto grid size-11 place-items-center p-0" aria-label={`当前主题：${theme === "system" ? "跟随系统" : theme === "light" ? "浅色" : "深色"}`} title="切换主题">{theme === "system" ? <Monitor size={19} /> : theme === "light" ? <Moon size={19} /> : <Sun size={19} />}</button>
-          <button onClick={() => setModal("notifications")} className="btn-ghost relative grid size-11 place-items-center p-0" aria-label="查看提醒"><Bell size={19} />{(lowStock.length + expiring.length) > 0 && <span className="absolute right-2 top-2 size-2 rounded-full" style={{ background: "var(--danger)" }} />}</button>
+          <button onClick={() => setModal("notifications")} className="btn-ghost relative grid size-11 place-items-center p-0" aria-label="查看提醒"><Bell size={19} />{(lowStock.length + expiring.length + expired.length + (data?.fridge.status === "TOO_WARM" || data?.fridge.status === "TOO_COLD" ? 1 : 0)) > 0 && <span className="absolute right-2 top-2 size-2 rounded-full" style={{ background: "var(--danger)" }} />}</button>
           <button onClick={() => setModal("item")} className="btn-primary flex items-center gap-2 whitespace-nowrap"><Plus size={19} /><span className="desktop-only">录入物品</span></button>
         </header>
 
         <AnimatePresence mode="wait">
           <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: .22 }}>
             {loading ? <LoadingView /> : view === "dashboard" ? (
-              <DashboardView data={data!} lowStock={lowStock} expiring={expiring} pending={pendingShopping} totalValue={totalValue} onNavigate={setView} onEdit={openEdit} onConsume={consume} onQr={setQrItem} onAi={setAiItem} />
+              <DashboardView data={data!} lowStock={lowStock} expiring={expiring} expired={expired} pending={pendingShopping} totalValue={totalValue} onNavigate={setView} onEdit={openEdit} onConsume={consume} onQr={setQrItem} onAi={setAiItem} onFridge={() => setModal("fridge")} onAlerts={() => setModal("notifications")} />
             ) : view === "items" ? (
               <ItemsView allItems={data!.items} items={filteredItems} search={search} setSearch={setSearch} filter={typeFilter} setFilter={setTypeFilter} onEdit={openEdit} onConsume={consume} onDelete={removeItem} onQr={setQrItem} onAi={setAiItem} onPrint={setPrintItems} />
             ) : view === "shopping" ? (
               <ShoppingView items={data!.shopping} onToggle={toggleShopping} onAdd={() => setModal("shopping")} onDelete={async (id) => { await request(`/api/shopping/${id}`, { method: "DELETE" }); await refresh(); }} />
             ) : view === "locations" ? (
               <LocationsView locations={data!.locations} items={data!.items} onAdd={() => setModal("location")} onOpen={(name) => { setSearch(name); setView("items"); }} />
-            ) : <SettingsView theme={theme} onTheme={setThemeMode} onToast={setToast} />}
+            ) : view === "settings" ? <SettingsView theme={theme} onTheme={setThemeMode} onToast={setToast} onAbout={() => setView("about")} /> : <AboutView onWelcome={() => setShowWelcome(true)} />}
           </motion.div>
         </AnimatePresence>
       </main>
 
-      <nav className="mobile-only fixed bottom-0 left-0 right-0 z-30 grid grid-cols-4 border-t px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        {navItems.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setView(id)} className="relative flex flex-col items-center gap-1 py-1 text-[11px] font-semibold" style={{ color: view === id ? "var(--primary)" : "var(--muted)" }}><Icon size={20} /><span>{label}</span>{id === "shopping" && pendingShopping.length > 0 && <span className="absolute right-[26%] top-0 size-2 rounded-full" style={{ background: "var(--danger)" }} />}</button>)}
+      <nav className="mobile-only fixed bottom-0 left-0 right-0 z-30 grid grid-cols-5 border-t px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+        {mobileNavItems.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setView(id)} className="relative flex flex-col items-center gap-1 py-1 text-[11px] font-semibold" style={{ color: view === id ? "var(--primary)" : "var(--muted)" }}><Icon size={20} /><span>{label}</span>{id === "shopping" && pendingShopping.length > 0 && <span className="absolute right-[26%] top-0 size-2 rounded-full" style={{ background: "var(--danger)" }} />}</button>)}
       </nav>
 
       <AnimatePresence>
         {modal === "item" && <ItemModal locations={data?.locations ?? []} item={editing} onClose={closeModal} onSaved={async () => { closeModal(); setToast(editing ? "物品已更新" : "物品已录入"); await refresh(); }} />}
         {modal === "shopping" && <ShoppingModal onClose={closeModal} onSaved={async () => { closeModal(); setToast("已加入采购清单"); await refresh(); }} />}
         {modal === "location" && <LocationModal onClose={closeModal} onSaved={async () => { closeModal(); setToast("新空间已创建"); await refresh(); }} />}
-        {modal === "notifications" && <NotificationsModal lowStock={lowStock} expiring={expiring} onClose={closeModal} onOpenItem={(item) => { closeModal(); openEdit(item); }} onShopping={() => { closeModal(); setView("shopping"); }} />}
+        {modal === "notifications" && <NotificationsModal lowStock={lowStock} expiring={expiring} expired={expired} fridge={data?.fridge} onClose={closeModal} onOpenItem={(item) => { closeModal(); openEdit(item); }} onShopping={() => { closeModal(); setView("shopping"); }} onFridge={() => setModal("fridge")} />}
+        {modal === "fridge" && data?.fridge && <FridgeModal fridge={data.fridge} onClose={closeModal} onSaved={async () => { closeModal(); setToast("冰箱温度已记录"); await refresh(); }} />}
         {qrItem && <QrModal item={qrItem} onClose={() => setQrItem(null)} onPrint={() => { setQrItem(null); setPrintItems([qrItem]); }} />}
         {aiItem && <AiAssistantModal item={aiItem} onClose={() => setAiItem(null)} onApplied={async (message) => { setToast(message); await refresh(); }} />}
       </AnimatePresence>
       {printItems && <PrintStudio items={printItems} onClose={() => setPrintItems(null)} />}
+      {showWelcome && <WelcomeModal onClose={() => { localStorage.setItem(`home-inventory-welcome-${APP_VERSION}`, "seen"); setShowWelcome(false); }} />}
       <AnimatePresence>{toast && <motion.div initial={{ opacity: 0, y: 20, x: "-50%" }} animate={{ opacity: 1, y: 0, x: "-50%" }} exit={{ opacity: 0, y: 12, x: "-50%" }} className="fixed bottom-24 left-1/2 z-[70] rounded-2xl px-4 py-3 text-sm font-semibold text-white shadow-2xl md:bottom-8" style={{ background: "#24242d" }}>{toast}</motion.div>}</AnimatePresence>
     </div>
   );
 }
 
 function Brand({ compact = false }: { compact?: boolean }) {
-  return <div className="flex items-center gap-2.5"><div className="grid size-10 place-items-center rounded-2xl text-white shadow-lg" style={{ background: "linear-gradient(145deg, var(--primary), #a177ff)" }}><Archive size={21} /></div>{!compact && <div><div className="text-lg font-black tracking-tight">归物</div><div className="text-[10px] font-semibold tracking-[.18em] muted">HOME INVENTORY</div></div>}</div>;
+  return <div className="flex items-center gap-2.5"><div className="grid size-10 place-items-center rounded-2xl text-white shadow-lg" style={{ background: "linear-gradient(145deg, var(--primary), #a177ff)" }}><Archive size={21} /></div>{!compact && <div><div className="flex items-center gap-2 text-lg font-black tracking-tight">归物 <span className="rounded-md px-1.5 py-0.5 text-[9px] font-bold" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>v{APP_VERSION}</span></div><div className="text-[10px] font-semibold tracking-[.18em] muted">HOME INVENTORY</div></div>}</div>;
 }
 
 function PageTitle({ title, text, action }: { title: string; text: string; action?: React.ReactNode }) {
   return <div className="mb-6 flex items-end justify-between gap-4"><div><h1 className="m-0 text-2xl font-black tracking-tight sm:text-3xl">{title}</h1><p className="mb-0 mt-2 text-sm muted">{text}</p></div>{action}</div>;
 }
 
-function DashboardView({ data, lowStock, expiring, pending, totalValue, onNavigate, onEdit, onConsume, onQr, onAi }: { data: DashboardData; lowStock: Item[]; expiring: Item[]; pending: ShoppingItem[]; totalValue: number; onNavigate: (v: View) => void; onEdit: (i: Item) => void; onConsume: (i: Item) => void; onQr: (i: Item) => void; onAi: (i: Item) => void }) {
+function DashboardView({ data, lowStock, expiring, expired, pending, totalValue, onNavigate, onEdit, onConsume, onQr, onAi, onFridge, onAlerts }: { data: DashboardData; lowStock: Item[]; expiring: Item[]; expired: Item[]; pending: ShoppingItem[]; totalValue: number; onNavigate: (v: View) => void; onEdit: (i: Item) => void; onConsume: (i: Item) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onFridge: () => void; onAlerts: () => void }) {
   const stats = [
     { label: "全部物品", value: data.items.length, suffix: "件", icon: Boxes, color: "#6d4aff", bg: "#eeeaff" },
     { label: "低库存", value: lowStock.length, suffix: "项", icon: CircleAlert, color: "#e37d25", bg: "#fff1df" },
@@ -234,18 +246,25 @@ function DashboardView({ data, lowStock, expiring, pending, totalValue, onNaviga
     { label: "估算价值", value: totalValue >= 10000 ? `${(totalValue / 10000).toFixed(1)}万` : `¥${Math.round(totalValue)}`, suffix: "", icon: Zap, color: "#15966a", bg: "#e0f7ef" },
   ];
   return <>
-    <PageTitle title="晚上好，家里一切有序" text={`今天有 ${lowStock.length + expiring.length} 条事项值得留意。`} />
+    <PageTitle title="晚上好，家里一切有序" text={`今天有 ${lowStock.length + expiring.length + expired.length} 条库存与保质期事项值得留意。`} />
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
       {stats.map(({ label, value, suffix, icon: Icon, color, bg }, index) => <motion.div key={label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * .06 }} className="surface rounded-3xl p-4 sm:p-5"><div className="mb-4 grid size-10 place-items-center rounded-2xl" style={{ color, background: bg }}><Icon size={20} /></div><div className="flex items-end gap-1"><b className="text-2xl font-black sm:text-3xl">{value}</b><span className="mb-1 text-xs muted">{suffix}</span></div><div className="mt-1 text-xs font-semibold muted">{label}</div></motion.div>)}
     </div>
 
-    {(lowStock.length > 0 || expiring.length > 0) && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="my-5 flex items-center gap-3 rounded-3xl p-4 text-sm" style={{ background: "linear-gradient(100deg, #fff1df, #ffe8e8)", color: "#7d491f" }}><div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-white/70"><CircleAlert size={20} /></div><div className="min-w-0 flex-1"><b>需要你的关注</b><div className="mt-0.5 truncate text-xs opacity-80">{lowStock.length} 件库存不足 · {expiring.length} 件即将到期</div></div><button onClick={() => onNavigate("shopping")} className="flex items-center gap-1 font-bold">去处理 <ChevronRight size={16} /></button></motion.div>}
+    {(lowStock.length > 0 || expiring.length > 0 || expired.length > 0 || data.fridge.status === "TOO_WARM" || data.fridge.status === "TOO_COLD") && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="my-5 flex items-center gap-3 rounded-3xl p-4 text-sm" style={{ background: "linear-gradient(100deg, #fff1df, #ffe8e8)", color: "#7d491f" }}><div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-white/70"><CircleAlert size={20} /></div><div className="min-w-0 flex-1"><b>{expired.length > 0 ? `${expired.length} 件物品已经过期` : "需要你的关注"}</b><div className="mt-0.5 truncate text-xs opacity-80">{lowStock.length} 件库存不足 · {expiring.length} 件即将到期{data.fridge.status === "TOO_WARM" ? " · 冰箱温度偏高" : data.fridge.status === "TOO_COLD" ? " · 冰箱温度偏低" : ""}</div></div><button onClick={onAlerts} className="flex items-center gap-1 font-bold">查看提醒 <ChevronRight size={16} /></button></motion.div>}
 
     <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(300px,.7fr)]">
       <section className="surface min-w-0 rounded-3xl p-4 sm:p-5"><SectionHead title="最近更新" action="查看全部" onClick={() => onNavigate("items")} /><div className="mt-4 grid gap-3 sm:grid-cols-2">{data.items.slice(0, 6).map((item) => <ItemCard key={item.id} item={item} onEdit={() => onEdit(item)} onConsume={() => onConsume(item)} onQr={() => onQr(item)} onAi={() => onAi(item)} compact />)}{data.items.length === 0 && <EmptyState icon={Boxes} title="还没有物品" text="点击右上角，录入家里的第一件物品" />}</div></section>
-      <section className="surface rounded-3xl p-4 sm:p-5"><SectionHead title="采购清单" action="全部" onClick={() => onNavigate("shopping")} /><div className="mt-4 space-y-2">{pending.slice(0, 5).map((item) => <div key={item.id} className="flex items-center gap-3 rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}><span className="size-2 rounded-full" style={{ background: item.priority === 2 ? "var(--danger)" : "var(--warning)" }} /><div className="min-w-0 flex-1"><div className="truncate text-sm font-bold">{item.name}</div><div className="mt-0.5 text-xs muted">{item.quantity} {item.unit} · {item.category || "未分类"}</div></div></div>)}{pending.length === 0 && <EmptyState icon={Check} title="清单已完成" text="暂时没有需要采购的物品" />}</div></section>
+      <div className="space-y-5"><HomeInsights data={data} onFridge={onFridge} /><section className="surface rounded-3xl p-4 sm:p-5"><SectionHead title="采购清单" action="全部" onClick={() => onNavigate("shopping")} /><div className="mt-4 space-y-2">{pending.slice(0, 4).map((item) => <div key={item.id} className="flex items-center gap-3 rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}><span className="size-2 rounded-full" style={{ background: item.priority === 2 ? "var(--danger)" : "var(--warning)" }} /><div className="min-w-0 flex-1"><div className="truncate text-sm font-bold">{item.name}</div><div className="mt-0.5 text-xs muted">{item.quantity} {item.unit} · {item.category || "未分类"}</div></div></div>)}{pending.length === 0 && <EmptyState icon={Check} title="清单已完成" text="暂时没有需要采购的物品" />}</div></section></div>
     </div>
   </>;
+}
+
+function HomeInsights({ data, onFridge }: { data: DashboardData; onFridge: () => void }) {
+  const fridgeText = data.fridge.status === "TOO_WARM" ? "温度偏高，检查门封与档位" : data.fridge.status === "TOO_COLD" ? "温度偏低，避免食材冻伤" : data.fridge.status === "NORMAL" ? "温度处于安全范围" : data.fridge.status === "DISABLED" ? "异常提醒已关闭" : "尚未记录温度";
+  const fridgeNormal = data.fridge.status === "NORMAL";
+  const fridgeWarning = data.fridge.status === "TOO_WARM" || data.fridge.status === "TOO_COLD";
+  return <section className="surface rounded-3xl p-4 sm:p-5"><h2 className="m-0 text-base font-black">家庭状态</h2><button onClick={onFridge} className="mt-4 flex w-full items-center gap-3 rounded-2xl p-3 text-left" style={{ background: "var(--surface-soft)" }}><div className="grid size-10 place-items-center rounded-2xl" style={{ background: fridgeNormal ? "#e0f7ef" : fridgeWarning ? "#fff1df" : "var(--primary-soft)", color: fridgeNormal ? "var(--success)" : fridgeWarning ? "var(--warning)" : "var(--primary)" }}><Thermometer size={19} /></div><div className="min-w-0 flex-1"><div className="text-sm font-bold">冰箱 {data.fridge.latest ? `${data.fridge.latest.temperature}℃` : "待记录"}</div><div className="mt-0.5 truncate text-[11px] muted">{fridgeText}</div></div><ChevronRight size={15} className="muted" /></button><div className="mt-3 grid grid-cols-2 gap-3"><div className="rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}><div className="flex items-center gap-1.5 text-[11px] font-bold muted"><WalletCards size={13} />本月消费</div><div className="mt-2 text-lg font-black">¥{data.finance.currentMonthTotal.toFixed(0)}</div></div><div className="rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}><div className="text-[11px] font-bold muted">近 6 月均值</div><div className="mt-2 text-lg font-black">¥{data.finance.averageMonthly.toFixed(0)}</div></div></div>{data.finance.recent[0] && <div className="mt-3 truncate text-[11px] muted">最近：{data.finance.recent[0].itemName} ¥{data.finance.recent[0].totalPrice.toFixed(2)}</div>}</section>;
 }
 
 function ItemsView({ allItems, items, search, setSearch, filter, setFilter, onEdit, onConsume, onDelete, onQr, onAi, onPrint }: { allItems: Item[]; items: Item[]; search: string; setSearch: (s: string) => void; filter: "ALL" | ItemType; setFilter: (f: "ALL" | ItemType) => void; onEdit: (i: Item) => void; onConsume: (i: Item) => void; onDelete: (i: Item) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onPrint: (items: Item[]) => void }) {
@@ -286,14 +305,14 @@ function LocationsView({ locations, items, onAdd, onOpen }: { locations: Locatio
   return <><PageTitle title="家庭空间" text="按房间和收纳位置快速找到物品。" action={<button onClick={onAdd} className="btn-primary flex items-center gap-2"><Plus size={18} /><span className="desktop-only">添加空间</span></button>} /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{locations.map((location, index) => { const Icon = iconMap[location.icon as keyof typeof iconMap] || Package; const count = items.filter((i) => i.locationId === location.id).length; const consumables = items.filter((i) => i.locationId === location.id && i.type === "CONSUMABLE").length; return <motion.button key={location.id} initial={{ opacity: 0, scale: .97 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: index * .05 }} onClick={() => onOpen(location.name)} className="surface group rounded-3xl p-5 text-left transition hover:-translate-y-1 hover:shadow-lg"><div className="mb-6 flex items-start justify-between"><div className="grid size-12 place-items-center rounded-2xl" style={{ color: location.color, background: `color-mix(in srgb, ${location.color} 12%, var(--surface-solid))` }}><Icon size={23} /></div><ChevronRight className="muted transition group-hover:translate-x-1" size={18} /></div><h3 className="m-0 text-lg font-black">{location.name}</h3><p className="mb-0 mt-2 text-sm muted">{count} 件物品 · {consumables} 件消耗品</p></motion.button>; })}<button onClick={onAdd} className="grid min-h-48 place-items-center rounded-3xl border-2 border-dashed p-5 muted transition hover:border-[var(--primary)] hover:text-[var(--primary)]" style={{ borderColor: "var(--border)" }}><span className="flex flex-col items-center gap-2 text-sm font-bold"><Plus size={24} />添加新空间</span></button></div></>;
 }
 
-function SettingsView({ theme, onTheme, onToast }: { theme: ThemeMode; onTheme: (mode: ThemeMode) => void; onToast: (message: string) => void }) {
+function SettingsView({ theme, onTheme, onToast, onAbout }: { theme: ThemeMode; onTheme: (mode: ThemeMode) => void; onToast: (message: string) => void; onAbout: () => void }) {
   const [database, setDatabase] = useState<{ databaseLabel: string; storageMode: string } | null>(null);
   useEffect(() => { let active = true; request<{ databaseLabel: string; storageMode: string }>("/api/system/info").then((result) => { if (active) setDatabase(result); }).catch(() => undefined); return () => { active = false; }; }, []);
   return <><PageTitle title="设置" text="调整归物的显示、存储和部署偏好。" /><div className="max-w-3xl space-y-4">
     <section className="surface rounded-3xl p-5"><h3 className="m-0 text-base">显示</h3><div className="mt-4 flex flex-wrap gap-2">{([ ["light", "浅色", Sun], ["dark", "深色", Moon], ["system", "跟随系统", Monitor] ] as const).map(([mode, label, Icon]) => <button key={mode} onClick={() => onTheme(mode)} className="flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-bold transition" style={theme === mode ? { background: "var(--primary)", color: "white" } : { background: "var(--surface-soft)", color: "var(--muted)" }}><Icon size={17} />{label}</button>)}</div></section>
     <AiSettings onToast={onToast} />
     <OssSettings onToast={onToast} />
-    <section className="surface rounded-3xl p-5"><h3 className="m-0 text-base">数据与部署</h3><SettingRow icon={Grid2X2} title={`当前数据库：${database?.databaseLabel || "检测中…"}`} text={database ? `${database.storageMode} · 可通过 DATABASE_PROVIDER 切换` : "正在读取运行环境"} action={<span className="rounded-xl px-3 py-1.5 text-xs font-bold" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>{database?.databaseLabel || "检测中"}</span>} /><SettingRow icon={Archive} title="归物" text="家庭物品管理系统 · v0.3.0" /></section>
+    <section className="surface rounded-3xl p-5"><h3 className="m-0 text-base">数据与部署</h3><SettingRow icon={Grid2X2} title={`当前数据库：${database?.databaseLabel || "检测中…"}`} text={database ? `${database.storageMode} · 可通过 DATABASE_PROVIDER 切换` : "正在读取运行环境"} action={<span className="rounded-xl px-3 py-1.5 text-xs font-bold" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>{database?.databaseLabel || "检测中"}</span>} /><SettingRow icon={Info} title="关于归物" text={`版本 ${APP_VERSION} · 更新说明与使用提示`} action={<button onClick={onAbout} className="btn-ghost text-xs">查看</button>} /></section>
   </div></>;
 }
 
@@ -330,10 +349,40 @@ function OssSettings({ onToast }: { onToast: (message: string) => void }) {
   </section>;
 }
 
-function NotificationsModal({ lowStock, expiring, onClose, onOpenItem, onShopping }: { lowStock: Item[]; expiring: Item[]; onClose: () => void; onOpenItem: (item: Item) => void; onShopping: () => void }) {
-  const alerts = [...lowStock.map((item) => ({ item, label: `库存仅剩 ${item.quantity} ${item.unit}`, color: "var(--danger)" })), ...expiring.filter((item) => !lowStock.some((low) => low.id === item.id)).map((item) => ({ item, label: `${new Date(item.expiryDate!).toLocaleDateString("zh-CN")} 到期`, color: "var(--warning)" }))];
-  return <Modal title="提醒中心" subtitle={`${alerts.length} 条待处理事项`} onClose={onClose}><div className="space-y-2">{alerts.map(({ item, label, color }) => <button key={item.id} onClick={() => onOpenItem(item)} className="flex w-full items-center gap-3 rounded-2xl p-3 text-left" style={{ background: "var(--surface-soft)" }}><span className="size-2 rounded-full" style={{ background: color }} /><div className="min-w-0 flex-1"><div className="truncate text-sm font-bold">{item.name}</div><div className="mt-1 text-xs muted">{label}</div></div><ChevronRight size={16} className="muted" /></button>)}{alerts.length === 0 && <EmptyState icon={Check} title="暂无提醒" text="库存和保质期都在安全范围内" />}</div>{lowStock.length > 0 && <button onClick={onShopping} className="btn-primary mt-4 w-full">查看采购清单</button>}</Modal>;
+function NotificationsModal({ lowStock, expiring, expired, fridge, onClose, onOpenItem, onShopping, onFridge }: { lowStock: Item[]; expiring: Item[]; expired: Item[]; fridge?: FridgeSummary; onClose: () => void; onOpenItem: (item: Item) => void; onShopping: () => void; onFridge: () => void }) {
+  const alerts = [
+    ...expired.map((item) => ({ item, label: `${["食品", "饮品"].includes(item.category) ? "食品" : "物品"}已过期 · ${new Date(item.expiryDate!).toLocaleDateString("zh-CN")}`, color: "var(--danger)" })),
+    ...expiring.filter((item) => !expired.some((old) => old.id === item.id)).map((item) => ({ item, label: `${["食品", "饮品"].includes(item.category) ? "食品即将到期" : "即将到期"} · ${new Date(item.expiryDate!).toLocaleDateString("zh-CN")}`, color: "var(--warning)" })),
+    ...lowStock.filter((item) => !expired.some((old) => old.id === item.id)).map((item) => ({ item, label: `库存仅剩 ${item.quantity} ${item.unit}`, color: "#e37d25" })),
+  ];
+  const fridgeAlert = fridge && (fridge.status === "TOO_WARM" || fridge.status === "TOO_COLD");
+  return <Modal title="提醒中心" subtitle={`${alerts.length + (fridgeAlert ? 1 : 0)} 条待处理事项`} onClose={onClose}><div className="space-y-2">{fridgeAlert && <button onClick={onFridge} className="flex w-full items-center gap-3 rounded-2xl p-3 text-left" style={{ background: "#fff1df" }}><Thermometer size={18} style={{ color: "var(--warning)" }} /><div className="min-w-0 flex-1"><div className="text-sm font-bold">冰箱温度{fridge.status === "TOO_WARM" ? "偏高" : "偏低"}</div><div className="mt-1 text-xs muted">当前 {fridge.latest?.temperature}℃，建议范围 {fridge.setting.targetMin}–{fridge.setting.targetMax}℃</div></div><ChevronRight size={16} /></button>}{alerts.map(({ item, label, color }) => <button key={`${item.id}-${label}`} onClick={() => onOpenItem(item)} className="flex w-full items-center gap-3 rounded-2xl p-3 text-left" style={{ background: "var(--surface-soft)" }}><span className="size-2 rounded-full" style={{ background: color }} /><div className="min-w-0 flex-1"><div className="truncate text-sm font-bold">{item.name}</div><div className="mt-1 text-xs muted">{label}</div></div><ChevronRight size={16} className="muted" /></button>)}{alerts.length === 0 && !fridgeAlert && <EmptyState icon={Check} title="暂无提醒" text="库存、保质期和冰箱温度都在安全范围内" />}</div>{lowStock.length > 0 && <button onClick={onShopping} className="btn-primary mt-4 w-full">查看采购清单</button>}</Modal>;
 }
+
+function FridgeModal({ fridge, onClose, onSaved }: { fridge: FridgeSummary; onClose: () => void; onSaved: () => void }) {
+  const [temperature, setTemperature] = useState(fridge.latest?.temperature ?? 4);
+  const [targetMin, setTargetMin] = useState(fridge.setting.targetMin);
+  const [targetMax, setTargetMax] = useState(fridge.setting.targetMax);
+  const [enabled, setEnabled] = useState(fridge.setting.enabled);
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const state = temperature < targetMin ? "偏低，可能造成蔬果冻伤" : temperature > targetMax ? "偏高，食品变质风险上升" : "处于建议范围";
+  const submit = async (event: FormEvent) => { event.preventDefault(); setSaving(true); setError(""); try { await Promise.all([request("/api/fridge", { method: "POST", body: JSON.stringify({ temperature, note }) }), request("/api/fridge", { method: "PATCH", body: JSON.stringify({ enabled, targetMin, targetMax }) })]); onSaved(); } catch (e) { setError(e instanceof Error ? e.message : "保存失败"); } finally { setSaving(false); } };
+  return <Modal title="冰箱温度" subtitle={`建议冷藏区保持 ${targetMin}–${targetMax}℃`} onClose={onClose}><form onSubmit={submit} className="space-y-4"><div className="grid place-items-center rounded-3xl p-5" style={{ background: temperature >= targetMin && temperature <= targetMax ? "#e0f7ef" : "#fff1df" }}><Snowflake size={26} style={{ color: temperature >= targetMin && temperature <= targetMax ? "var(--success)" : "var(--warning)" }} /><div className="mt-2 text-4xl font-black">{temperature}℃</div><div className="mt-1 text-xs muted">{state}</div></div><Field label="本次温度"><input type="number" step="0.1" min="-10" max="30" className="input" value={temperature} onChange={(e) => setTemperature(Number(e.target.value))} /></Field><div className="grid grid-cols-2 gap-3"><Field label="提醒下限"><input type="number" step="0.5" className="input" value={targetMin} onChange={(e) => setTargetMin(Number(e.target.value))} /></Field><Field label="提醒上限"><input type="number" step="0.5" className="input" value={targetMax} onChange={(e) => setTargetMax(Number(e.target.value))} /></Field></div><Field label="备注（可选）"><input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="例如：调整到 3 档" /></Field><button type="button" onClick={() => setEnabled(!enabled)} className="flex w-full items-center justify-between rounded-2xl p-3 text-sm" style={{ background: "var(--surface-soft)" }}><span>温度异常提醒</span><span className="font-bold" style={{ color: enabled ? "var(--success)" : "var(--muted)" }}>{enabled ? "已开启" : "已关闭"}</span></button>{error && <p className="m-0 text-sm text-red-500">{error}</p>}<div className="flex gap-3"><button type="button" onClick={onClose} className="btn-ghost flex-1">取消</button><button disabled={saving} className="btn-primary flex-1">{saving ? "保存中…" : "记录温度"}</button></div></form></Modal>;
+}
+
+function AboutView({ onWelcome }: { onWelcome: () => void }) {
+  return <><PageTitle title="关于归物" text="轻量、清楚、真正适合家庭日常使用。" /><div className="max-w-3xl space-y-4"><section className="surface rounded-3xl p-6"><div className="flex items-center gap-4"><div className="grid size-14 place-items-center rounded-3xl text-white" style={{ background: "linear-gradient(145deg, var(--primary), #a177ff)" }}><Archive size={26} /></div><div><h2 className="m-0 text-xl font-black">归物 HomeInventory</h2><p className="mb-0 mt-1 text-sm muted">版本 {APP_VERSION} · MVP 迭代起点</p></div></div><p className="mb-0 mt-5 text-sm leading-7 muted">归物帮助家庭记录物品、消耗品、保质期、采购与价格。功能设计遵循“少一步操作、少一个干扰”的原则，复杂能力放在需要时再展开。</p></section><section className="surface rounded-3xl p-6"><h3 className="m-0 text-base">0.0.1 更新内容</h3><div className="mt-4 grid gap-3 sm:grid-cols-2"><AboutFeature icon={AlertTriangle} title="保质期预警" text="区分已过期和即将到期，食品提醒更明确。" /><AboutFeature icon={Snowflake} title="冰箱温度" text="记录温度并在超出范围时提醒。" /><AboutFeature icon={WalletCards} title="消费概览" text="保留购买价格流水与近 6 月均值。" /><AboutFeature icon={QrCode} title="物品标签" text="二维码详情与自定义批量打印。" /></div></section><button onClick={onWelcome} className="btn-ghost text-sm">重新查看欢迎页</button></div></>;
+}
+
+function AboutFeature({ icon: Icon, title, text }: { icon: typeof Info; title: string; text: string }) { return <div className="rounded-2xl p-4" style={{ background: "var(--surface-soft)" }}><Icon size={18} style={{ color: "var(--primary)" }} /><div className="mt-3 text-sm font-bold">{title}</div><p className="mb-0 mt-1 text-xs leading-5 muted">{text}</p></div>; }
+
+function WelcomeModal({ onClose }: { onClose: () => void }) {
+  return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[90] grid place-items-center bg-black/35 p-4 backdrop-blur-sm"><motion.div initial={{ opacity: 0, y: 18, scale: .98 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="w-full max-w-lg rounded-[30px] p-6 shadow-2xl sm:p-7" style={{ background: "var(--surface-solid)" }}><div className="flex items-start gap-4"><div className="grid size-12 shrink-0 place-items-center rounded-2xl text-white" style={{ background: "linear-gradient(145deg, var(--primary), #a177ff)" }}><Archive size={22} /></div><div><div className="text-xs font-bold" style={{ color: "var(--primary)" }}>欢迎使用 · v{APP_VERSION}</div><h2 className="mb-0 mt-1 text-2xl font-black">让家里的每件东西都有归处</h2></div></div><p className="mb-0 mt-4 text-sm leading-6 muted">先从常用物品开始录入。归物会在需要时提醒库存、保质期和冰箱温度，不会用复杂流程打断你。</p><div className="my-5 grid gap-2 sm:grid-cols-3"><WelcomePoint icon={Package} text="快速记录" /><WelcomePoint icon={Bell} text="适时提醒" /><WelcomePoint icon={WalletCards} text="消费有数" /></div><button onClick={onClose} className="btn-primary w-full">开始整理</button></motion.div></motion.div>;
+}
+
+function WelcomePoint({ icon: Icon, text }: { icon: typeof Package; text: string }) { return <div className="flex items-center gap-2 rounded-2xl p-3 text-xs font-bold" style={{ background: "var(--surface-soft)" }}><Icon size={16} style={{ color: "var(--primary)" }} />{text}</div>; }
 
 function QrModal({ item, onClose, onPrint }: { item: Item; onClose: () => void; onPrint: () => void }) {
   const url = `${globalThis.location?.origin || ""}/items/${item.id}`;
@@ -343,18 +392,20 @@ function QrModal({ item, onClose, onPrint }: { item: Item; onClose: () => void; 
 function ItemModal({ locations, item, onClose, onSaved }: { locations: Location[]; item: Item | null; onClose: () => void; onSaved: () => void }) {
   const [draft, setDraft] = useState<ItemDraft>(() => item ? { name: item.name, category: item.category, type: item.type, quantity: item.quantity, minQuantity: item.minQuantity, unit: item.unit, price: item.price?.toString() ?? "", purchaseDate: item.purchaseDate?.slice(0, 10) ?? "", expiryDate: item.expiryDate?.slice(0, 10) ?? "", locationId: item.locationId ?? "", notes: item.notes ?? "", imageUrl: item.imageUrl ?? "" } : emptyDraft);
   const [saving, setSaving] = useState(false); const [uploading, setUploading] = useState(false); const [aiLoading, setAiLoading] = useState(false); const [moreOpen, setMoreOpen] = useState(false); const [error, setError] = useState("");
+  const [recordPurchase, setRecordPurchase] = useState(!item);
+  const [purchaseStore, setPurchaseStore] = useState("");
   const set = (key: keyof ItemDraft, value: string | number) => setDraft((old) => ({ ...old, [key]: value }));
   const uploadImage = async (file?: File) => { if (!file) return; setUploading(true); setError(""); try { const form = new FormData(); form.append("file", file); const response = await fetch("/api/upload", { method: "POST", body: form }); const result = await response.json(); if (!response.ok) throw new Error(result.error || "上传失败"); set("imageUrl", result.url); } catch (e) { setError(e instanceof Error ? e.message : "上传失败"); } finally { setUploading(false); } };
   const applyAi = (analysis: AiAnalysis) => setDraft((old) => ({ ...old, name: analysis.name || old.name, category: analysis.category || old.category, type: analysis.type || old.type, unit: analysis.unit || old.unit, expiryDate: analysis.suggestedExpiryDate || old.expiryDate, notes: analysis.suggestedNotes || analysis.storageAdvice ? [old.notes, analysis.suggestedNotes, analysis.storageAdvice && `存储建议：${analysis.storageAdvice}`].filter(Boolean).join("\n") : old.notes }));
   const runAi = async (action: "identify" | "shelf_life") => { setAiLoading(true); setError(""); try { const result = await analyzeItem({ action, imageUrl: draft.imageUrl || null, hint: draft.name, item: { name: draft.name, category: draft.category, type: draft.type, quantity: draft.quantity, minQuantity: draft.minQuantity, unit: draft.unit, purchaseDate: draft.purchaseDate || null, expiryDate: draft.expiryDate || null, notes: draft.notes || null } }); applyAi(result.analysis); if (action === "shelf_life") setMoreOpen(true); } catch (e) { setError(e instanceof Error ? e.message : "AI 分析失败"); } finally { setAiLoading(false); } };
-  const submit = async (event: FormEvent) => { event.preventDefault(); setSaving(true); setError(""); try { await request(item ? `/api/items/${item.id}` : "/api/items", { method: item ? "PATCH" : "POST", body: JSON.stringify(draft) }); onSaved(); } catch (e) { setError(e instanceof Error ? e.message : "保存失败"); } finally { setSaving(false); } };
+  const submit = async (event: FormEvent) => { event.preventDefault(); setSaving(true); setError(""); try { await request(item ? `/api/items/${item.id}` : "/api/items", { method: item ? "PATCH" : "POST", body: JSON.stringify({ ...draft, recordPurchase, purchaseStore }) }); onSaved(); } catch (e) { setError(e instanceof Error ? e.message : "保存失败"); } finally { setSaving(false); } };
   return <Modal title={item ? "编辑物品" : "录入新物品"} subtitle={item?.itemCode || "只填名称和数量也可以，其他信息稍后补充"} onClose={onClose}><form onSubmit={submit} className="space-y-4">
     <div className="flex gap-3"><label className="group grid size-20 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-2xl border border-dashed bg-cover bg-center transition hover:border-[var(--primary)]" style={draft.imageUrl ? { backgroundImage: `url(${draft.imageUrl})`, borderColor: "var(--primary)" } : { borderColor: "var(--border)", background: "var(--surface-soft)" }}>{!draft.imageUrl && (uploading ? <Sparkles className="animate-pulse" size={22} /> : <ImagePlus className="muted" size={24} />)}<input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" disabled={uploading} onChange={(e) => uploadImage(e.target.files?.[0])} /></label><div className="min-w-0 flex-1"><label className="mb-1.5 block text-xs font-bold muted">物品名称 *</label><input autoFocus required className="input" value={draft.name} onChange={(e) => set("name", e.target.value)} placeholder="拍照让 AI 识别，或直接输入名称" /><div className="mt-2 flex gap-2"><button type="button" disabled={aiLoading || (!draft.name && !draft.imageUrl)} onClick={() => runAi("identify")} className="btn-ghost flex items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-40"><Sparkles size={14} />{aiLoading ? "分析中…" : "AI 补全"}</button><button type="button" disabled={aiLoading || (!draft.name && !draft.imageUrl)} onClick={() => runAi("shelf_life")} className="btn-ghost flex items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-40"><Bot size={14} />分析保质期</button></div></div></div>
     <div className="grid grid-cols-2 gap-3"><label className="cursor-pointer rounded-2xl border px-3 py-2.5 transition" style={draft.type === "DURABLE" ? { borderColor: "var(--primary)", background: "var(--primary-soft)" } : { borderColor: "var(--border)" }}><input type="radio" className="hidden" checked={draft.type === "DURABLE"} onChange={() => set("type", "DURABLE")} /><div className="text-sm font-bold">📦 耐用品</div></label><label className="cursor-pointer rounded-2xl border px-3 py-2.5 transition" style={draft.type === "CONSUMABLE" ? { borderColor: "var(--primary)", background: "var(--primary-soft)" } : { borderColor: "var(--border)" }}><input type="radio" className="hidden" checked={draft.type === "CONSUMABLE"} onChange={() => set("type", "CONSUMABLE")} /><div className="text-sm font-bold">🧴 消耗品</div></label></div>
     <div className="grid grid-cols-2 gap-3"><Field label="分类"><select className="input" value={draft.category} onChange={(e) => set("category", e.target.value)}>{categories.map((c) => <option key={c}>{c}</option>)}</select></Field><Field label="存放位置"><select className="input" value={draft.locationId} onChange={(e) => set("locationId", e.target.value)}><option value="">未设置</option>{locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></Field></div>
     <div className="grid grid-cols-2 gap-3"><Field label="数量"><input required type="number" min="0" step="0.1" className="input" value={draft.quantity} onChange={(e) => set("quantity", Number(e.target.value))} /></Field><Field label="单位"><select className="input" value={draft.unit} onChange={(e) => set("unit", e.target.value)}>{units.map((u) => <option key={u}>{u}</option>)}</select></Field></div>
     <button type="button" onClick={() => setMoreOpen(!moreOpen)} className="flex w-full items-center justify-between rounded-2xl px-3 py-2.5 text-sm font-bold" style={{ background: "var(--surface-soft)" }}><span>更多信息 <span className="ml-1 text-xs font-normal muted">价格、日期、提醒、备注</span></span><ChevronDown size={17} className={`transition ${moreOpen ? "rotate-180" : ""}`} /></button>
-    {moreOpen && <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="space-y-3 overflow-hidden"><div className="grid grid-cols-2 gap-3"><Field label="单价"><input type="number" min="0" step="0.01" className="input" value={draft.price} onChange={(e) => set("price", e.target.value)} placeholder="¥" /></Field><Field label="低库存阈值"><input type="number" min="0" step="0.1" className="input" value={draft.minQuantity} onChange={(e) => set("minQuantity", Number(e.target.value))} /></Field></div><div className="grid grid-cols-2 gap-3"><Field label="购入日期"><input type="date" className="input" value={draft.purchaseDate} onChange={(e) => set("purchaseDate", e.target.value)} /></Field><Field label="到期日期"><input type="date" className="input" value={draft.expiryDate} onChange={(e) => set("expiryDate", e.target.value)} /></Field></div><Field label="备注"><textarea className="input min-h-20 resize-none" value={draft.notes} onChange={(e) => set("notes", e.target.value)} placeholder="规格、保修、使用提示…" /></Field></motion.div>}
+    {moreOpen && <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="space-y-3 overflow-hidden"><div className="grid grid-cols-2 gap-3"><Field label="购买单价"><input type="number" min="0" step="0.01" className="input" value={draft.price} onChange={(e) => set("price", e.target.value)} placeholder="¥" /></Field><Field label="低库存阈值"><input type="number" min="0" step="0.1" className="input" value={draft.minQuantity} onChange={(e) => set("minQuantity", Number(e.target.value))} /></Field></div>{draft.price && <div className="rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}><button type="button" onClick={() => setRecordPurchase(!recordPurchase)} className="flex w-full items-center justify-between text-sm"><span>记入本月消费记录</span><span className="font-bold" style={{ color: recordPurchase ? "var(--success)" : "var(--muted)" }}>{recordPurchase ? "是" : "否"}</span></button>{recordPurchase && <input className="input mt-3" value={purchaseStore} onChange={(e) => setPurchaseStore(e.target.value)} placeholder="购买商店（可选）" />}</div>}<div className="grid grid-cols-2 gap-3"><Field label="购入日期"><input type="date" className="input" value={draft.purchaseDate} onChange={(e) => set("purchaseDate", e.target.value)} /></Field><Field label="到期日期"><input type="date" className="input" value={draft.expiryDate} onChange={(e) => set("expiryDate", e.target.value)} /></Field></div><Field label="备注"><textarea className="input min-h-20 resize-none" value={draft.notes} onChange={(e) => set("notes", e.target.value)} placeholder="规格、保修、使用提示…" /></Field></motion.div>}
     {error && <p className="m-0 rounded-xl p-2.5 text-sm text-red-500" style={{ background: "#ffe8eb" }}>{error}</p>}<div className="flex gap-3 pt-1"><button type="button" onClick={onClose} className="btn-ghost flex-1">取消</button><button disabled={saving || uploading || aiLoading} className="btn-primary flex-1 disabled:opacity-60">{saving ? "保存中…" : item ? "保存修改" : "快速保存"}</button></div>
   </form></Modal>;
 }

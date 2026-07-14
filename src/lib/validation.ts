@@ -18,6 +18,8 @@ export const itemSchema = z.object({
   imageUrl: z.union([z.string().url().max(1000), z.literal(""), z.null()]).optional().transform((value) => value || null),
   locationId: z.union([z.string(), z.literal(""), z.null()]).optional().transform((value) => value || null),
   notes: z.union([z.string().max(500), z.null()]).optional().transform((value) => value || null),
+  recordPurchase: z.boolean().optional().default(false),
+  purchaseStore: z.union([z.string().trim().max(80), z.literal(""), z.null()]).optional().transform((value) => value || null),
 });
 
 export const itemPatchSchema = itemSchema.partial();
@@ -68,4 +70,26 @@ export const aiAnalyzeSchema = z.object({
   }).optional(),
   imageUrl: z.string().url().nullable().optional(),
   hint: z.string().max(500).optional(),
+});
+
+export const fridgeReadingSchema = z.object({
+  temperature: z.coerce.number().min(-10).max(30),
+  note: z.union([z.string().trim().max(200), z.literal(""), z.null()]).optional().transform((value) => value || null),
+});
+
+export const fridgeSettingSchema = z.object({
+  enabled: z.boolean(),
+  targetMin: z.coerce.number().min(-5).max(15),
+  targetMax: z.coerce.number().min(-5).max(20),
+}).refine((value) => value.targetMax > value.targetMin, { message: "最高温度必须大于最低温度" });
+
+export const priceRecordSchema = z.object({
+  itemId: z.union([z.string(), z.literal(""), z.null()]).optional().transform((value) => value || null),
+  itemName: z.string().trim().min(1).max(80),
+  category: z.string().trim().min(1).max(40),
+  unitPrice: z.coerce.number().min(0).max(99999999),
+  quantity: z.coerce.number().positive().max(999999).default(1),
+  purchasedAt: optionalDate,
+  store: z.union([z.string().trim().max(80), z.literal(""), z.null()]).optional().transform((value) => value || null),
+  notes: z.union([z.string().max(300), z.null()]).optional().transform((value) => value || null),
 });

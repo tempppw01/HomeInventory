@@ -22,8 +22,15 @@ export async function GET(_: NextRequest, { params }: Context) {
 export async function PATCH(request: NextRequest, { params }: Context) {
   try {
     const { id } = await params;
-    const data = itemPatchSchema.parse(await request.json());
-    const item = await prisma.item.update({ where: { id }, data, include: { location: true } });
+    const { recordPurchase, purchaseStore, ...data } = itemPatchSchema.parse(await request.json());
+    const item = await prisma.$transaction(async (tx) => {
+      const updated = await tx.item.update({ where: { id }, data, include: { location: true } });
+      if (recordPurchase && updated.price != null) {
+        const quantity = Math.max(data.quantity ?? updated.quantity, 1);
+        await tx.priceRecord.create({ data: { itemId: updated.id, itemName: updated.name, category: updated.category, unitPrice: updated.price, quantity, totalPrice: updated.price * quantity, purchasedAt: data.purchaseDate || new Date(), store: purchaseStore } });
+      }
+      return updated;
+    });
 
     if (item.type === "CONSUMABLE" && item.minQuantity > 0 && item.quantity <= item.minQuantity) {
       const existing = await prisma.shoppingItem.findFirst({ where: { name: item.name, status: "PENDING" } });
