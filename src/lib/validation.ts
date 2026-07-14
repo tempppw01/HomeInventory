@@ -15,6 +15,7 @@ export const itemSchema = z.object({
   price: z.union([z.coerce.number().min(0), z.literal(""), z.null()]).optional().transform((value) => value === "" || value == null ? null : value),
   purchaseDate: optionalDate,
   expiryDate: optionalDate,
+  imageUrl: z.union([z.string().url().max(1000), z.literal(""), z.null()]).optional().transform((value) => value || null),
   locationId: z.union([z.string(), z.literal(""), z.null()]).optional().transform((value) => value || null),
   notes: z.union([z.string().max(500), z.null()]).optional().transform((value) => value || null),
 });
@@ -34,4 +35,13 @@ export const locationSchema = z.object({
   name: z.string().trim().min(1).max(30),
   icon: z.string().max(30).default("Package"),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default("#7c3aed"),
+});
+
+export const ossSettingSchema = z.object({
+  region: z.string().trim().min(1, "请输入 OSS Region").max(80),
+  endpoint: z.union([z.string().trim().max(200), z.literal(""), z.null()]).optional().transform((value) => value || null),
+  bucket: z.string().trim().min(1, "请输入 Bucket").max(100),
+  accessKeyId: z.string().trim().min(1, "请输入 AccessKey ID").max(200),
+  accessKeySecret: z.string().max(300).optional(),
+  publicBaseUrl: z.union([z.string().url().max(500), z.literal(""), z.null()]).optional().transform((value) => value ? value.replace(/\/$/, "") : null),
 });

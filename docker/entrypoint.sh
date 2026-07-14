@@ -39,4 +39,6 @@ if [ "${SEED_DEMO_DATA:-false}" = "true" ]; then
   npx tsx /app/prisma/seed.ts
 fi
 
+npx tsx /app/scripts/backfill-item-codes.ts
+
 exec npm start

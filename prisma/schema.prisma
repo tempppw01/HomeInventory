@@ -29,6 +29,7 @@ model Location {
 
 model Item {
   id           String    @id @default(cuid())
+  itemCode     String?   @unique
   name         String
   category     String
   type         ItemType  @default(DURABLE)
@@ -49,6 +50,17 @@ model Item {
   @@index([category])
   @@index([locationId])
   @@index([expiryDate])
+}
+
+model OssSetting {
+  id              String   @id @default("default")
+  region          String
+  endpoint        String?
+  bucket          String
+  accessKeyId     String
+  accessKeySecret String
+  publicBaseUrl   String?
+  updatedAt       DateTime @updatedAt
 }
 
 model ShoppingItem {

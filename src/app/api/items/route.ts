@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { itemSchema } from "@/lib/validation";
 import { apiError } from "@/lib/api";
+import { createItemCode } from "@/lib/item-code";
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const data = itemSchema.parse(await request.json());
-    const item = await prisma.item.create({ data, include: { location: true } });
+    const item = await prisma.item.create({ data: { ...data, itemCode: createItemCode() }, include: { location: true } });
 
     if (item.type === "CONSUMABLE" && item.minQuantity > 0 && item.quantity <= item.minQuantity) {
       await prisma.shoppingItem.create({

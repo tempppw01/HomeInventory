@@ -14,11 +14,11 @@ async function main() {
 
   await prisma.item.createMany({
     data: [
-      { name: "大米", category: "食品", type: "CONSUMABLE", quantity: 3.5, minQuantity: 2, unit: "kg", price: 32.8, expiryDate: new Date(Date.now() + 120 * 86400000), locationId: kitchen.id },
-      { name: "牛奶", category: "饮品", type: "CONSUMABLE", quantity: 2, minQuantity: 3, unit: "盒", price: 14.9, expiryDate: new Date(Date.now() + 5 * 86400000), locationId: kitchen.id },
-      { name: "洗衣液", category: "清洁", type: "CONSUMABLE", quantity: 0.6, minQuantity: 1, unit: "瓶", price: 39, locationId: bathroom.id },
-      { name: "投影仪", category: "家电", type: "DURABLE", quantity: 1, unit: "台", price: 3299, purchaseDate: new Date("2025-11-18"), locationId: livingRoom.id },
-      { name: "露营帐篷", category: "户外", type: "DURABLE", quantity: 1, unit: "顶", price: 699, purchaseDate: new Date("2026-03-02"), locationId: storage.id },
+      { itemCode: "INV-DEMO-001", name: "大米", category: "食品", type: "CONSUMABLE", quantity: 3.5, minQuantity: 2, unit: "kg", price: 32.8, expiryDate: new Date(Date.now() + 120 * 86400000), locationId: kitchen.id },
+      { itemCode: "INV-DEMO-002", name: "牛奶", category: "饮品", type: "CONSUMABLE", quantity: 2, minQuantity: 3, unit: "盒", price: 14.9, expiryDate: new Date(Date.now() + 5 * 86400000), locationId: kitchen.id },
+      { itemCode: "INV-DEMO-003", name: "洗衣液", category: "清洁", type: "CONSUMABLE", quantity: 0.6, minQuantity: 1, unit: "瓶", price: 39, locationId: bathroom.id },
+      { itemCode: "INV-DEMO-004", name: "投影仪", category: "家电", type: "DURABLE", quantity: 1, unit: "台", price: 3299, purchaseDate: new Date("2025-11-18"), locationId: livingRoom.id },
+      { itemCode: "INV-DEMO-005", name: "露营帐篷", category: "户外", type: "DURABLE", quantity: 1, unit: "顶", price: 699, purchaseDate: new Date("2026-03-02"), locationId: storage.id },
     ],
   });
 

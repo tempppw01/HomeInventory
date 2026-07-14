@@ -1,6 +1,6 @@
 {
   "name": "home-inventory",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "engines": {
     "node": ">=22"
@@ -15,15 +15,18 @@
     "db:push": "prisma db push --schema prisma/schema.prisma",
     "db:init:sqlite": "tsx scripts/init-sqlite.ts",
     "db:seed": "tsx prisma/seed.ts",
-    "db:setup": "npm run db:generate && npm run db:init:sqlite && npm run db:seed"
+    "db:backfill": "tsx scripts/backfill-item-codes.ts",
+    "db:setup": "npm run db:generate && npm run db:init:sqlite && npm run db:seed && npm run db:backfill"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",
+    "ali-oss": "^6.23.0",
     "fast-check": "^4.9.0",
     "lucide-react": "^0.468.0",
     "motion": "^12.0.0",
     "next": "16.2.10",
     "prisma": "^6.19.0",
+    "qrcode.react": "^4.2.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "tsx": "^4.19.2",
@@ -31,6 +34,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.0",
+    "@types/ali-oss": "^6.23.3",
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.3",
     "@types/react-dom": "^19.0.2",

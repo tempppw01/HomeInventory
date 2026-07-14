@@ -11,6 +11,7 @@ export interface Location {
 
 export interface Item {
   id: string;
+  itemCode: string | null;
   name: string;
   category: string;
   type: ItemType;
@@ -21,6 +22,7 @@ export interface Item {
   purchaseDate: string | null;
   expiryDate: string | null;
   notes: string | null;
+  imageUrl: string | null;
   locationId: string | null;
   location: Location | null;
   createdAt: string;

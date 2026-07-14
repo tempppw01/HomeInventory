@@ -5,6 +5,20 @@ import { apiError } from "@/lib/api";
 
 type Context = { params: Promise<{ id: string }> };
 
+export async function GET(_: NextRequest, { params }: Context) {
+  try {
+    const { id } = await params;
+    const item = await prisma.item.findFirst({
+      where: { OR: [{ id }, { itemCode: id }] },
+      include: { location: true },
+    });
+    if (!item) return NextResponse.json({ error: "物品不存在" }, { status: 404 });
+    return NextResponse.json(item);
+  } catch (error) {
+    return apiError(error);
+  }
+}
+
 export async function PATCH(request: NextRequest, { params }: Context) {
   try {
     const { id } = await params;

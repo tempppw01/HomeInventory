@@ -5,6 +5,8 @@
 ## 已实现
 
 - 物品录入、编辑、删除、搜索和分类筛选
+- 物品图片上传至阿里云 OSS、可见物品编号与二维码详情
+- 搜索快捷联想、提醒中心和跟随系统主题
 - 耐用品 / 消耗品两类库存模型
 - 消耗品快速扣减，低于阈值时自动加入采购清单
 - 采购清单手动添加、完成和删除
@@ -102,6 +104,12 @@ docker compose up -d
 | `DATABASE_URL` | SQLite 文件路径 | Prisma 数据库连接串 |
 | `SEED_DEMO_DATA` | `false` | 容器启动时是否写入演示数据 |
 | `HOME_INVENTORY_IMAGE` | `home-inventory:local` | Compose 使用的应用镜像 |
+| `OSS_REGION` | 空 | 阿里云 OSS Region |
+| `OSS_ENDPOINT` | 空 | 自定义 OSS Endpoint |
+| `OSS_BUCKET` | 空 | OSS Bucket 名称 |
+| `OSS_ACCESS_KEY_ID` | 空 | OSS AccessKey ID |
+| `OSS_ACCESS_KEY_SECRET` | 空 | OSS AccessKey Secret |
+| `OSS_PUBLIC_BASE_URL` | 空 | Bucket 或 CDN 的公开访问域名 |
 
 直接运行 Docker 镜像且未设置数据库变量时，会自动使用 `file:/app/data/home-inventory.db`。请挂载 `/app/data` 目录，否则删除容器后 SQLite 数据也会丢失。
 
