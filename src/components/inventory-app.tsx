@@ -38,6 +38,8 @@ const mobileNavItems = [...navItems, { id: "settings" as View, label: "设置", 
 const iconMap = { Package, CookingPot, Sofa, Bath, Warehouse };
 const categories = ["日用", "食品", "饮品", "清洁", "家电", "数码", "衣物", "医药", "户外", "其他"];
 const units = ["件", "个", "盒", "瓶", "袋", "卷", "包", "台", "kg", "L"];
+const welcomeStorageKey = "home-inventory-welcome-seen";
+const legacyWelcomeStorageKeys = ["home-inventory-welcome-0.0.1"];
 const appStartedAt = Date.now();
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
@@ -93,7 +95,10 @@ export function InventoryApp() {
     return () => { active = false; };
   }, []);
   useEffect(() => {
-    if (localStorage.getItem(`home-inventory-welcome-${APP_VERSION}`)) return;
+    if (localStorage.getItem(welcomeStorageKey) || legacyWelcomeStorageKeys.some((key) => localStorage.getItem(key))) {
+      localStorage.setItem(welcomeStorageKey, "seen");
+      return;
+    }
     const frame = requestAnimationFrame(() => setShowWelcome(true));
     return () => cancelAnimationFrame(frame);
   }, []);
@@ -224,7 +229,7 @@ export function InventoryApp() {
         {aiItem && <AiAssistantModal item={aiItem} onClose={() => setAiItem(null)} onApplied={async (message) => { setToast(message); await refresh(); }} />}
       </AnimatePresence>
       {printItems && <PrintStudio items={printItems} onClose={() => setPrintItems(null)} />}
-      {showWelcome && <WelcomeModal onClose={() => { localStorage.setItem(`home-inventory-welcome-${APP_VERSION}`, "seen"); setShowWelcome(false); }} />}
+      {showWelcome && <WelcomeModal onClose={() => { localStorage.setItem(welcomeStorageKey, "seen"); setShowWelcome(false); }} />}
       <AnimatePresence>{toast && <motion.div initial={{ opacity: 0, y: 20, x: "-50%" }} animate={{ opacity: 1, y: 0, x: "-50%" }} exit={{ opacity: 0, y: 12, x: "-50%" }} className="fixed bottom-24 left-1/2 z-[70] rounded-2xl px-4 py-3 text-sm font-semibold text-white shadow-2xl md:bottom-8" style={{ background: "#24242d" }}>{toast}</motion.div>}</AnimatePresence>
     </div>
   );
@@ -373,7 +378,7 @@ function FridgeModal({ fridge, onClose, onSaved }: { fridge: FridgeSummary; onCl
 }
 
 function AboutView({ onWelcome }: { onWelcome: () => void }) {
-  return <><PageTitle title="关于归物" text="轻量、清楚、真正适合家庭日常使用。" /><div className="max-w-3xl space-y-4"><section className="surface rounded-3xl p-6"><div className="flex items-center gap-4"><div className="grid size-14 place-items-center rounded-3xl text-white" style={{ background: "linear-gradient(145deg, var(--primary), #a177ff)" }}><Archive size={26} /></div><div><h2 className="m-0 text-xl font-black">归物 HomeInventory</h2><p className="mb-0 mt-1 text-sm muted">版本 {APP_VERSION} · MVP 迭代起点</p></div></div><p className="mb-0 mt-5 text-sm leading-7 muted">归物帮助家庭记录物品、消耗品、保质期、采购与价格。功能设计遵循“少一步操作、少一个干扰”的原则，复杂能力放在需要时再展开。</p></section><section className="surface rounded-3xl p-6"><h3 className="m-0 text-base">0.0.1 更新内容</h3><div className="mt-4 grid gap-3 sm:grid-cols-2"><AboutFeature icon={AlertTriangle} title="保质期预警" text="区分已过期和即将到期，食品提醒更明确。" /><AboutFeature icon={Snowflake} title="冰箱温度" text="记录温度并在超出范围时提醒。" /><AboutFeature icon={WalletCards} title="消费概览" text="保留购买价格流水与近 6 月均值。" /><AboutFeature icon={QrCode} title="物品标签" text="二维码详情与自定义批量打印。" /></div></section><button onClick={onWelcome} className="btn-ghost text-sm">重新查看欢迎页</button></div></>;
+  return <><PageTitle title="关于归物" text="轻量、清楚、真正适合家庭日常使用。" /><div className="max-w-3xl space-y-4"><section className="surface rounded-3xl p-6"><div className="flex items-center gap-4"><div className="grid size-14 place-items-center rounded-3xl text-white" style={{ background: "linear-gradient(145deg, var(--primary), #a177ff)" }}><Archive size={26} /></div><div><h2 className="m-0 text-xl font-black">归物 HomeInventory</h2><p className="mb-0 mt-1 text-sm muted">版本 {APP_VERSION} · MVP 迭代起点</p></div></div><p className="mb-0 mt-5 text-sm leading-7 muted">归物帮助家庭记录物品、消耗品、保质期、采购与价格。功能设计遵循“少一步操作、少一个干扰”的原则，复杂能力放在需要时再展开。</p></section><section className="surface rounded-3xl p-6"><h3 className="m-0 text-base">{APP_VERSION} 更新内容</h3><div className="mt-4 grid gap-3 sm:grid-cols-2"><AboutFeature icon={Bot} title="AI 兼容增强" text="兼容更多渠道返回格式，并提供明确的连接错误提示。" /><AboutFeature icon={AlertTriangle} title="保质期预警" text="区分已过期和即将到期，食品提醒更明确。" /><AboutFeature icon={Snowflake} title="冰箱温度" text="记录温度并在超出范围时提醒。" /><AboutFeature icon={WalletCards} title="消费概览" text="保留购买价格流水与近 6 月均值。" /></div></section><button onClick={onWelcome} className="btn-ghost text-sm">重新查看欢迎页</button></div></>;
 }
 
 function AboutFeature({ icon: Icon, title, text }: { icon: typeof Info; title: string; text: string }) { return <div className="rounded-2xl p-4" style={{ background: "var(--surface-soft)" }}><Icon size={18} style={{ color: "var(--primary)" }} /><div className="mt-3 text-sm font-bold">{title}</div><p className="mb-0 mt-1 text-xs leading-5 muted">{text}</p></div>; }
