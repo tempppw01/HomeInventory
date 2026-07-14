@@ -35,9 +35,10 @@ else
   npx tsx /app/scripts/init-sqlite.ts
 fi
 
-if [ "${SEED_DEMO_DATA:-false}" = "true" ]; then
-  npx tsx /app/prisma/seed.ts
-fi
+case "${SEED_DEMO_DATA:-auto}" in
+  false|0|no|off) echo "Demo data disabled" ;;
+  *) npx tsx /app/prisma/seed.ts ;;
+esac
 
 npx tsx /app/scripts/backfill-item-codes.ts
 

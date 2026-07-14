@@ -58,14 +58,14 @@ docker compose up -d --build
 
 数据库存放在具名卷 `home_inventory_data`。访问 <http://localhost:3000>。
 
-如需演示数据：
+首次启动且数据库为空时，会自动加入少量示范物品、采购事项、消费记录和冰箱温度，帮助快速了解主要功能。已有任何家庭数据时都会自动跳过，不会覆盖或重复写入。
+
+如需从空库开始且不写入示范数据：
 
 ```powershell
-$env:SEED_DEMO_DATA="true"
+$env:SEED_DEMO_DATA="false"
 docker compose up -d --build
 ```
-
-首次初始化后请将其恢复为 `false`，避免空库重建时再次写入示例。
 
 ## Docker Compose（MySQL）
 
@@ -109,7 +109,7 @@ docker compose up -d
 | `APP_PORT` | `3000` | 宿主机访问端口 |
 | `DATABASE_PROVIDER` | `sqlite` | `sqlite` 或 `mysql` |
 | `DATABASE_URL` | SQLite 文件路径 | Prisma 数据库连接串 |
-| `SEED_DEMO_DATA` | `false` | 容器启动时是否写入演示数据 |
+| `SEED_DEMO_DATA` | `auto` | 空库自动写入示范数据；设为 `false` 可关闭 |
 | `HOME_INVENTORY_IMAGE` | `home-inventory:local` | Compose 使用的应用镜像 |
 | `OSS_REGION` | 空 | 阿里云 OSS Region |
 | `OSS_ENDPOINT` | 空 | 自定义 OSS Endpoint |

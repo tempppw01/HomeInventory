@@ -10,7 +10,7 @@ services:
     environment:
       DATABASE_PROVIDER: sqlite
       DATABASE_URL: file:/app/data/home-inventory.db
-      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-auto}
       OSS_REGION: ${OSS_REGION:-}
       OSS_ENDPOINT: ${OSS_ENDPOINT:-}
       OSS_BUCKET: ${OSS_BUCKET:-}
