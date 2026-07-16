@@ -123,7 +123,7 @@ export function AiSettings({ onToast }: { onToast: (message: string) => void }) 
       <div>
         <div className="mb-2 text-xs font-bold muted">供应商快捷设置</div>
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-          {AI_PROVIDER_PRESETS.map((preset) => <button key={preset.id} type="button" disabled={form.managedByEnvironment} onClick={() => chooseProvider(preset.id)} className="flex min-w-0 flex-col items-center gap-2 rounded-2xl border px-2 py-3 text-[11px] font-bold transition hover:-translate-y-0.5" style={{ borderColor: provider.id === preset.id ? preset.color : "var(--border)", background: provider.id === preset.id ? `color-mix(in srgb, ${preset.color} 10%, var(--surface-solid))` : "var(--surface-soft)", color: provider.id === preset.id ? preset.color : "var(--muted)" }}><ProviderIcon provider={preset.id} size={19} /><span className="truncate">{preset.shortName}</span></button>)}
+          {AI_PROVIDER_PRESETS.map((preset) => <button key={preset.id} type="button" title={preset.name} aria-label={`选择 ${preset.name}`} disabled={form.managedByEnvironment} onClick={() => chooseProvider(preset.id)} className="grid h-16 min-w-0 place-items-center rounded-2xl border transition hover:-translate-y-0.5" style={{ borderColor: provider.id === preset.id ? preset.color : "var(--border)", background: provider.id === preset.id ? `color-mix(in srgb, ${preset.color} 10%, var(--surface-solid))` : "var(--surface-soft)", color: provider.id === preset.id ? preset.color : "var(--muted)" }}><ProviderIcon provider={preset.id} size={24} /></button>)}
         </div>
       </div>
 
