@@ -112,7 +112,7 @@ npm.cmd run dev
 <summary><strong>使用 Docker Hub 镜像</strong></summary>
 
 ```powershell
-$env:HOME_INVENTORY_IMAGE="你的DockerHub用户名/home-inventory:latest"
+$env:HOME_INVENTORY_IMAGE="34v0wphix/homeinventory:latest"
 docker compose up -d
 ```
 

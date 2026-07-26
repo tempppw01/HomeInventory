@@ -36,7 +36,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/home-inventory
+          images: 34v0wphix/homeinventory
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=tag
