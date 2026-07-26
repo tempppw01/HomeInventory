@@ -80,11 +80,33 @@ services:
     volumes:
       # 威联通 Container Station 默认绑定卷
       - /share/Container/homeinventory:/app/data
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: home-inventory-cloudflared
+    restart: unless-stopped
+    depends_on:
+      - home-inventory
+    # 将 YOUR_CLOUDFLARE_TUNNEL_TOKEN 替换为 Cloudflare Tunnel 令牌
+    command: tunnel --no-autoupdate run --token YOUR_CLOUDFLARE_TUNNEL_TOKEN
 ```
 
-数据会保存到威联通的 `/share/Container/homeinventory`，容器内路径固定为 `/app/data`。Container Station 显示容器运行后，使用 `http://NAS_IP:3100` 打开应用。
+数据会保存到威联通的 `/share/Container/homeinventory`，容器内路径固定为 `/app/data`。Container Station 显示容器运行后，使用 `http://NAS_IP:3100` 打开应用。`cloudflared` 通过出站连接提供公网访问，不需要在路由器上做端口转发。
 
 </details>
+
+### Cloudflare Tunnel 设置
+
+1. 先将自己的域名接入 Cloudflare，并在 [Cloudflare One](https://one.dash.cloudflare.com/) 打开 **网络 → Tunnels（隧道）**，创建一个 **Cloudflared** Tunnel。
+2. 在 Tunnel 的 Docker 安装步骤中复制 `--token` 后面的令牌，替换威联通 Compose 中的 `YOUR_CLOUDFLARE_TUNNEL_TOKEN`。令牌等同于连接凭据，只保存在 NAS 的 Compose 配置中，不要提交到 GitHub。
+3. 为该 Tunnel 添加 **Public Hostname**，例如 `inventory.example.com`；服务类型选择 **HTTP**，服务地址填写 **`http://home-inventory:3000`**。这是 Compose 内部服务名和容器端口，不要填写 NAS IP、`localhost` 或外部的 `3100` 端口。
+4. 部署后访问 `https://inventory.example.com`。建议在 Cloudflare Zero Trust 的 **Access → Applications** 中为该域名添加登录策略，避免家庭库存直接公开到互联网。
+
+如果使用仓库中的本地 Compose，可在 `.env` 中设置 `CLOUDFLARE_TUNNEL_TOKEN`，然后执行：
+
+```bash
+docker compose --profile cloudflare up -d
+```
 
 ### NAS 更新镜像
 

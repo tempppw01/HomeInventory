@@ -24,5 +24,14 @@ services:
     volumes:
       - home_inventory_data:/app/data
 
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: home-inventory-cloudflared
+    restart: unless-stopped
+    profiles: ["cloudflare"]
+    depends_on:
+      - home-inventory
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:-}
+
 volumes:
   home_inventory_data:
