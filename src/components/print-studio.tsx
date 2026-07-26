@@ -2,10 +2,15 @@
 
 import { Printer, Settings2, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Item } from "@/types";
 
 type PaperPreset = "a4-portrait" | "a4-landscape" | "custom";
+const printSettingsKey = "home-inventory-print-settings-v1";
+
+function savedNumber(value: unknown, min: number, max: number) {
+  return typeof value === "number" && Number.isFinite(value) && value >= min && value <= max ? value : null;
+}
 
 export function PrintStudio({ items, onClose }: { items: Item[]; onClose: () => void }) {
   const [preset, setPreset] = useState<PaperPreset>("a4-portrait");
@@ -23,6 +28,33 @@ export function PrintStudio({ items, onClose }: { items: Item[]; onClose: () => 
   const [showLocation, setShowLocation] = useState(true);
   const [showQuantity, setShowQuantity] = useState(true);
   const [showExpiry, setShowExpiry] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      try {
+        const saved = JSON.parse(localStorage.getItem(printSettingsKey) || "null") as Record<string, unknown> | null;
+        if (!saved) return;
+        if (saved.preset === "a4-portrait" || saved.preset === "a4-landscape" || saved.preset === "custom") setPreset(saved.preset);
+        const restore = (value: unknown, min: number, max: number, setValue: (next: number) => void) => { const next = savedNumber(value, min, max); if (next != null) setValue(next); };
+        restore(saved.customWidth, 40, 500, setCustomWidth); restore(saved.customHeight, 40, 500, setCustomHeight); restore(saved.columns, 1, 5, setColumns); restore(saved.qrSize, 80, 160, setQrSize); restore(saved.horizontalMargin, 0, 60, setHorizontalMargin); restore(saved.verticalMargin, 0, 60, setVerticalMargin); restore(saved.columnGap, 0, 40, setColumnGap); restore(saved.rowGap, 0, 40, setRowGap); restore(saved.labelWidth, 20, 200, setLabelWidth); restore(saved.labelHeight, 20, 200, setLabelHeight);
+        if (typeof saved.showLabelBorder === "boolean") setShowLabelBorder(saved.showLabelBorder);
+        if (typeof saved.showLocation === "boolean") setShowLocation(saved.showLocation);
+        if (typeof saved.showQuantity === "boolean") setShowQuantity(saved.showQuantity);
+        if (typeof saved.showExpiry === "boolean") setShowExpiry(saved.showExpiry);
+      } catch {
+        // Ignore malformed saved settings and keep the defaults.
+      } finally {
+        setSettingsLoaded(true);
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    localStorage.setItem(printSettingsKey, JSON.stringify({ preset, customWidth, customHeight, columns, qrSize, horizontalMargin, verticalMargin, columnGap, rowGap, labelWidth, labelHeight, showLabelBorder, showLocation, showQuantity, showExpiry }));
+  }, [settingsLoaded, preset, customWidth, customHeight, columns, qrSize, horizontalMargin, verticalMargin, columnGap, rowGap, labelWidth, labelHeight, showLabelBorder, showLocation, showQuantity, showExpiry]);
 
   const paper = useMemo(() => preset === "a4-landscape" ? { width: 297, height: 210 } : preset === "custom" ? { width: customWidth, height: customHeight } : { width: 210, height: 297 }, [preset, customWidth, customHeight]);
   const labelScale = Math.min(1, Math.max(.22, (labelHeight * 3) / (qrSize + 88)));
