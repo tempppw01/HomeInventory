@@ -30,6 +30,8 @@
 Docker Hub 镜像 `34v0wphix/homeinventory:latest` 同时支持 `amd64` 和 `arm64`，可直接用于极空间、威联通等 NAS。在 NAS 的 Docker / Container Station 中新建 Compose 项目，粘贴以下内容并部署：
 
 ```yaml
+version: "3.8"
+
 services:
   home-inventory:
     image: 34v0wphix/homeinventory:latest
@@ -60,16 +62,28 @@ volumes:
 <details>
 <summary><strong>威联通 QNAP NAS</strong></summary>
 
-打开 **Container Station**，新建应用 / Compose 项目并粘贴上方 YAML。Container Station 会为应用创建默认的数据绑定卷；请保留它的宿主机目录，并确认容器内挂载路径为 **`/app/data`**、访问权限为读写。不要把 NAS 自动生成的绑定卷路径改成 `./data`。
-
-如果在“存储 / 卷”页面手动添加绑定卷，遵循下面的对应关系即可（宿主机路径使用 Container Station 已生成的默认路径，不要照抄为固定的 `/share/...` 路径）：
+打开 **Container Station**，选择“创建应用”，将下方完整的 Docker Compose 编排粘贴进去后直接部署：
 
 ```yaml
+version: "3.8"
+
+services:
+  home-inventory:
+    image: 34v0wphix/homeinventory:latest
+    container_name: home-inventory
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      SEED_DEMO_DATA: auto
+    volumes:
+      - home_inventory_data:/app/data
+
 volumes:
-  - <Container Station 默认绑定卷宿主机路径>:/app/data
+  home_inventory_data:
 ```
 
-Container Station 中显示容器运行后，使用 `http://NAS_IP:3000` 打开应用。备份时备份该默认绑定卷中的数据即可。
+其中 `home_inventory_data` 是 Compose 定义的数据卷；Container Station 会自动创建并绑定它，容器内路径已固定为 `/app/data`。不需要手动填写或猜测 `/share/...` 的 NAS 宿主机路径。Container Station 显示容器运行后，使用 `http://NAS_IP:3000` 打开应用。
 
 </details>
 
