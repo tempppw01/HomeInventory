@@ -25,7 +25,54 @@
 - 可选接入 OSS 图片存储和 OpenAI 兼容 AI 助手
 - 手机和电脑均可使用，支持深色模式
 
-## 三步启动
+## Docker Compose 部署（极空间 / 威联通 NAS）
+
+Docker Hub 镜像 `34v0wphix/homeinventory:latest` 同时支持 `amd64` 和 `arm64`，可直接用于极空间、威联通等 NAS。在 NAS 的 Docker / Container Station 中新建 Compose 项目，粘贴以下内容并部署：
+
+```yaml
+services:
+  home-inventory:
+    image: 34v0wphix/homeinventory:latest
+    container_name: home-inventory
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # 设为 false 可关闭首次启动时的示范数据
+      SEED_DEMO_DATA: auto
+    volumes:
+      # 把数据保存到 Compose 项目目录下，重建容器不会丢失
+      - ./data:/app/data
+```
+
+部署完成后，在浏览器访问 `http://NAS_IP:3000`。若 3000 端口已被占用，将左侧端口改为其他未占用端口，例如 `"3100:3000"`，再访问 `http://NAS_IP:3100`。
+
+<details>
+<summary><strong>极空间 NAS</strong></summary>
+
+在 Docker 应用中创建 Compose 项目，将上方 YAML 作为项目配置。建议将项目保存到一个方便备份的共享文件夹；其中 `./data` 会在该项目目录下创建并保存 SQLite 数据库。部署后可在容器详情中查看日志和运行状态。
+
+</details>
+
+<details>
+<summary><strong>威联通 QNAP NAS</strong></summary>
+
+打开 **Container Station**，新建应用 / Compose 项目并粘贴上方 YAML。建议把项目目录放在共享文件夹中，方便通过 File Station 备份 `data` 目录。Container Station 中显示容器运行后，使用 `http://NAS_IP:3000` 打开应用。
+
+</details>
+
+### NAS 更新镜像
+
+在 Compose 项目的终端或 NAS SSH 中执行：
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+这只会替换应用容器，`./data` 中的物品数据会保留。
+
+## 从源码三步启动
 
 电脑需要先安装 [Docker Desktop](https://www.docker.com/products/docker-desktop/)。
 
@@ -143,4 +190,4 @@ docker compose up -d
 
 项目使用 Next.js、React、TypeScript、Prisma 和 Tailwind CSS，可部署到 `linux/amd64` 与 `linux/arm64` 设备。
 
-当前版本：`0.0.4`
+当前版本：`0.0.5`
