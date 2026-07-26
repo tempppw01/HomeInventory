@@ -41,8 +41,11 @@ services:
       # 设为 false 可关闭首次启动时的示范数据
       SEED_DEMO_DATA: auto
     volumes:
-      # 把数据保存到 Compose 项目目录下，重建容器不会丢失
-      - ./data:/app/data
+      # Docker / Container Station 管理的数据卷，重建容器不会丢失
+      - home_inventory_data:/app/data
+
+volumes:
+  home_inventory_data:
 ```
 
 部署完成后，在浏览器访问 `http://NAS_IP:3000`。若 3000 端口已被占用，将左侧端口改为其他未占用端口，例如 `"3100:3000"`，再访问 `http://NAS_IP:3100`。
@@ -50,14 +53,23 @@ services:
 <details>
 <summary><strong>极空间 NAS</strong></summary>
 
-在 Docker 应用中创建 Compose 项目，将上方 YAML 作为项目配置。建议将项目保存到一个方便备份的共享文件夹；其中 `./data` 会在该项目目录下创建并保存 SQLite 数据库。部署后可在容器详情中查看日志和运行状态。
+在 Docker 应用中创建 Compose 项目，将上方 YAML 作为项目配置。`home_inventory_data` 会由 Docker 管理，部署后可在容器详情中查看日志和运行状态。
 
 </details>
 
 <details>
 <summary><strong>威联通 QNAP NAS</strong></summary>
 
-打开 **Container Station**，新建应用 / Compose 项目并粘贴上方 YAML。建议把项目目录放在共享文件夹中，方便通过 File Station 备份 `data` 目录。Container Station 中显示容器运行后，使用 `http://NAS_IP:3000` 打开应用。
+打开 **Container Station**，新建应用 / Compose 项目并粘贴上方 YAML。Container Station 会为应用创建默认的数据绑定卷；请保留它的宿主机目录，并确认容器内挂载路径为 **`/app/data`**、访问权限为读写。不要把 NAS 自动生成的绑定卷路径改成 `./data`。
+
+如果在“存储 / 卷”页面手动添加绑定卷，遵循下面的对应关系即可（宿主机路径使用 Container Station 已生成的默认路径，不要照抄为固定的 `/share/...` 路径）：
+
+```yaml
+volumes:
+  - <Container Station 默认绑定卷宿主机路径>:/app/data
+```
+
+Container Station 中显示容器运行后，使用 `http://NAS_IP:3000` 打开应用。备份时备份该默认绑定卷中的数据即可。
 
 </details>
 
@@ -70,7 +82,7 @@ docker compose pull
 docker compose up -d
 ```
 
-这只会替换应用容器，`./data` 中的物品数据会保留。
+这只会替换应用容器，数据卷中的物品数据会保留。
 
 ## 从源码三步启动
 
