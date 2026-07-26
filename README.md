@@ -73,17 +73,16 @@ services:
     container_name: home-inventory
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # 威联通常见服务会占用 3000，外部端口改用 3100
+      - "3100:3000"
     environment:
       SEED_DEMO_DATA: auto
     volumes:
-      - home_inventory_data:/app/data
-
-volumes:
-  home_inventory_data:
+      # 威联通 Container Station 默认绑定卷
+      - /share/Container/homeinventory:/app/data
 ```
 
-其中 `home_inventory_data` 是 Compose 定义的数据卷；Container Station 会自动创建并绑定它，容器内路径已固定为 `/app/data`。不需要手动填写或猜测 `/share/...` 的 NAS 宿主机路径。Container Station 显示容器运行后，使用 `http://NAS_IP:3000` 打开应用。
+数据会保存到威联通的 `/share/Container/homeinventory`，容器内路径固定为 `/app/data`。Container Station 显示容器运行后，使用 `http://NAS_IP:3100` 打开应用。
 
 </details>
 
