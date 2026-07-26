@@ -13,8 +13,13 @@ export function PrintStudio({ items, onClose }: { items: Item[]; onClose: () => 
   const [customHeight, setCustomHeight] = useState(297);
   const [columns, setColumns] = useState(3);
   const [qrSize, setQrSize] = useState(112);
-  const [margin, setMargin] = useState(10);
-  const [gap, setGap] = useState(5);
+  const [horizontalMargin, setHorizontalMargin] = useState(10);
+  const [verticalMargin, setVerticalMargin] = useState(10);
+  const [columnGap, setColumnGap] = useState(5);
+  const [rowGap, setRowGap] = useState(5);
+  const [labelWidth, setLabelWidth] = useState(60);
+  const [labelHeight, setLabelHeight] = useState(70);
+  const [showLabelBorder, setShowLabelBorder] = useState(true);
   const [showLocation, setShowLocation] = useState(true);
   const [showQuantity, setShowQuantity] = useState(true);
   const [showExpiry, setShowExpiry] = useState(false);
@@ -26,8 +31,8 @@ export function PrintStudio({ items, onClose }: { items: Item[]; onClose: () => 
       html, body { width: ${paper.width}mm; min-height: ${paper.height}mm; background: white !important; }
       body * { visibility: hidden !important; }
       .print-sheet, .print-sheet * { visibility: visible !important; }
-      .print-sheet { position: absolute !important; inset: 0 auto auto 0 !important; width: ${paper.width}mm !important; min-height: ${paper.height}mm !important; padding: ${margin}mm !important; display: grid !important; grid-template-columns: repeat(${columns}, minmax(0, 1fr)) !important; gap: ${gap}mm !important; align-content: start !important; background: white !important; color: black !important; box-shadow: none !important; }
-      .print-label { break-inside: avoid; page-break-inside: avoid; border: 0.25mm solid #d7d7dc !important; color: black !important; }
+      .print-sheet { position: absolute !important; inset: 0 auto auto 0 !important; width: ${paper.width}mm !important; min-height: ${paper.height}mm !important; padding: ${verticalMargin}mm ${horizontalMargin}mm !important; display: grid !important; grid-template-columns: repeat(${columns}, ${labelWidth}mm) !important; column-gap: ${columnGap}mm !important; row-gap: ${rowGap}mm !important; align-content: start !important; background: white !important; color: black !important; box-shadow: none !important; }
+      .print-label { width: ${labelWidth}mm !important; height: ${labelHeight}mm !important; break-inside: avoid; page-break-inside: avoid; border: ${showLabelBorder ? "0.25mm solid #d7d7dc" : "0"} !important; color: black !important; }
     }
   `;
 
@@ -39,15 +44,17 @@ export function PrintStudio({ items, onClose }: { items: Item[]; onClose: () => 
         <Control label="纸张规格"><select className="input" value={preset} onChange={(e) => setPreset(e.target.value as PaperPreset)}><option value="a4-portrait">A4 纵向</option><option value="a4-landscape">A4 横向</option><option value="custom">自定义尺寸</option></select></Control>
         {preset === "custom" && <div className="grid grid-cols-2 gap-3"><Control label="宽度 mm"><input className="input" type="number" min="40" max="500" value={customWidth} onChange={(e) => setCustomWidth(Number(e.target.value))} /></Control><Control label="高度 mm"><input className="input" type="number" min="40" max="500" value={customHeight} onChange={(e) => setCustomHeight(Number(e.target.value))} /></Control></div>}
         <div className="grid grid-cols-2 gap-3"><Control label="每行标签数"><select className="input" value={columns} onChange={(e) => setColumns(Number(e.target.value))}>{[1,2,3,4,5].map((value) => <option key={value} value={value}>{value} 列</option>)}</select></Control><Control label="二维码尺寸"><select className="input" value={qrSize} onChange={(e) => setQrSize(Number(e.target.value))}>{[80,96,112,128,144,160].map((value) => <option key={value} value={value}>{value}px</option>)}</select></Control></div>
-        <div className="grid grid-cols-2 gap-3"><Control label="页边距 mm"><input className="input" type="number" min="0" max="30" value={margin} onChange={(e) => setMargin(Number(e.target.value))} /></Control><Control label="标签间距 mm"><input className="input" type="number" min="0" max="20" value={gap} onChange={(e) => setGap(Number(e.target.value))} /></Control></div>
-        <div><div className="mb-2 flex items-center gap-2 text-xs font-bold muted"><Settings2 size={14} />摘要内容</div><div className="flex flex-wrap gap-2"><Toggle checked={showLocation} onChange={setShowLocation} label="存放位置" /><Toggle checked={showQuantity} onChange={setShowQuantity} label="数量" /><Toggle checked={showExpiry} onChange={setShowExpiry} label="到期日" /></div></div>
+        <div><div className="mb-2 flex items-center gap-2 text-xs font-bold muted"><Settings2 size={14} />标签大小</div><div className="grid grid-cols-2 gap-3"><Control label="标签宽度 mm"><input className="input" type="number" min="20" max="200" step="0.1" value={labelWidth} onChange={(e) => setLabelWidth(Number(e.target.value))} /></Control><Control label="标签高度 mm"><input className="input" type="number" min="20" max="200" step="0.1" value={labelHeight} onChange={(e) => setLabelHeight(Number(e.target.value))} /></Control></div></div>
+        <div className="grid grid-cols-2 gap-3"><Control label="左右页边距 mm"><input className="input" type="number" min="0" max="60" step="0.1" value={horizontalMargin} onChange={(e) => setHorizontalMargin(Number(e.target.value))} /></Control><Control label="上下页边距 mm"><input className="input" type="number" min="0" max="60" step="0.1" value={verticalMargin} onChange={(e) => setVerticalMargin(Number(e.target.value))} /></Control></div>
+        <div className="grid grid-cols-2 gap-3"><Control label="标签列间距 mm"><input className="input" type="number" min="0" max="40" step="0.1" value={columnGap} onChange={(e) => setColumnGap(Number(e.target.value))} /></Control><Control label="标签行间距 mm"><input className="input" type="number" min="0" max="40" step="0.1" value={rowGap} onChange={(e) => setRowGap(Number(e.target.value))} /></Control></div>
+        <div><div className="mb-2 flex items-center gap-2 text-xs font-bold muted"><Settings2 size={14} />标签内容</div><div className="flex flex-wrap gap-2"><Toggle checked={showLabelBorder} onChange={setShowLabelBorder} label="二维码标签边框" /><Toggle checked={showLocation} onChange={setShowLocation} label="存放位置" /><Toggle checked={showQuantity} onChange={setShowQuantity} label="数量" /><Toggle checked={showExpiry} onChange={setShowExpiry} label="到期日" /></div></div>
       </div>
       <button onClick={() => window.print()} className="btn-primary mt-7 flex w-full items-center justify-center gap-2"><Printer size={18} />打印 / 保存 PDF</button>
       <p className="mt-3 text-[11px] leading-5 muted">打印对话框中请选择“实际大小”或 100% 缩放。物品较多时浏览器会自动分页，每页保持相同布局。</p>
     </aside>
     <div className="flex-1 overflow-auto p-4 lg:p-8" style={{ background: "#d9dae0" }}>
-      <div className="print-sheet mx-auto grid content-start bg-white text-black shadow-2xl" style={{ width: `${paper.width * 3}px`, minHeight: `${paper.height * 3}px`, padding: `${margin * 3}px`, gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: `${gap * 3}px` }}>
-        {items.map((item) => <div key={item.id} className="print-label flex min-w-0 flex-col items-center rounded-xl border border-gray-300 p-3 text-center"><QRCodeSVG value={`${globalThis.location?.origin || ""}/items/${item.id}`} size={qrSize} level="M" includeMargin /><div className="mt-2 w-full truncate text-sm font-bold">{item.name}</div><div className="mt-1 w-full truncate font-mono text-[9px] text-gray-500">{item.itemCode || item.id}</div><div className="mt-2 w-full text-[10px] leading-4 text-gray-700">{item.category}{showLocation && ` · ${item.location?.name || "未设置位置"}`}{showQuantity && ` · ${item.quantity}${item.unit}`}{showExpiry && item.type === "CONSUMABLE" && item.expiryDate && <><br />到期：{new Date(item.expiryDate).toLocaleDateString("zh-CN")}</>}</div></div>)}
+      <div className="print-sheet mx-auto grid content-start bg-white text-black shadow-2xl" style={{ width: `${paper.width * 3}px`, minHeight: `${paper.height * 3}px`, padding: `${verticalMargin * 3}px ${horizontalMargin * 3}px`, gridTemplateColumns: `repeat(${columns}, ${labelWidth * 3}px)`, columnGap: `${columnGap * 3}px`, rowGap: `${rowGap * 3}px` }}>
+        {items.map((item) => <div key={item.id} className={`print-label flex min-w-0 flex-col items-center rounded-xl p-3 text-center ${showLabelBorder ? "border border-gray-300" : "border-0"}`} style={{ width: `${labelWidth * 3}px`, height: `${labelHeight * 3}px` }}><QRCodeSVG value={`${globalThis.location?.origin || ""}/items/${item.id}`} size={qrSize} level="M" includeMargin /><div className="mt-2 w-full truncate text-sm font-bold">{item.name}</div><div className="mt-1 w-full truncate font-mono text-[9px] text-gray-500">{item.itemCode || item.id}</div><div className="mt-2 w-full text-[10px] leading-4 text-gray-700">{item.category}{showLocation && ` · ${item.location?.name || "未设置位置"}`}{showQuantity && ` · ${item.quantity}${item.unit}`}{showExpiry && item.type === "CONSUMABLE" && item.expiryDate && <><br />到期：{new Date(item.expiryDate).toLocaleDateString("zh-CN")}</>}</div></div>)}
       </div>
     </div>
   </div>;
