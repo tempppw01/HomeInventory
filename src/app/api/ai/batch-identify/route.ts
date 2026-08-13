@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     if (images.some((image) => !image.dataUrl.startsWith("data:image/"))) return NextResponse.json({ error: "图片格式不正确" }, { status: 400 });
     const config = await getAiConfig();
     if (!config) return NextResponse.json({ error: "请先在设置中配置 AI 接口" }, { status: 400 });
-    const instruction = "识别图片中清晰可见的家庭物品，每张图片对应一个物品；如果一张图有多个物品，分别列出。只返回 JSON 对象 {\"items\":[...]}，不要 Markdown。每项字段：name, category(日用/食品/饮品/清洁/家电/数码/衣物/医药/户外/其他), type(DURABLE或CONSUMABLE), quantity(数字), unit, purchaseDate(YYYY-MM-DD或null), expiryDate(YYYY-MM-DD或null), notes, confidence(0到1)。耐用品 expiryDate 必须为 null，不确定的字段保守填写。图片无法判断购买日期时 purchaseDate 返回 null。";
+    const instruction = "识别图片中清晰可见的家庭物品，每张图片对应一个物品；如果一张图有多个物品，分别列出。只返回 JSON 对象 {\"items\":[...]}，不要 Markdown。每项字段：sourceIndex(图片序号，从0开始), name, category(日用/食品/饮品/清洁/家电/数码/衣物/医药/户外/其他), type(DURABLE或CONSUMABLE), quantity(数字), unit, purchaseDate(YYYY-MM-DD或null), expiryDate(YYYY-MM-DD或null), notes, confidence(0到1)。sourceIndex 必须对应识别该物品的图片；耐用品 expiryDate 必须为 null，不确定的字段保守填写。图片无法判断购买日期时 purchaseDate 返回 null。";
     const content = [{ type: "text", text: instruction }, ...images.map((image) => ({ type: "image_url", image_url: { url: image.dataUrl, detail: "low" } }))];
     const payload = config.protocol === "anthropic"
       ? { model: config.model, max_tokens: 1800, messages: [{ role: "user", content: [{ type: "text", text: instruction }, ...images.map((image) => ({ type: "image", source: { type: "base64", media_type: image.dataUrl.match(/^data:(image\/[^;]+);/)?.[1] || "image/jpeg", data: image.dataUrl.split(",")[1] || "" } }))] }] }
@@ -30,6 +30,6 @@ export async function POST(request: NextRequest) {
     const raw = await response.text();
     if (!response.ok) return NextResponse.json({ error: `AI 接口请求失败（${response.status}）` }, { status: 502 });
     const root = JSON.parse(raw) as Record<string, unknown>; const choices = Array.isArray(root.choices) ? root.choices : []; const message = choices[0] && typeof choices[0] === "object" ? (choices[0] as Record<string, unknown>).message : undefined; const answer = config.protocol === "anthropic" ? textOf(root.content) : textOf(message && typeof message === "object" ? (message as Record<string, unknown>).content : root.output_text); const records = parseJson(answer);
-    return NextResponse.json({ items: records.slice(0, 30).map((item) => ({ ...(item as Record<string, unknown>), quantity: Number((item as Record<string, unknown>).quantity) > 0 ? Number((item as Record<string, unknown>).quantity) : 1, confidence: Number((item as Record<string, unknown>).confidence) || 0 })) });
+    return NextResponse.json({ items: records.slice(0, 30).map((item) => { const record = item as Record<string, unknown>; const sourceIndex = Number(record.sourceIndex); return { ...record, sourceIndex: Number.isInteger(sourceIndex) && sourceIndex >= 0 && sourceIndex < images.length ? sourceIndex : 0, quantity: Number(record.quantity) > 0 ? Number(record.quantity) : 1, confidence: Number(record.confidence) || 0 }; }) });
   } catch (error) { return apiError(error); }
 }
