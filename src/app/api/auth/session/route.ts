@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
-import { AUTH_COOKIE, authToken } from "@/lib/auth-token";
+import { NextResponse } from "next/server";
+import { currentUser } from "@/lib/account-auth";
+import { prisma } from "@/lib/prisma";
 
-export async function GET(request: NextRequest) {
-  const password = process.env.APP_PASSWORD?.trim();
-  if (!password) return NextResponse.json({ enabled: false, authenticated: true });
-  const expected = await authToken(password);
-  return NextResponse.json({ enabled: true, authenticated: request.cookies.get(AUTH_COOKIE)?.value === expected });
+export async function GET() {
+  const setupRequired = await prisma.user.count() === 0;
+  const user = setupRequired ? null : await currentUser();
+  return NextResponse.json({ setupRequired, authenticated: Boolean(user), user: user && { id: user.id, username: user.username, displayName: user.displayName, role: user.role } });
 }

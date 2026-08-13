@@ -1,0 +1,16 @@
+"use client";
+
+import { FormEvent, useEffect, useState } from "react";
+import { LogOut, UserPlus, Users } from "lucide-react";
+
+type User = { id: string; username: string; displayName: string; role: "ADMIN" | "MEMBER" | "VIEWER"; active: boolean };
+
+export function AccountSettings({ onToast }: { onToast: (message: string) => void }) {
+  const [users, setUsers] = useState<User[]>([]);
+  const [form, setForm] = useState({ username: "", displayName: "", password: "", role: "MEMBER" });
+  const load = () => fetch("/api/auth/users").then((response) => response.ok ? response.json() : []).then(setUsers).catch(() => undefined);
+  useEffect(() => { load(); }, []);
+  const create = async (event: FormEvent) => { event.preventDefault(); const response = await fetch("/api/auth/users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) }); const result = await response.json(); if (!response.ok) { onToast(result.error || "创建失败"); return; } setForm({ username: "", displayName: "", password: "", role: "MEMBER" }); load(); onToast("账号已创建"); };
+  const logout = async () => { await fetch("/api/auth/logout", { method: "POST" }); location.reload(); };
+  return <details className="surface group rounded-3xl p-5"><summary className="flex cursor-pointer list-none items-center gap-3 [&::-webkit-details-marker]:hidden"><div className="grid size-11 place-items-center rounded-2xl" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><Users size={20} /></div><div className="min-w-0 flex-1"><h3 className="m-0 text-sm font-black">账号与家庭成员</h3><p className="mb-0 mt-1 text-xs muted">管理登录账号和只读权限</p></div></summary><div className="mt-5 space-y-4 border-t pt-4" style={{ borderColor: "var(--border)" }}><div className="space-y-2">{users.map((user) => <div key={user.id} className="flex items-center gap-3 rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}><div className="min-w-0 flex-1"><div className="truncate text-sm font-bold">{user.displayName}</div><div className="text-xs muted">@{user.username} · {user.role === "ADMIN" ? "管理员" : user.role === "VIEWER" ? "只读" : "成员"}</div></div><span className="text-xs muted">{user.active ? "正常" : "停用"}</span></div>)}</div><form onSubmit={create} className="space-y-2"><div className="text-xs font-bold muted">新增成员账号</div><div className="grid gap-2 sm:grid-cols-2"><input required className="input" placeholder="用户名" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /><input required className="input" placeholder="显示名称" value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /><input required minLength={8} type="password" className="input" placeholder="初始密码（至少 8 位）" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /><select className="input" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}><option value="MEMBER">成员</option><option value="VIEWER">只读</option></select></div><button className="btn-primary flex items-center gap-2 text-xs"><UserPlus size={14} />创建账号</button></form><button onClick={logout} className="btn-ghost flex items-center gap-2 text-xs"><LogOut size={14} />退出当前账号</button></div></details>;
+}

@@ -3,6 +3,24 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 const statements = [
+  `CREATE TABLE IF NOT EXISTS "User" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "username" TEXT NOT NULL,
+    "displayName" TEXT NOT NULL,
+    "passwordHash" TEXT NOT NULL,
+    "role" TEXT NOT NULL DEFAULT 'MEMBER',
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS "AuthSession" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "tokenHash" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "expiresAt" DATETIME NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "AuthSession_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
   `CREATE TABLE IF NOT EXISTS "Location" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "name" TEXT NOT NULL,
@@ -101,6 +119,12 @@ const statements = [
     CONSTRAINT "PriceRecord_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item" ("id") ON DELETE SET NULL ON UPDATE CASCADE
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "Location_name_key" ON "Location"("name")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "User_username_key" ON "User"("username")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "AuthSession_tokenHash_key" ON "AuthSession"("tokenHash")`,
+  `CREATE INDEX IF NOT EXISTS "AuthSession_userId_idx" ON "AuthSession"("userId")`,
+  `CREATE INDEX IF NOT EXISTS "AuthSession_expiresAt_idx" ON "AuthSession"("expiresAt")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "HouseholdMember_userId_key" ON "HouseholdMember"("userId")`,
+  `CREATE INDEX IF NOT EXISTS "ActivityLog_userId_idx" ON "ActivityLog"("userId")`,
   `CREATE INDEX IF NOT EXISTS "Item_type_idx" ON "Item"("type")`,
   `CREATE INDEX IF NOT EXISTS "Item_category_idx" ON "Item"("category")`,
   `CREATE INDEX IF NOT EXISTS "Item_locationId_idx" ON "Item"("locationId")`,
@@ -132,6 +156,10 @@ async function main() {
     }
   }
   const ossColumns = await prisma.$queryRawUnsafe<Array<{ name: string }>>(`PRAGMA table_info("OssSetting")`);
+  const memberColumns = await prisma.$queryRawUnsafe<Array<{ name: string }>>(`PRAGMA table_info("HouseholdMember")`);
+  if (!memberColumns.some((column) => column.name === "userId")) await prisma.$executeRawUnsafe(`ALTER TABLE "HouseholdMember" ADD COLUMN "userId" TEXT`);
+  const activityColumns = await prisma.$queryRawUnsafe<Array<{ name: string }>>(`PRAGMA table_info("ActivityLog")`);
+  if (!activityColumns.some((column) => column.name === "userId")) await prisma.$executeRawUnsafe(`ALTER TABLE "ActivityLog" ADD COLUMN "userId" TEXT`);
   if (!ossColumns.some((column) => column.name === "storageMode")) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "OssSetting" ADD COLUMN "storageMode" TEXT NOT NULL DEFAULT 'oss'`);
   }

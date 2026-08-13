@@ -13,6 +13,7 @@ import type { DashboardData, Item, ItemType, Location, ShoppingItem } from "@/ty
 import { AiSettings } from "@/components/ai-settings";
 import { RecycleBinModal } from "@/components/recycle-bin-modal";
 import { DataTools } from "@/components/data-tools";
+import { AccountSettings } from "@/components/account-settings";
 import { AiAssistantModal, analyzeItem, type AiAnalysis } from "@/components/ai-assistant-modal";
 import { PrintStudio } from "@/components/print-studio";
 import { dailyUsageCost, isLiquidConsumable } from "@/lib/item-metrics";
@@ -392,6 +393,7 @@ function SettingsView({ onToast, onAbout, onRecycle }: { onToast: (message: stri
   const [database, setDatabase] = useState<{ databaseLabel: string; storageMode: string } | null>(null);
   useEffect(() => { let active = true; request<{ databaseLabel: string; storageMode: string }>("/api/system/info").then((result) => { if (active) setDatabase(result); }).catch(() => undefined); return () => { active = false; }; }, []);
   return <><PageTitle title="设置" text="按类别展开需要修改的设置，保持页面简洁。" action={<button onClick={onRecycle} className="btn-ghost flex items-center gap-2"><Trash2 size={16} />回收站</button>} /><div className="grid max-w-5xl items-start gap-4 lg:grid-cols-2">
+    <AccountSettings onToast={onToast} />
     <AiSettings onToast={onToast} />
     <DataTools onToast={onToast} />
     <OssSettings onToast={onToast} />
