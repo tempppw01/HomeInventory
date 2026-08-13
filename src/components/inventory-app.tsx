@@ -11,6 +11,7 @@ import {
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { DashboardData, FridgeSummary, Item, ItemType, Location, ShoppingItem } from "@/types";
 import { AiSettings } from "@/components/ai-settings";
+import { RecycleBinModal } from "@/components/recycle-bin-modal";
 import { AiAssistantModal, analyzeItem, type AiAnalysis } from "@/components/ai-assistant-modal";
 import { PrintStudio } from "@/components/print-studio";
 import { dailyUsageCost, isLiquidConsumable } from "@/lib/item-metrics";
@@ -85,7 +86,7 @@ export function InventoryApp() {
   const [view, setView] = useState<View>("dashboard");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"ALL" | ItemType>("ALL");
-  const [modal, setModal] = useState<"item" | "shopping" | "location" | "notifications" | null>(null);
+  const [modal, setModal] = useState<"item" | "shopping" | "location" | "notifications" | "recycle" | null>(null);
   const [editing, setEditing] = useState<Item | null>(null);
   const [qrItem, setQrItem] = useState<Item | null>(null);
   const [printItems, setPrintItems] = useState<Item[] | null>(null);
@@ -187,8 +188,8 @@ export function InventoryApp() {
   };
 
   const removeItem = async (item: Item) => {
-    if (!confirm(`确定删除“${item.name}”吗？`)) return;
-    await request(`/api/items/${item.id}`, { method: "DELETE" }); setToast("物品已删除"); await refresh();
+    if (!confirm(`确定将“${item.name}”移入回收站吗？`)) return;
+    await request(`/api/items/${item.id}`, { method: "DELETE" }); setToast("物品已移入回收站，可在回收站恢复"); await refresh();
   };
 
   const toggleShopping = async (item: ShoppingItem) => {
@@ -213,6 +214,7 @@ export function InventoryApp() {
           <button onClick={() => setView("settings")} className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold muted hover:bg-[var(--surface-soft)]">
             <Settings size={19} /> 设置
           </button>
+          <button onClick={() => setModal("recycle")} className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold muted hover:bg-[var(--surface-soft)]"><Trash2 size={19} />回收站</button>
           <button onClick={() => setView("about")} className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold muted hover:bg-[var(--surface-soft)]"><Info size={19} />关于 <span className="ml-auto text-[10px]">v{APP_VERSION}</span></button>
           <div className="mt-3 rounded-2xl p-3" style={{ background: "linear-gradient(135deg, var(--primary-soft), var(--surface-soft))" }}>
             <div className="flex items-center gap-2 text-sm font-bold"><Sparkles size={16} style={{ color: "var(--primary)" }} /> 今日小结</div>
@@ -242,7 +244,7 @@ export function InventoryApp() {
               <ShoppingView items={data!.shopping} onToggle={toggleShopping} onAdd={() => setModal("shopping")} onDelete={async (id) => { await request(`/api/shopping/${id}`, { method: "DELETE" }); await refresh(); }} />
             ) : view === "locations" ? (
               <LocationsView locations={data!.locations} items={data!.items} onAdd={() => setModal("location")} onOpen={(name) => { setSearch(name); setView("items"); }} />
-            ) : view === "settings" ? <SettingsView onToast={setToast} onAbout={() => setView("about")} /> : <AboutView onWelcome={() => setShowWelcome(true)} />}
+            ) : view === "settings" ? <SettingsView onToast={setToast} onAbout={() => setView("about")} onRecycle={() => setModal("recycle")} /> : <AboutView onWelcome={() => setShowWelcome(true)} />}
           </motion.div>
         </AnimatePresence>
       </main>
@@ -256,6 +258,7 @@ export function InventoryApp() {
         {modal === "shopping" && <ShoppingModal onClose={closeModal} onSaved={async () => { closeModal(); setToast("已加入采购清单"); await refresh(); }} />}
         {modal === "location" && <LocationModal onClose={closeModal} onSaved={async () => { closeModal(); setToast("新空间已创建"); await refresh(); }} />}
         {modal === "notifications" && <NotificationsModal lowStock={lowStock} expiring={expiring} expired={expired} fridge={undefined} onClose={closeModal} onOpenItem={(item) => { closeModal(); openEdit(item); }} onShopping={() => { closeModal(); setView("shopping"); }} onFridge={() => setModal(null)} />}
+        {modal === "recycle" && <RecycleBinModal onClose={closeModal} onRestored={async () => { setToast("物品已恢复"); await refresh(); }} onToast={setToast} />}
         {qrItem && <QrModal item={qrItem} onClose={() => setQrItem(null)} onPrint={() => { setQrItem(null); setPrintItems([qrItem]); }} />}
         {aiItem && <AiAssistantModal item={aiItem} onClose={() => setAiItem(null)} onApplied={async (message) => { setToast(message); await refresh(); }} />}
       </AnimatePresence>
@@ -388,10 +391,10 @@ function LocationsView({ locations, items, onAdd, onOpen }: { locations: Locatio
   return <><PageTitle title="家庭空间" text="按房间和收纳位置快速找到物品。" action={<button onClick={onAdd} className="btn-primary flex items-center gap-2"><Plus size={18} /><span className="desktop-only">添加空间</span></button>} /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{locations.map((location, index) => { const Icon = iconMap[location.icon as keyof typeof iconMap] || Package; const count = items.filter((i) => i.locationId === location.id).length; const consumables = items.filter((i) => i.locationId === location.id && i.type === "CONSUMABLE").length; return <motion.button key={location.id} initial={{ opacity: 0, scale: .97 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: index * .05 }} onClick={() => onOpen(location.name)} className="surface group rounded-3xl p-5 text-left transition hover:-translate-y-1 hover:shadow-lg"><div className="mb-6 flex items-start justify-between"><div className="grid size-12 place-items-center rounded-2xl" style={{ color: location.color, background: `color-mix(in srgb, ${location.color} 12%, var(--surface-solid))` }}><Icon size={23} /></div><ChevronRight className="muted transition group-hover:translate-x-1" size={18} /></div><h3 className="m-0 text-lg font-black">{location.name}</h3><p className="mb-0 mt-2 text-sm muted">{count} 件物品 · {consumables} 件消耗品</p></motion.button>; })}<button onClick={onAdd} className="grid min-h-48 place-items-center rounded-3xl border-2 border-dashed p-5 muted transition hover:border-[var(--primary)] hover:text-[var(--primary)]" style={{ borderColor: "var(--border)" }}><span className="flex flex-col items-center gap-2 text-sm font-bold"><Plus size={24} />添加新空间</span></button></div></>;
 }
 
-function SettingsView({ onToast, onAbout }: { onToast: (message: string) => void; onAbout: () => void }) {
+function SettingsView({ onToast, onAbout, onRecycle }: { onToast: (message: string) => void; onAbout: () => void; onRecycle: () => void }) {
   const [database, setDatabase] = useState<{ databaseLabel: string; storageMode: string } | null>(null);
   useEffect(() => { let active = true; request<{ databaseLabel: string; storageMode: string }>("/api/system/info").then((result) => { if (active) setDatabase(result); }).catch(() => undefined); return () => { active = false; }; }, []);
-  return <><PageTitle title="设置" text="按类别展开需要修改的设置，保持页面简洁。" /><div className="grid max-w-5xl items-start gap-4 lg:grid-cols-2">
+  return <><PageTitle title="设置" text="按类别展开需要修改的设置，保持页面简洁。" action={<button onClick={onRecycle} className="btn-ghost flex items-center gap-2"><Trash2 size={16} />回收站</button>} /><div className="grid max-w-5xl items-start gap-4 lg:grid-cols-2">
     <AiSettings onToast={onToast} />
     <OssSettings onToast={onToast} />
     <details className="surface group rounded-3xl p-5"><summary className="flex cursor-pointer list-none items-center gap-3 [&::-webkit-details-marker]:hidden"><div className="grid size-11 shrink-0 place-items-center rounded-2xl" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><Grid2X2 size={20} /></div><div className="min-w-0 flex-1"><h3 className="m-0 text-sm font-black">数据与部署</h3><p className="mb-0 mt-1 truncate text-xs muted">{database ? `${database.databaseLabel} · ${database.storageMode}` : "正在读取运行环境"}</p></div><ChevronDown size={17} className="muted transition-transform group-open:rotate-180" /></summary><div className="mt-5 border-t pt-1" style={{ borderColor: "var(--border)" }}><SettingRow icon={Grid2X2} title={`当前数据库：${database?.databaseLabel || "检测中…"}`} text={database ? `${database.storageMode} · 可通过 DATABASE_PROVIDER 切换` : "正在读取运行环境"} action={<span className="rounded-xl px-3 py-1.5 text-xs font-bold" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>{database?.databaseLabel || "检测中"}</span>} /><SettingRow icon={Info} title="关于归物" text={`版本 ${APP_VERSION} · 更新说明与使用提示`} action={<button onClick={onAbout} className="btn-ghost text-xs">查看</button>} /></div></details>

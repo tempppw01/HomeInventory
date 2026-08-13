@@ -10,7 +10,7 @@ export async function GET(_: NextRequest, { params }: Context) {
   try {
     const { id } = await params;
     const item = await prisma.item.findFirst({
-      where: { OR: [{ id }, { itemCode: id }] },
+      where: { deletedAt: null, OR: [{ id }, { itemCode: id }] },
       include: { location: true },
     });
     if (!item) return NextResponse.json({ error: "物品不存在" }, { status: 404 });
@@ -51,11 +51,15 @@ export async function PATCH(request: NextRequest, { params }: Context) {
   }
 }
 
-export async function DELETE(_: NextRequest, { params }: Context) {
+export async function DELETE(request: NextRequest, { params }: Context) {
   try {
     const { id } = await params;
-    await prisma.item.delete({ where: { id } });
-    return NextResponse.json({ ok: true });
+    const item = await prisma.item.findUnique({ where: { id } });
+    if (!item) return NextResponse.json({ error: "物品不存在" }, { status: 404 });
+    const body = await request.json().catch(() => ({}));
+    if (body.permanent === true) await prisma.item.delete({ where: { id } });
+    else await prisma.item.update({ where: { id }, data: { deletedAt: new Date() } });
+    return NextResponse.json({ ok: true, deletedAt: new Date().toISOString() });
   } catch (error) {
     return apiError(error);
   }

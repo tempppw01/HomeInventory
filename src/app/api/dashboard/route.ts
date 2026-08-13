@@ -10,7 +10,7 @@ export async function GET() {
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const sixMonthStart = new Date(now.getFullYear(), now.getMonth() - 5, 1);
     const [items, locations, shopping, priceRecords, fridgeSetting, fridgeReading] = await Promise.all([
-      prisma.item.findMany({ include: { location: true }, orderBy: { updatedAt: "desc" } }),
+      prisma.item.findMany({ where: { deletedAt: null }, include: { location: true }, orderBy: { updatedAt: "desc" } }),
       prisma.location.findMany({ include: { _count: { select: { items: true } } }, orderBy: { createdAt: "asc" } }),
       prisma.shoppingItem.findMany({ orderBy: [{ status: "asc" }, { priority: "desc" }, { createdAt: "desc" }] }),
       prisma.priceRecord.findMany({ where: { purchasedAt: { gte: sixMonthStart } }, orderBy: { purchasedAt: "desc" } }),

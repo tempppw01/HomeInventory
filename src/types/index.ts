@@ -32,6 +32,7 @@ export interface Item {
   location: Location | null;
   createdAt: string;
   updatedAt: string;
+  deletedAt: string | null;
 }
 
 export interface ShoppingItem {

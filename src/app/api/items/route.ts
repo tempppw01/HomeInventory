@@ -8,10 +8,9 @@ import { isLiquidConsumable } from "@/lib/item-metrics";
 export async function GET(request: NextRequest) {
   try {
     const search = request.nextUrl.searchParams.get("q")?.trim();
+    const deleted = request.nextUrl.searchParams.get("deleted") === "1";
     const items = await prisma.item.findMany({
-      where: search
-        ? { OR: [{ name: { contains: search } }, { category: { contains: search } }, { notes: { contains: search } }] }
-        : undefined,
+      where: { deletedAt: deleted ? { not: null } : null, ...(search ? { OR: [{ name: { contains: search } }, { category: { contains: search } }, { notes: { contains: search } }] } : {}) },
       include: { location: true },
       orderBy: { updatedAt: "desc" },
     });

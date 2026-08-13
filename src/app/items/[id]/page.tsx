@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function ItemDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const item = await prisma.item.findFirst({
-    where: { OR: [{ id }, { itemCode: id }] },
+    where: { deletedAt: null, OR: [{ id }, { itemCode: id }] },
     include: { location: true },
   });
   if (!item) notFound();

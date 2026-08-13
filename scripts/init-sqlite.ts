@@ -33,6 +33,7 @@ const statements = [
     "locationId" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
+    "deletedAt" DATETIME,
     CONSTRAINT "Item_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "Location" ("id") ON DELETE SET NULL ON UPDATE CASCADE
   )`,
   `CREATE TABLE IF NOT EXISTS "ShoppingItem" (
@@ -111,6 +112,9 @@ async function main() {
   const columns = await prisma.$queryRawUnsafe<Array<{ name: string }>>(`PRAGMA table_info("Item")`);
   if (!columns.some((column) => column.name === "itemCode")) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "Item" ADD COLUMN "itemCode" TEXT`);
+  }
+  if (!columns.some((column) => column.name === "deletedAt")) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Item" ADD COLUMN "deletedAt" DATETIME`);
   }
   if (!columns.some((column) => column.name === "remainingPercent")) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "Item" ADD COLUMN "remainingPercent" REAL NOT NULL DEFAULT 100`);
