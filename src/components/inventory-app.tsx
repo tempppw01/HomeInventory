@@ -239,7 +239,7 @@ export function InventoryApp() {
           <div className="desktop-only max-w-md flex-1">
             <SearchBox items={data?.items ?? []} value={search} onChange={setSearch} onSelect={(item) => { setSearch(item.name); setView("items"); }} onFocus={() => setView("items")} placeholder="搜索名称、编号、分类或位置…" />
           </div>
-          <button onClick={() => setChatOpen(true)} className="btn-ghost grid size-11 place-items-center p-0" aria-label="打开库存 AI 助手" title="库存 AI 助手"><Bot size={19} /></button>
+          <button onClick={() => setChatOpen(true)} className="btn-ghost grid size-11 place-items-center p-0" aria-label="打开归物助手" title="归物助手"><Bot size={19} /></button>
           <button onClick={cycleTheme} className="btn-ghost grid size-11 place-items-center p-0" aria-label={`当前主题：${theme === "system" ? "跟随系统" : theme === "light" ? "浅色" : "深色"}`} title="切换主题">{theme === "system" ? <Monitor size={19} /> : theme === "light" ? <Moon size={19} /> : <Sun size={19} />}</button>
           <button onClick={() => setModal("notifications")} className="btn-ghost relative grid size-11 place-items-center p-0" aria-label="查看提醒"><Bell size={19} />{lowStock.length + expiring.length + expired.length > 0 && <span className="absolute right-2 top-2 size-2 rounded-full" style={{ background: "var(--danger)" }} />}</button>
           <button onClick={() => setModal("batch-ai")} className="btn-ghost flex items-center gap-2 whitespace-nowrap"><ImagePlus size={18} /><span className="desktop-only">图片识别</span></button><button onClick={() => setModal("item")} className="btn-primary flex items-center gap-2 whitespace-nowrap"><Plus size={19} /><span className="desktop-only">录入物品</span></button>
