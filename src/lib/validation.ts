@@ -5,6 +5,17 @@ const optionalDate = z
   .optional()
   .transform((value) => (value ? new Date(value) : null));
 
+// Images can be hosted by OSS (absolute URL) or served by the local upload
+// route. Keep local paths scoped to that route so arbitrary relative paths and
+// traversal segments cannot be persisted as image URLs.
+const imageUrlSchema = z.union([
+  z.string().url().max(1000),
+  z.string()
+    .max(1000)
+    .regex(/^\/api\/uploads\/[A-Za-z0-9/_-]+(?:\.[A-Za-z0-9_-]+)?$/)
+    .refine((value) => !value.includes("..")),
+]);
+
 export const itemSchema = z.object({
   name: z.string().trim().min(1, "请输入物品名称").max(80),
   category: z.string().trim().min(1, "请选择或输入分类").max(40),
@@ -16,7 +27,7 @@ export const itemSchema = z.object({
   price: z.union([z.coerce.number().min(0), z.literal(""), z.null()]).optional().transform((value) => value === "" || value == null ? null : value),
   purchaseDate: optionalDate,
   expiryDate: optionalDate,
-  imageUrl: z.union([z.string().url().max(1000), z.literal(""), z.null()]).optional().transform((value) => value || null),
+  imageUrl: z.union([imageUrlSchema, z.literal(""), z.null()]).optional().transform((value) => value || null),
   locationId: z.union([z.string(), z.literal(""), z.null()]).optional().transform((value) => value || null),
   notes: z.union([z.string().max(500), z.null()]).optional().transform((value) => value || null),
   aiSummary: z.union([z.string().max(800), z.null()]).optional().transform((value) => value || null),
@@ -84,7 +95,7 @@ export const aiAnalyzeSchema = z.object({
     expiryDate: z.string().nullable().optional(),
     notes: z.string().nullable().optional(),
   }).optional(),
-  imageUrl: z.string().url().nullable().optional(),
+  imageUrl: imageUrlSchema.nullable().optional(),
   hint: z.string().max(500).optional(),
 });
 
