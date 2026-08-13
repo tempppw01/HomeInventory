@@ -3,6 +3,8 @@ services:
     environment:
       DATABASE_PROVIDER: mysql
       DATABASE_URL: mysql://${MYSQL_USER:-homeinventory}:${MYSQL_PASSWORD:-change-me}@mysql:3306/${MYSQL_DATABASE:-homeinventory}
+      IMAGE_STORAGE_MODE: ${IMAGE_STORAGE_MODE:-}
+      LOCAL_UPLOAD_DIR: ${LOCAL_UPLOAD_DIR:-/app/data/uploads}
     depends_on:
       mysql:
         condition: service_healthy

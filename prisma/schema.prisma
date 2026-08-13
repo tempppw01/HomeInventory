@@ -96,6 +96,8 @@ model FridgeReading {
 
 model OssSetting {
   id              String   @id @default("default")
+  storageMode     String   @default("oss")
+  localDirectory  String   @default("/app/data/uploads")
   region          String
   endpoint        String?
   bucket          String

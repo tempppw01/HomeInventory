@@ -49,6 +49,8 @@ const statements = [
   )`,
   `CREATE TABLE IF NOT EXISTS "OssSetting" (
     "id" TEXT NOT NULL PRIMARY KEY DEFAULT 'default',
+    "storageMode" TEXT NOT NULL DEFAULT 'oss',
+    "localDirectory" TEXT NOT NULL DEFAULT '/app/data/uploads',
     "region" TEXT NOT NULL,
     "endpoint" TEXT,
     "bucket" TEXT NOT NULL,
@@ -119,6 +121,12 @@ async function main() {
     }
   }
   const ossColumns = await prisma.$queryRawUnsafe<Array<{ name: string }>>(`PRAGMA table_info("OssSetting")`);
+  if (!ossColumns.some((column) => column.name === "storageMode")) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "OssSetting" ADD COLUMN "storageMode" TEXT NOT NULL DEFAULT 'oss'`);
+  }
+  if (!ossColumns.some((column) => column.name === "localDirectory")) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "OssSetting" ADD COLUMN "localDirectory" TEXT NOT NULL DEFAULT '/app/data/uploads'`);
+  }
   if (!ossColumns.some((column) => column.name === "directory")) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "OssSetting" ADD COLUMN "directory" TEXT NOT NULL DEFAULT 'home-inventory'`);
   }

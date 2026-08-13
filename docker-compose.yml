@@ -11,6 +11,8 @@ services:
       DATABASE_PROVIDER: sqlite
       DATABASE_URL: file:/app/data/home-inventory.db
       SEED_DEMO_DATA: ${SEED_DEMO_DATA:-auto}
+      IMAGE_STORAGE_MODE: ${IMAGE_STORAGE_MODE:-}
+      LOCAL_UPLOAD_DIR: ${LOCAL_UPLOAD_DIR:-/app/data/uploads}
       OSS_REGION: ${OSS_REGION:-}
       OSS_ENDPOINT: ${OSS_ENDPOINT:-}
       OSS_BUCKET: ${OSS_BUCKET:-}

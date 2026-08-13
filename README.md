@@ -22,7 +22,8 @@
 - 提醒临期、过期物品和冰箱温度异常
 - 记录购买价格，查看本月消费和近 6 个月平均水平
 - 生成物品二维码，支持 A4 批量打印
-- 可选接入 OSS 图片存储和 OpenAI 兼容 AI 助手
+- 图片默认保存到本地目录，也可切换 OSS 或本地 + OSS 双写
+- 可选接入 OpenAI 兼容 AI 助手
 - 手机和电脑均可使用，支持深色模式
 
 ## Docker Compose 部署（极空间 / 威联通 NAS）
@@ -157,11 +158,12 @@ docker compose down
 进入应用的“设置”页面，可以配置：
 
 - AI 模型接口：可快捷选择 OpenAI、DeepSeek、火山引擎、阿里千问、Gemini 或 Claude 官方端点
-- 阿里云 OSS：用于保存物品图片，并可指定 Bucket 内的存储目录
+- 图片存储：默认本地目录，也可选择阿里云 OSS 或本地 + OSS 双写
+- 图片上传支持 JPG、PNG、WebP、GIF；浏览器会自动压缩，最终限制 5MB
 
 浅色、深色或跟随系统主题可直接在页面右上角切换。
 
-如果 AI 接口运行在宿主机，而应用运行在 Docker 中，请使用 `host.docker.internal`，不要填写 `localhost`。
+如果 AI 接口运行在宿主机，而应用运行在 Docker 中，请使用 `host.docker.internal`，不要填写 `localhost`。本地图片会保存在 Docker 卷中的 `/app/data/uploads`。
 
 <details>
 <summary><strong>不需要示范数据</strong></summary>

@@ -12,6 +12,8 @@ export async function GET() {
     return NextResponse.json({
       configured: Boolean(config),
       managedByEnvironment: ossIsManagedByEnvironment(),
+      storageMode: config?.storageMode ?? process.env.IMAGE_STORAGE_MODE ?? "local",
+      localDirectory: config?.localDirectory ?? process.env.LOCAL_UPLOAD_DIR ?? "/app/data/uploads",
       region: config?.region ?? "",
       endpoint: config?.endpoint ?? "",
       bucket: config?.bucket ?? "",
@@ -32,8 +34,9 @@ export async function PATCH(request: NextRequest) {
     }
     const input = ossSettingSchema.parse(await request.json());
     const existing = await prisma.ossSetting.findUnique({ where: { id: "default" } });
-    const secret = input.accessKeySecret || existing?.accessKeySecret;
-    if (!secret) return NextResponse.json({ error: "首次配置必须填写 AccessKey Secret" }, { status: 400 });
+    const needsOss = input.storageMode === "oss" || input.storageMode === "both";
+    const secret = input.accessKeySecret || existing?.accessKeySecret || "";
+    if (needsOss && !secret) return NextResponse.json({ error: "首次配置 OSS 必须填写 AccessKey Secret" }, { status: 400 });
 
     await prisma.ossSetting.upsert({
       where: { id: "default" },
