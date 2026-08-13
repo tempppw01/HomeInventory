@@ -19,8 +19,6 @@ async function main() {
     prisma.item.count(),
     prisma.shoppingItem.count(),
     prisma.priceRecord.count(),
-    prisma.fridgeSetting.count(),
-    prisma.fridgeReading.count(),
   ]);
   if (counts.some((count) => count > 0)) {
     console.log("Existing household data detected, skipping demo data.");
@@ -59,8 +57,6 @@ async function main() {
       ],
     });
 
-    await tx.fridgeSetting.create({ data: { id: "default", enabled: true, targetMin: 2, targetMax: 8 } });
-    await tx.fridgeReading.create({ data: { temperature: 4.2, note: "示范温度记录" } });
   });
 
   console.log("Demo household data seeded for the first visit.");

@@ -32,12 +32,14 @@ export async function POST(request: NextRequest) {
       if (recordPurchase && data.price != null) {
         await tx.priceRecord.create({ data: { itemId: created.id, itemName: created.name, category: created.category, unitPrice: data.price, quantity: Math.max(data.quantity, 1), totalPrice: data.price * Math.max(data.quantity, 1), purchasedAt: data.purchaseDate || new Date(), store: purchaseStore } });
       }
+      await tx.activityLog.create({ data: { action: "CREATE", itemId: created.id, itemName: created.name, detail: "录入物品" } });
       return created;
     });
 
     const needsRestock = item.type === "CONSUMABLE" && ((item.minQuantity > 0 && item.quantity <= item.minQuantity) || (isLiquidConsumable(item) && item.remainingPercent <= 20));
     if (needsRestock) {
-      await prisma.shoppingItem.create({
+      const existing = await prisma.shoppingItem.findFirst({ where: { name: item.name, status: "PENDING" } });
+      if (!existing) await prisma.shoppingItem.create({
         data: { name: item.name, quantity: Math.max(item.minQuantity - item.quantity, 1), unit: item.unit, category: item.category, priority: 2, source: "low-stock" },
       });
     }

@@ -1,19 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/api";
+import { bulkItemPatchSchema } from "@/lib/validation";
 
 export async function PATCH(request: NextRequest) {
   try {
-    const body = await request.json();
-    const ids = Array.isArray(body.ids) ? body.ids.filter((id: unknown): id is string => typeof id === "string") : [];
-    if (!ids.length) return NextResponse.json({ error: "请选择物品" }, { status: 400 });
-    const data: { category?: string; locationId?: string | null; restockPausedUntil?: Date | null } = {};
-    if (typeof body.category === "string") data.category = body.category.trim().slice(0, 40);
-    if (typeof body.locationId === "string" || body.locationId === null) data.locationId = body.locationId;
-    if (body.restockPausedUntil === null) data.restockPausedUntil = null;
-    if (typeof body.restockPausedUntil === "string") data.restockPausedUntil = new Date(body.restockPausedUntil);
-    if (!Object.keys(data).length) return NextResponse.json({ error: "没有可更新的内容" }, { status: 400 });
-    const result = await prisma.item.updateMany({ where: { id: { in: ids }, deletedAt: null }, data });
-    return NextResponse.json({ count: result.count });
+    const parsed = bulkItemPatchSchema.parse(await request.json());
+    const { ids, ...data } = parsed;
+    if (data.locationId) {
+      const location = await prisma.location.findUnique({ where: { id: data.locationId } });
+      if (!location) return NextResponse.json({ error: "存放位置不存在" }, { status: 400 });
+    }
+    const result = await prisma.$transaction(async (tx) => {
+      const updated = await tx.item.findMany({ where: { id: { in: ids }, deletedAt: null }, select: { id: true, name: true } });
+      await tx.item.updateMany({ where: { id: { in: ids }, deletedAt: null }, data });
+      if (updated.length) await tx.activityLog.createMany({ data: updated.map((item) => ({ action: "UPDATE", itemId: item.id, itemName: item.name, detail: "批量更新物品" })) });
+      return updated.length;
+    });
+    return NextResponse.json({ count: result });
   } catch (error) { return apiError(error); }
 }

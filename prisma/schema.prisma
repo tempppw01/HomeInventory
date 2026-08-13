@@ -106,23 +106,6 @@ model PriceRecord {
   @@index([category])
 }
 
-model FridgeSetting {
-  id        String   @id @default("default")
-  enabled   Boolean  @default(true)
-  targetMin Float    @default(2)
-  targetMax Float    @default(8)
-  updatedAt DateTime @updatedAt
-}
-
-model FridgeReading {
-  id          String   @id @default(cuid())
-  temperature Float
-  note        String?
-  recordedAt  DateTime @default(now())
-
-  @@index([recordedAt])
-}
-
 model OssSetting {
   id              String   @id @default("default")
   storageMode     String   @default("oss")

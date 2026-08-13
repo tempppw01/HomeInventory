@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import path from "node:path";
+import { unlink } from "node:fs/promises";
+import OSS from "ali-oss";
 
 export type OssConfig = {
   storageMode: "local" | "oss" | "both";
@@ -15,6 +17,31 @@ export type OssConfig = {
 
 export function ossIsManagedByEnvironment() {
   return Boolean(process.env.OSS_ACCESS_KEY_ID || process.env.OSS_ACCESS_KEY_SECRET || process.env.OSS_BUCKET || process.env.IMAGE_STORAGE_MODE);
+}
+
+export async function deleteStoredImage(imageUrl: string | null | undefined) {
+  if (!imageUrl) return;
+  const config = await getOssConfig();
+  if (!config) return;
+  let localObjectName: string | null = null;
+  if (imageUrl.startsWith("/api/uploads/")) {
+    localObjectName = imageUrl.slice("/api/uploads/".length);
+    const target = path.resolve(config.localDirectory, localObjectName);
+    const root = path.resolve(config.localDirectory);
+    if (target.startsWith(`${root}${path.sep}`)) await unlink(target).catch(() => undefined);
+  }
+  if (config.storageMode === "oss" || config.storageMode === "both") {
+    const prefix = config.publicBaseUrl ? `${config.publicBaseUrl}/` : "";
+    const objectName = prefix && imageUrl.startsWith(prefix) ? imageUrl.slice(prefix.length) : localObjectName;
+    if (objectName) {
+      const directoryPrefix = `${config.directory}/`;
+      const key = objectName.startsWith(directoryPrefix) ? objectName : `${config.directory}/${objectName}`;
+      if (key !== config.directory) {
+        const client = new OSS({ region: config.region, endpoint: config.endpoint || undefined, bucket: config.bucket, accessKeyId: config.accessKeyId, accessKeySecret: config.accessKeySecret, secure: true });
+        await client.delete(key).catch(() => undefined);
+      }
+    }
+  }
 }
 
 export async function getOssConfig(): Promise<OssConfig | null> {

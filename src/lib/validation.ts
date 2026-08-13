@@ -41,6 +41,13 @@ export const itemSchema = z.object({
 
 export const itemPatchSchema = itemSchema.partial();
 
+export const bulkItemPatchSchema = z.object({
+  ids: z.array(z.string().trim().min(1).max(80)).min(1, "请选择物品").max(100, "单次最多更新 100 件物品"),
+  category: z.string().trim().min(1).max(40).optional(),
+  locationId: z.union([z.string().trim().min(1).max(80), z.null()]).optional(),
+  restockPausedUntil: z.union([z.string().datetime(), z.null()]).optional().transform((value) => value ? new Date(value) : value),
+}).refine((value) => Object.keys(value).some((key) => key !== "ids" && value[key as keyof typeof value] !== undefined), { message: "没有可更新的内容" });
+
 export const shoppingSchema = z.object({
   name: z.string().trim().min(1, "请输入采购项").max(80),
   quantity: z.coerce.number().positive().max(999999).default(1),
@@ -99,17 +106,6 @@ export const aiAnalyzeSchema = z.object({
   imageUrl: imageUrlSchema.nullable().optional(),
   hint: z.string().max(500).optional(),
 });
-
-export const fridgeReadingSchema = z.object({
-  temperature: z.coerce.number().min(-10).max(30),
-  note: z.union([z.string().trim().max(200), z.literal(""), z.null()]).optional().transform((value) => value || null),
-});
-
-export const fridgeSettingSchema = z.object({
-  enabled: z.boolean(),
-  targetMin: z.coerce.number().min(-5).max(15),
-  targetMax: z.coerce.number().min(-5).max(20),
-}).refine((value) => value.targetMax > value.targetMin, { message: "最高温度必须大于最低温度" });
 
 export const priceRecordSchema = z.object({
   itemId: z.union([z.string(), z.literal(""), z.null()]).optional().transform((value) => value || null),

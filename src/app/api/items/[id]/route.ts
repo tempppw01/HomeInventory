@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { itemPatchSchema } from "@/lib/validation";
 import { apiError } from "@/lib/api";
 import { isLiquidConsumable } from "@/lib/item-metrics";
+import { deleteStoredImage } from "@/lib/oss";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -58,7 +59,11 @@ export async function DELETE(request: NextRequest, { params }: Context) {
     const item = await prisma.item.findUnique({ where: { id } });
     if (!item) return NextResponse.json({ error: "物品不存在" }, { status: 404 });
     const body = await request.json().catch(() => ({}));
-    if (body.permanent === true) await prisma.item.delete({ where: { id } });
+    if (body.permanent === true) {
+      await prisma.activityLog.create({ data: { action: "DELETE_PERMANENT", itemId: item.id, itemName: item.name, detail: "永久删除物品" } });
+      await prisma.item.delete({ where: { id } });
+      await deleteStoredImage(item.imageUrl);
+    }
     else {
       await prisma.item.update({ where: { id }, data: { deletedAt: new Date() } });
       await prisma.activityLog.create({ data: { action: "DELETE", itemId: item.id, itemName: item.name, memberId: typeof body.memberId === "string" ? body.memberId : null, detail: "移入回收站" } });

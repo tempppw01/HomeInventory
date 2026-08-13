@@ -2,18 +2,60 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/api";
 import { createItemCode } from "@/lib/item-code";
+import { itemSchema } from "@/lib/validation";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const rows = Array.isArray(body) ? body : body.items;
     if (!Array.isArray(rows)) return NextResponse.json({ error: "导入文件格式不正确" }, { status: 400 });
-    let count = 0;
-    for (const row of rows.slice(0, 1000)) {
-      if (!row?.name || !row?.category) continue;
-      await prisma.item.create({ data: { itemCode: createItemCode(), name: String(row.name).slice(0, 80), category: String(row.category).slice(0, 40), type: row.type === "CONSUMABLE" ? "CONSUMABLE" : "DURABLE", quantity: Number(row.quantity) || 1, unit: String(row.unit || "件").slice(0, 12), price: row.price == null ? null : Number(row.price), notes: row.notes ? String(row.notes).slice(0, 500) : null, deletedAt: null } });
-      count += 1;
-    }
-    return NextResponse.json({ count }, { status: 201 });
+    const errors: { row: number; error: string }[] = [];
+    const parsedRows = rows.slice(0, 1000).flatMap((row: unknown, index: number) => {
+      if (!row || typeof row !== "object") {
+        errors.push({ row: index + 1, error: "行数据不是对象" });
+        return [];
+      }
+      const source = row as Record<string, unknown>;
+      const dateOnly = (value: unknown) => typeof value === "string" && value ? value.slice(0, 10) : value;
+      const result = itemSchema.safeParse({
+        name: source.name,
+        category: source.category,
+        type: source.type === "CONSUMABLE" ? "CONSUMABLE" : "DURABLE",
+        quantity: source.quantity ?? 1,
+        minQuantity: source.minQuantity ?? 0,
+        remainingPercent: source.remainingPercent ?? 100,
+        unit: source.unit ?? "件",
+        price: source.price ?? null,
+        purchaseDate: dateOnly(source.purchaseDate),
+        expiryDate: dateOnly(source.expiryDate),
+        imageUrl: source.imageUrl ?? null,
+        locationId: source.locationId ?? null,
+        notes: source.notes ?? null,
+        aiSummary: source.aiSummary ?? null,
+        aiStorageAdvice: source.aiStorageAdvice ?? null,
+        aiUsageAdvice: source.aiUsageAdvice ?? null,
+        aiReplenishmentAdvice: source.aiReplenishmentAdvice ?? null,
+        restockPausedUntil: source.restockPausedUntil ?? null,
+      });
+      if (!result.success) {
+        errors.push({ row: index + 1, error: result.error.issues[0]?.message || "数据校验失败" });
+        return [];
+      }
+      return [result.data];
+    });
+    if (!parsedRows.length && errors.length) return NextResponse.json({ count: 0, errors }, { status: 400 });
+    const count = await prisma.$transaction(async (tx) => {
+      let createdCount = 0;
+      for (const data of parsedRows) {
+        const { recordPurchase, purchaseStore, ...itemData } = data;
+        void recordPurchase;
+        void purchaseStore;
+        const item = await tx.item.create({ data: { ...itemData, expiryDate: itemData.type === "DURABLE" ? null : itemData.expiryDate, itemCode: createItemCode() } });
+        await tx.activityLog.create({ data: { action: "CREATE", itemId: item.id, itemName: item.name, detail: "JSON 导入" } });
+        createdCount += 1;
+      }
+      return createdCount;
+    });
+    return NextResponse.json({ count, errors, truncated: rows.length > 1000 }, { status: 201 });
   } catch (error) { return apiError(error); }
 }

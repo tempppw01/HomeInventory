@@ -6,7 +6,12 @@ import { apiError } from "@/lib/api";
 export async function POST(request: NextRequest) {
   try {
     const data = shoppingSchema.parse(await request.json());
-    return NextResponse.json(await prisma.shoppingItem.create({ data }), { status: 201 });
+    const item = await prisma.$transaction(async (tx) => {
+      const created = await tx.shoppingItem.create({ data });
+      await tx.activityLog.create({ data: { action: "SHOPPING_CREATE", itemName: created.name, detail: "添加采购项" } });
+      return created;
+    });
+    return NextResponse.json(item, { status: 201 });
   } catch (error) {
     return apiError(error);
   }
