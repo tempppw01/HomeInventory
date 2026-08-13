@@ -14,6 +14,8 @@ import { AiSettings } from "@/components/ai-settings";
 import { RecycleBinModal } from "@/components/recycle-bin-modal";
 import { DataTools } from "@/components/data-tools";
 import { AccountSettings } from "@/components/account-settings";
+import { AiChat } from "@/components/ai-chat";
+import { BatchAiImport } from "@/components/batch-ai-import";
 import { AiAssistantModal, analyzeItem, type AiAnalysis } from "@/components/ai-assistant-modal";
 import { PrintStudio } from "@/components/print-studio";
 import { dailyUsageCost, isLiquidConsumable } from "@/lib/item-metrics";
@@ -89,8 +91,9 @@ export function InventoryApp() {
   const [view, setView] = useState<View>("dashboard");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"ALL" | ItemType>("ALL");
-  const [modal, setModal] = useState<"item" | "shopping" | "location" | "notifications" | "recycle" | null>(null);
+  const [modal, setModal] = useState<"item" | "shopping" | "location" | "notifications" | "recycle" | "batch-ai" | null>(null);
   const [editing, setEditing] = useState<Item | null>(null);
+  const [editingLocation, setEditingLocation] = useState<Location | null>(null);
   const [qrItem, setQrItem] = useState<Item | null>(null);
   const [printItems, setPrintItems] = useState<Item[] | null>(null);
   const [aiItem, setAiItem] = useState<Item | null>(null);
@@ -99,6 +102,7 @@ export function InventoryApp() {
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState<ThemeMode>("system");
   const [showWelcome, setShowWelcome] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -170,7 +174,7 @@ export function InventoryApp() {
 
   const openEdit = (item: Item) => { setEditing(item); setModal("item"); };
   const copyText = async (value: string, message: string) => { try { await navigator.clipboard.writeText(value); setToast(message); } catch { setToast("复制失败，请手动复制"); } };
-  const closeModal = () => { setModal(null); setEditing(null); };
+  const closeModal = () => { setModal(null); setEditing(null); setEditingLocation(null); };
 
   const consume = async (item: Item) => {
     if (item.quantity <= 0) return;
@@ -235,9 +239,10 @@ export function InventoryApp() {
           <div className="desktop-only max-w-md flex-1">
             <SearchBox items={data?.items ?? []} value={search} onChange={setSearch} onSelect={(item) => { setSearch(item.name); setView("items"); }} onFocus={() => setView("items")} placeholder="搜索名称、编号、分类或位置…" />
           </div>
-          <button onClick={cycleTheme} className="btn-ghost ml-auto grid size-11 place-items-center p-0" aria-label={`当前主题：${theme === "system" ? "跟随系统" : theme === "light" ? "浅色" : "深色"}`} title="切换主题">{theme === "system" ? <Monitor size={19} /> : theme === "light" ? <Moon size={19} /> : <Sun size={19} />}</button>
+          <button onClick={() => setChatOpen(true)} className="btn-ghost grid size-11 place-items-center p-0" aria-label="打开库存 AI 助手" title="库存 AI 助手"><Bot size={19} /></button>
+          <button onClick={cycleTheme} className="btn-ghost grid size-11 place-items-center p-0" aria-label={`当前主题：${theme === "system" ? "跟随系统" : theme === "light" ? "浅色" : "深色"}`} title="切换主题">{theme === "system" ? <Monitor size={19} /> : theme === "light" ? <Moon size={19} /> : <Sun size={19} />}</button>
           <button onClick={() => setModal("notifications")} className="btn-ghost relative grid size-11 place-items-center p-0" aria-label="查看提醒"><Bell size={19} />{lowStock.length + expiring.length + expired.length > 0 && <span className="absolute right-2 top-2 size-2 rounded-full" style={{ background: "var(--danger)" }} />}</button>
-          <button onClick={() => setModal("item")} className="btn-primary flex items-center gap-2 whitespace-nowrap"><Plus size={19} /><span className="desktop-only">录入物品</span></button>
+          <button onClick={() => setModal("batch-ai")} className="btn-ghost flex items-center gap-2 whitespace-nowrap"><ImagePlus size={18} /><span className="desktop-only">图片识别</span></button><button onClick={() => setModal("item")} className="btn-primary flex items-center gap-2 whitespace-nowrap"><Plus size={19} /><span className="desktop-only">录入物品</span></button>
         </header>
 
         <AnimatePresence mode="wait">
@@ -249,7 +254,7 @@ export function InventoryApp() {
             ) : view === "shopping" ? (
               <ShoppingView items={data!.shopping} onToggle={toggleShopping} onAdd={() => setModal("shopping")} onDelete={async (id) => { await request(`/api/shopping/${id}`, { method: "DELETE" }); await refresh(); }} />
             ) : view === "locations" ? (
-              <LocationsView locations={data!.locations} items={data!.items} onAdd={() => setModal("location")} onOpen={(name) => { setSearch(name); setView("items"); }} onToast={setToast} />
+              <LocationsView locations={data!.locations} items={data!.items} onAdd={() => { setEditingLocation(null); setModal("location"); }} onOpen={(name) => { setSearch(name); setView("items"); }} onEdit={(location) => { setEditingLocation(location); setModal("location"); }} onToast={setToast} />
             ) : view === "settings" ? <SettingsView onToast={setToast} onAbout={() => setView("about")} onRecycle={() => setModal("recycle")} /> : <AboutView onWelcome={() => setShowWelcome(true)} />}
           </motion.div>
         </AnimatePresence>
@@ -262,12 +267,14 @@ export function InventoryApp() {
       <AnimatePresence>
         {modal === "item" && <ItemModal locations={data?.locations ?? []} item={editing} onClose={closeModal} onSaved={async () => { closeModal(); setToast(editing ? "物品已更新" : "物品已录入"); await refresh(); }} />}
         {modal === "shopping" && <ShoppingModal onClose={closeModal} onSaved={async () => { closeModal(); setToast("已加入采购清单"); await refresh(); }} />}
-        {modal === "location" && <LocationModal onClose={closeModal} onSaved={async () => { closeModal(); setToast("新空间已创建"); await refresh(); }} />}
+        {modal === "location" && <LocationModal location={editingLocation} onClose={closeModal} onSaved={async () => { const wasEditing = Boolean(editingLocation); closeModal(); setToast(wasEditing ? "空间已更新" : "新空间已创建"); await refresh(); }} />}
         {modal === "notifications" && <NotificationsModal lowStock={lowStock} expiring={expiring} expired={expired} onClose={closeModal} onOpenItem={(item) => { closeModal(); openEdit(item); }} onShopping={() => { closeModal(); setView("shopping"); }} />}
         {modal === "recycle" && <RecycleBinModal onClose={closeModal} onRestored={async () => { setToast("物品已恢复"); await refresh(); }} onToast={setToast} />}
+        {modal === "batch-ai" && <BatchAiImport onClose={closeModal} onSaved={refresh} onToast={setToast} />}
         {qrItem && <QrModal item={qrItem} onClose={() => setQrItem(null)} onPrint={() => { setQrItem(null); setPrintItems([qrItem]); }} />}
         {aiItem && <AiAssistantModal item={aiItem} onClose={() => setAiItem(null)} onApplied={async (message) => { setToast(message); await refresh(); }} />}
       </AnimatePresence>
+      {chatOpen && <AiChat onClose={() => setChatOpen(false)} />}
       {printItems && <PrintStudio items={printItems} onClose={() => setPrintItems(null)} />}
       {showWelcome && <WelcomeModal hasDemoData={data?.items.some((item) => item.itemCode?.startsWith("INV-DEMO-")) ?? false} onClose={() => { localStorage.setItem(welcomeStorageKey, "seen"); setShowWelcome(false); }} />}
       <AnimatePresence>{toast && <motion.div initial={{ opacity: 0, y: 20, x: "-50%" }} animate={{ opacity: 1, y: 0, x: "-50%" }} exit={{ opacity: 0, y: 12, x: "-50%" }} className="fixed bottom-24 left-1/2 z-[70] rounded-2xl px-4 py-3 text-sm font-semibold text-white shadow-2xl md:bottom-8" style={{ background: "#24242d" }}>{toast}</motion.div>}</AnimatePresence>
@@ -393,16 +400,17 @@ function ShoppingRow({ item, onToggle, onDelete, compact = false }: { item: Shop
   return <><motion.div layout onContextMenu={context.onContextMenu} className={`group flex items-center gap-3 rounded-2xl ${compact ? "py-2" : "p-3"}`} style={compact ? {} : { background: "var(--surface-soft)" }}><button onClick={onToggle} className="grid size-6 shrink-0 place-items-center rounded-lg border transition" style={done ? { background: "var(--success)", borderColor: "var(--success)", color: "white" } : { borderColor: "var(--border)", background: "var(--surface-solid)" }}>{done && <Check size={14} />}</button><div className="min-w-0 flex-1"><div className={`truncate text-sm font-bold ${done ? "line-through opacity-50" : ""}`}>{item.name}</div>{!compact && <div className="mt-0.5 text-xs muted">{item.quantity} {item.unit} · {item.source === "low-stock" ? "库存提醒" : item.category || "手动添加"}</div>}</div>{!compact && item.priority === 2 && !done && <span className="rounded-lg px-2 py-1 text-[10px] font-bold" style={{ background: "#ffe8e8", color: "#d54b57" }}>优先</span>}<button onClick={onDelete} className="p-1.5 opacity-0 muted transition group-hover:opacity-100"><X size={15} /></button></motion.div><ContextMenu menu={context.menu} items={contextItems} onClose={context.close} /></>;
 }
 
-function LocationsView({ locations, items, onAdd, onOpen, onToast }: { locations: Location[]; items: Item[]; onAdd: () => void; onOpen: (name: string) => void; onToast: (message: string) => void }) {
-  return <><PageTitle title="家庭空间" text="按房间和收纳位置快速找到物品。" action={<button onClick={onAdd} className="btn-primary flex items-center gap-2"><Plus size={18} /><span className="desktop-only">添加空间</span></button>} /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{locations.map((location, index) => <LocationCard key={location.id} location={location} items={items} index={index} onOpen={onOpen} onToast={onToast} />)}</div></>;
+function LocationsView({ locations, items, onAdd, onOpen, onEdit, onToast }: { locations: Location[]; items: Item[]; onAdd: () => void; onOpen: (name: string) => void; onEdit: (location: Location) => void; onToast: (message: string) => void }) {
+  return <><PageTitle title="家庭空间" text="按房间和收纳位置快速找到物品。" action={<button onClick={onAdd} className="btn-primary flex items-center gap-2"><Plus size={18} /><span className="desktop-only">添加空间</span></button>} /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{locations.map((location, index) => <LocationCard key={location.id} location={location} items={items} index={index} onOpen={onOpen} onEdit={onEdit} onToast={onToast} />)}</div></>;
 }
 
-function LocationCard({ location, items, index, onOpen, onToast }: { location: Location; items: Item[]; index: number; onOpen: (name: string) => void; onToast: (message: string) => void }) {
+function LocationCard({ location, items, index, onOpen, onEdit, onToast }: { location: Location; items: Item[]; index: number; onOpen: (name: string) => void; onEdit: (location: Location) => void; onToast: (message: string) => void }) {
   const Icon = iconMap[location.icon as keyof typeof iconMap] || Package;
   const count = items.filter((i) => i.locationId === location.id).length;
   const consumables = items.filter((i) => i.locationId === location.id && i.type === "CONSUMABLE").length;
   const context = useContextMenu();
-  const contextItems: ContextMenuItem[] = [{ label: "打开空间", icon: ExternalLink, onClick: () => onOpen(location.name) }, { label: "复制空间名称", icon: Copy, onClick: async () => { try { await navigator.clipboard.writeText(location.name); onToast("空间名称已复制"); } catch { onToast("复制失败"); } } }];
+  const remove = async () => { if (!confirm(`确定删除空间“${location.name}”？`)) return; try { const response = await fetch(`/api/locations/${location.id}`, { method: "DELETE" }); const result = await response.json(); if (!response.ok) throw new Error(result.error || "删除失败"); onToast("空间已删除"); window.location.reload(); } catch (error) { onToast(error instanceof Error ? error.message : "删除失败"); } };
+  const contextItems: ContextMenuItem[] = [{ label: "打开空间", icon: ExternalLink, onClick: () => onOpen(location.name) }, { label: "编辑空间", icon: Pencil, onClick: () => onEdit(location) }, { label: "复制空间名称", icon: Copy, onClick: async () => { try { await navigator.clipboard.writeText(location.name); onToast("空间名称已复制"); } catch { onToast("复制失败"); } } }, { label: "删除空间", icon: Trash2, danger: true, separatorBefore: true, onClick: remove }];
   return <><motion.button onContextMenu={context.onContextMenu} key={location.id} initial={{ opacity: 0, scale: .97 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: index * .05 }} onClick={() => onOpen(location.name)} className="surface group rounded-3xl p-5 text-left transition hover:-translate-y-1 hover:shadow-lg"><div className="mb-6 flex items-start justify-between"><div className="grid size-12 place-items-center rounded-2xl" style={{ color: location.color, background: `color-mix(in srgb, ${location.color} 12%, var(--surface-solid))` }}><Icon size={23} /></div><ChevronRight className="muted transition group-hover:translate-x-1" size={18} /></div><h3 className="m-0 text-lg font-black">{location.name}</h3><p className="mb-0 mt-2 text-sm muted">{count} 件物品 · {consumables} 件消耗品</p></motion.button><ContextMenu menu={context.menu} items={contextItems} onClose={context.close} /></>;
 }
 
@@ -514,7 +522,7 @@ function QuickLocationDialog({ onClose, onCreated }: { onClose: () => void; onCr
 
 function ShoppingModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) { const [name, setName] = useState(""); const [quantity, setQuantity] = useState(1); const [unit, setUnit] = useState("件"); const submit = async (e: FormEvent) => { e.preventDefault(); await request("/api/shopping", { method: "POST", body: JSON.stringify({ name, quantity, unit, priority: 1, source: "manual" }) }); onSaved(); }; return <Modal title="添加采购项" subtitle="想到什么就记下来，买齐后打勾。" onClose={onClose}><form onSubmit={submit} className="space-y-4"><Field label="需要采购什么？"><input autoFocus required className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="例如：厨房纸" /></Field><div className="grid grid-cols-2 gap-3"><Field label="数量"><input type="number" min="0.1" step="0.1" className="input" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} /></Field><Field label="单位"><select className="input" value={unit} onChange={(e) => setUnit(e.target.value)}>{units.map((u) => <option key={u}>{u}</option>)}</select></Field></div><div className="flex gap-3 pt-2"><button type="button" onClick={onClose} className="btn-ghost flex-1">取消</button><button className="btn-primary flex-1">加入清单</button></div></form></Modal>; }
 
-function LocationModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) { const [name, setName] = useState(""); const [color, setColor] = useState("#7c3aed"); const submit = async (e: FormEvent) => { e.preventDefault(); await request("/api/locations", { method: "POST", body: JSON.stringify({ name, color, icon: "Package" }) }); onSaved(); }; return <Modal title="添加家庭空间" subtitle="房间、柜子或任何方便查找的位置。" onClose={onClose}><form onSubmit={submit} className="space-y-4"><Field label="空间名称"><input autoFocus required className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="例如：主卧衣柜" /></Field><Field label="标记颜色"><div className="flex items-center gap-3"><input type="color" className="h-11 w-16 cursor-pointer rounded-xl border-0 bg-transparent" value={color} onChange={(e) => setColor(e.target.value)} /><span className="text-sm muted">用于快速区分空间</span></div></Field><div className="flex gap-3 pt-2"><button type="button" onClick={onClose} className="btn-ghost flex-1">取消</button><button className="btn-primary flex-1">创建空间</button></div></form></Modal>; }
+function LocationModal({ location, onClose, onSaved }: { location: Location | null; onClose: () => void; onSaved: () => void }) { const [name, setName] = useState(location?.name || ""); const [color, setColor] = useState(location?.color || "#7c3aed"); const [error, setError] = useState(""); const submit = async (e: FormEvent) => { e.preventDefault(); setError(""); try { await request(location ? `/api/locations/${location.id}` : "/api/locations", { method: location ? "PATCH" : "POST", body: JSON.stringify({ name, color, icon: location?.icon || "Package" }) }); onSaved(); } catch (reason) { setError(reason instanceof Error ? reason.message : "保存失败"); } }; return <Modal title={location ? "编辑家庭空间" : "添加家庭空间"} subtitle="房间、柜子或任何方便查找的位置。" onClose={onClose}><form onSubmit={submit} className="space-y-4"><Field label="空间名称"><input autoFocus required className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="例如：主卧衣柜" /></Field><Field label="标记颜色"><div className="flex items-center gap-3"><input type="color" className="h-11 w-16 cursor-pointer rounded-xl border-0 bg-transparent" value={color} onChange={(e) => setColor(e.target.value)} /><span className="text-sm muted">用于快速区分空间</span></div></Field>{error && <p className="m-0 rounded-xl p-2.5 text-sm text-red-500" style={{ background: "#ffe8eb" }}>{error}</p>}<div className="flex gap-3 pt-2"><button type="button" onClick={onClose} className="btn-ghost flex-1">取消</button><button className="btn-primary flex-1">{location ? "保存修改" : "创建空间"}</button></div></form></Modal>; }
 
 function Modal({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: React.ReactNode }) { return <motion.div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 p-0 backdrop-blur-sm sm:items-center sm:p-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}><motion.div initial={{ y: 35, opacity: 0, scale: .98 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: 25, opacity: 0 }} transition={{ type: "spring", damping: 28, stiffness: 340 }} className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-[28px] p-5 shadow-2xl sm:rounded-[28px] sm:p-6" style={{ background: "var(--surface-solid)" }}><div className="mb-6 flex items-start gap-3"><div className="flex-1"><h2 className="m-0 text-xl font-black">{title}</h2><p className="mb-0 mt-1 text-xs muted">{subtitle}</p></div><button onClick={onClose} className="btn-ghost grid size-9 place-items-center p-0"><X size={17} /></button></div>{children}</motion.div></motion.div>; }
 

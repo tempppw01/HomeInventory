@@ -41,6 +41,10 @@ export const itemSchema = z.object({
 
 export const itemPatchSchema = itemSchema.partial();
 
+// Used by the AI import flow. Keep purchase bookkeeping out of this endpoint so
+// importing a set of recognised items remains a single atomic inventory change.
+export const batchItemSchema = itemSchema.omit({ recordPurchase: true, purchaseStore: true });
+
 export const bulkItemPatchSchema = z.object({
   ids: z.array(z.string().trim().min(1).max(80)).min(1, "请选择物品").max(100, "单次最多更新 100 件物品"),
   category: z.string().trim().min(1).max(40).optional(),
