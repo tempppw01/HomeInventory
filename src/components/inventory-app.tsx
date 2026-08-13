@@ -6,7 +6,7 @@ import {
   AlertTriangle, Archive, Bath, Bell, Bot, Boxes, Check, CheckSquare, ChevronDown, ChevronRight, CircleAlert, Cloud, CookingPot,
   Grid2X2, ImagePlus, Info, LayoutDashboard, LayoutGrid, List, MapPin, Minus, Monitor, Moon,
   Package, Plus, Printer, QrCode, Search, Settings, ShoppingBasket, Sofa, Sparkles,
-  Sun, Trash2, WalletCards, Warehouse, X, Zap,
+  Snowflake, Sun, Trash2, WalletCards, Warehouse, X, Zap,
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { DashboardData, FridgeSummary, Item, ItemType, Location, ShoppingItem } from "@/types";
