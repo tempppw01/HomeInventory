@@ -12,6 +12,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { DashboardData, FridgeSummary, Item, ItemType, Location, ShoppingItem } from "@/types";
 import { AiSettings } from "@/components/ai-settings";
 import { RecycleBinModal } from "@/components/recycle-bin-modal";
+import { DataTools } from "@/components/data-tools";
 import { AiAssistantModal, analyzeItem, type AiAnalysis } from "@/components/ai-assistant-modal";
 import { PrintStudio } from "@/components/print-studio";
 import { dailyUsageCost, isLiquidConsumable } from "@/lib/item-metrics";
@@ -91,6 +92,7 @@ export function InventoryApp() {
   const [qrItem, setQrItem] = useState<Item | null>(null);
   const [printItems, setPrintItems] = useState<Item[] | null>(null);
   const [aiItem, setAiItem] = useState<Item | null>(null);
+  const [memberId, setMemberId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState<ThemeMode>("system");
@@ -137,6 +139,7 @@ export function InventoryApp() {
     media.addEventListener("change", apply);
     return () => media.removeEventListener("change", apply);
   }, [theme]);
+  useEffect(() => { request<{ id: string }[]>("/api/members").then((members) => setMemberId(members[0]?.id ?? null)).catch(() => undefined); }, []);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(null), 2600);
@@ -157,7 +160,7 @@ export function InventoryApp() {
     );
   }, [data, search, typeFilter]);
 
-  const lowStock = (data?.items ?? []).filter((item) => item.type === "CONSUMABLE" && ((item.minQuantity > 0 && item.quantity <= item.minQuantity) || (isLiquidConsumable(item) && item.remainingPercent <= 20)));
+  const lowStock = (data?.items ?? []).filter((item) => item.type === "CONSUMABLE" && (!item.restockPausedUntil || new Date(item.restockPausedUntil).getTime() <= appStartedAt) && ((item.minQuantity > 0 && item.quantity <= item.minQuantity) || (isLiquidConsumable(item) && item.remainingPercent <= 20)));
   const pendingShopping = (data?.shopping ?? []).filter((item) => item.status === "PENDING");
   const expiring = (data?.items ?? []).filter((item) => item.type === "CONSUMABLE" && item.expiryDate && new Date(item.expiryDate).getTime() - appStartedAt < 14 * 86400000 && new Date(item.expiryDate).getTime() > appStartedAt);
   const expired = (data?.items ?? []).filter((item) => item.type === "CONSUMABLE" && item.expiryDate && new Date(item.expiryDate).getTime() <= appStartedAt);
@@ -189,7 +192,7 @@ export function InventoryApp() {
 
   const removeItem = async (item: Item) => {
     if (!confirm(`确定将“${item.name}”移入回收站吗？`)) return;
-    await request(`/api/items/${item.id}`, { method: "DELETE" }); setToast("物品已移入回收站，可在回收站恢复"); await refresh();
+    await request(`/api/items/${item.id}`, { method: "DELETE", body: JSON.stringify({ memberId }) }); setToast("物品已移入回收站，可在回收站恢复"); await refresh();
   };
 
   const toggleShopping = async (item: ShoppingItem) => {
@@ -239,7 +242,7 @@ export function InventoryApp() {
             {loading ? <LoadingView /> : view === "dashboard" ? (
               <DashboardView data={data!} lowStock={lowStock} expiring={expiring} expired={expired} pending={pendingShopping} totalValue={totalValue} onNavigate={setView} onEdit={openEdit} onConsume={consume} onQr={setQrItem} onAi={setAiItem} onAlerts={() => setModal("notifications")} />
             ) : view === "items" ? (
-              <ItemsView allItems={data!.items} items={filteredItems} search={search} setSearch={setSearch} filter={typeFilter} setFilter={setTypeFilter} onEdit={openEdit} onConsume={consume} onRemainingChange={updateRemaining} onDelete={removeItem} onQr={setQrItem} onAi={setAiItem} onPrint={setPrintItems} />
+              <ItemsView allItems={data!.items} items={filteredItems} search={search} setSearch={setSearch} filter={typeFilter} setFilter={setTypeFilter} onEdit={openEdit} onConsume={consume} onRemainingChange={updateRemaining} onDelete={removeItem} onQr={setQrItem} onAi={setAiItem} onPrint={setPrintItems} onToast={setToast} />
             ) : view === "shopping" ? (
               <ShoppingView items={data!.shopping} onToggle={toggleShopping} onAdd={() => setModal("shopping")} onDelete={async (id) => { await request(`/api/shopping/${id}`, { method: "DELETE" }); await refresh(); }} />
             ) : view === "locations" ? (
@@ -324,13 +327,14 @@ function HomeInsightsCompact({ data }: { data: DashboardData }) {
   return <section className="surface rounded-3xl p-4 sm:p-5"><h2 className="m-0 text-base font-black">家庭状态</h2><div className="mt-4 grid grid-cols-2 gap-3"><div className="rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}><div className="flex items-center gap-1.5 text-[11px] font-bold muted"><WalletCards size={13} />本月消费</div><div className="mt-2 text-lg font-black">¥{data.finance.currentMonthTotal.toFixed(0)}</div></div><div className="rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}><div className="text-[11px] font-bold muted">近 6 月均值</div><div className="mt-2 text-lg font-black">¥{data.finance.averageMonthly.toFixed(0)}</div></div></div>{data.finance.recent[0] && <div className="mt-3 truncate text-[11px] muted">最近：{data.finance.recent[0].itemName} ¥{data.finance.recent[0].totalPrice.toFixed(2)}</div>}</section>;
 }
 
-function ItemsView({ allItems, items, search, setSearch, filter, setFilter, onEdit, onConsume, onRemainingChange, onDelete, onQr, onAi, onPrint }: { allItems: Item[]; items: Item[]; search: string; setSearch: (s: string) => void; filter: "ALL" | ItemType; setFilter: (f: "ALL" | ItemType) => void; onEdit: (i: Item) => void; onConsume: (i: Item) => void; onRemainingChange: (item: Item, remainingPercent: number) => void; onDelete: (i: Item) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onPrint: (items: Item[]) => void }) {
+function ItemsView({ allItems, items, search, setSearch, filter, setFilter, onEdit, onConsume, onRemainingChange, onDelete, onQr, onAi, onPrint, onToast }: { allItems: Item[]; items: Item[]; search: string; setSearch: (s: string) => void; filter: "ALL" | ItemType; setFilter: (f: "ALL" | ItemType) => void; onEdit: (i: Item) => void; onConsume: (i: Item) => void; onRemainingChange: (item: Item, remainingPercent: number) => void; onDelete: (i: Item) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onPrint: (items: Item[]) => void; onToast: (message: string) => void }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const selectedItems = allItems.filter((item) => selected.has(item.id));
   const toggle = (id: string) => setSelected((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const selectVisible = () => setSelected(new Set(items.map((item) => item.id)));
+  const bulk = async (body: Record<string, unknown>) => { try { await request("/api/items/bulk", { method: "PATCH", body: JSON.stringify({ ...body, ids: [...selected] }) }); setSelected(new Set()); onToast("批量更新完成"); } catch (error) { onToast(error instanceof Error ? error.message : "批量更新失败"); } };
   return <><PageTitle title="我的物品" text="随时知道家里有什么、放在哪里。" />
-    <div className="mb-5 flex flex-col gap-3"><div className="flex flex-col gap-3 sm:flex-row sm:items-center"><div className="flex-1 md:hidden"><SearchBox items={allItems} value={search} onChange={setSearch} onSelect={(item) => setSearch(item.name)} placeholder="搜索名称或物品编号…" /></div><div className="flex gap-2 overflow-x-auto">{([ ["ALL", "全部"], ["DURABLE", "耐用品"], ["CONSUMABLE", "消耗品"] ] as const).map(([id, label]) => <button key={id} onClick={() => setFilter(id)} className="whitespace-nowrap rounded-xl px-4 py-2 text-sm font-bold transition" style={filter === id ? { background: "var(--primary)", color: "white" } : { background: "var(--surface-solid)", color: "var(--muted)", border: "1px solid var(--border)" }}>{label}</button>)}</div><span className="ml-auto text-sm muted">{items.length} 件</span></div><div className="flex flex-wrap items-center gap-2"><button onClick={selected.size === items.length && items.length > 0 ? () => setSelected(new Set()) : selectVisible} className="btn-ghost flex items-center gap-2 text-xs"><CheckSquare size={15} />{selected.size === items.length && items.length > 0 ? "取消全选" : "选择当前结果"}</button>{selected.size > 0 && <><span className="text-xs font-bold" style={{ color: "var(--primary)" }}>已选 {selected.size} 件</span><button onClick={() => onPrint(selectedItems)} className="btn-primary flex items-center gap-2 px-3 py-2 text-xs"><Printer size={15} />批量打印二维码</button><button onClick={() => setSelected(new Set())} className="btn-ghost px-3 py-2 text-xs">清空</button></>}</div></div>
+    <div className="mb-5 flex flex-col gap-3"><div className="flex flex-col gap-3 sm:flex-row sm:items-center"><div className="flex-1 md:hidden"><SearchBox items={allItems} value={search} onChange={setSearch} onSelect={(item) => setSearch(item.name)} placeholder="搜索名称或物品编号…" /></div><div className="flex gap-2 overflow-x-auto">{([ ["ALL", "全部"], ["DURABLE", "耐用品"], ["CONSUMABLE", "消耗品"] ] as const).map(([id, label]) => <button key={id} onClick={() => setFilter(id)} className="whitespace-nowrap rounded-xl px-4 py-2 text-sm font-bold transition" style={filter === id ? { background: "var(--primary)", color: "white" } : { background: "var(--surface-solid)", color: "var(--muted)", border: "1px solid var(--border)" }}>{label}</button>)}</div><span className="ml-auto text-sm muted">{items.length} 件</span></div><div className="flex flex-wrap items-center gap-2"><button onClick={selected.size === items.length && items.length > 0 ? () => setSelected(new Set()) : selectVisible} className="btn-ghost flex items-center gap-2 text-xs"><CheckSquare size={15} />{selected.size === items.length && items.length > 0 ? "取消全选" : "选择当前结果"}</button>{selected.size > 0 && <><span className="text-xs font-bold" style={{ color: "var(--primary)" }}>已选 {selected.size} 件</span><button onClick={() => bulk({ category: items.find((item) => selected.has(item.id))?.category || "日用" })} className="btn-ghost px-3 py-2 text-xs">沿用分类</button><button onClick={() => onPrint(selectedItems)} className="btn-primary flex items-center gap-2 px-3 py-2 text-xs"><Printer size={15} />批量打印二维码</button><button onClick={() => setSelected(new Set())} className="btn-ghost px-3 py-2 text-xs">清空</button></>}</div></div>
     {items.length ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">{items.map((item, index) => <motion.div className="h-full" key={item.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index * .025, .2) }}><ItemCard item={item} selected={selected.has(item.id)} onSelect={() => toggle(item.id)} onEdit={() => onEdit(item)} onConsume={() => onConsume(item)} onRemainingChange={(remainingPercent) => onRemainingChange(item, remainingPercent)} onDelete={() => onDelete(item)} onQr={() => onQr(item)} onAi={() => onAi(item)} /></motion.div>)}</div> : <div className="surface rounded-3xl py-16"><EmptyState icon={Search} title="没有找到物品" text="换个关键词或筛选条件试试" /></div>}
   </>;
 }
@@ -396,6 +400,7 @@ function SettingsView({ onToast, onAbout, onRecycle }: { onToast: (message: stri
   useEffect(() => { let active = true; request<{ databaseLabel: string; storageMode: string }>("/api/system/info").then((result) => { if (active) setDatabase(result); }).catch(() => undefined); return () => { active = false; }; }, []);
   return <><PageTitle title="设置" text="按类别展开需要修改的设置，保持页面简洁。" action={<button onClick={onRecycle} className="btn-ghost flex items-center gap-2"><Trash2 size={16} />回收站</button>} /><div className="grid max-w-5xl items-start gap-4 lg:grid-cols-2">
     <AiSettings onToast={onToast} />
+    <DataTools onToast={onToast} />
     <OssSettings onToast={onToast} />
     <details className="surface group rounded-3xl p-5"><summary className="flex cursor-pointer list-none items-center gap-3 [&::-webkit-details-marker]:hidden"><div className="grid size-11 shrink-0 place-items-center rounded-2xl" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><Grid2X2 size={20} /></div><div className="min-w-0 flex-1"><h3 className="m-0 text-sm font-black">数据与部署</h3><p className="mb-0 mt-1 truncate text-xs muted">{database ? `${database.databaseLabel} · ${database.storageMode}` : "正在读取运行环境"}</p></div><ChevronDown size={17} className="muted transition-transform group-open:rotate-180" /></summary><div className="mt-5 border-t pt-1" style={{ borderColor: "var(--border)" }}><SettingRow icon={Grid2X2} title={`当前数据库：${database?.databaseLabel || "检测中…"}`} text={database ? `${database.storageMode} · 可通过 DATABASE_PROVIDER 切换` : "正在读取运行环境"} action={<span className="rounded-xl px-3 py-1.5 text-xs font-bold" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>{database?.databaseLabel || "检测中"}</span>} /><SettingRow icon={Info} title="关于归物" text={`版本 ${APP_VERSION} · 更新说明与使用提示`} action={<button onClick={onAbout} className="btn-ghost text-xs">查看</button>} /></div></details>
   </div></>;

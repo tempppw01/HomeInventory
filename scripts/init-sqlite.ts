@@ -11,6 +11,24 @@ const statements = [
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS "HouseholdMember" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "name" TEXT NOT NULL,
+    "color" TEXT NOT NULL DEFAULT '#7c3aed',
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS "ActivityLog" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "action" TEXT NOT NULL,
+    "itemId" TEXT,
+    "itemName" TEXT,
+    "memberId" TEXT,
+    "detail" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "ActivityLog_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT "ActivityLog_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "HouseholdMember" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+  )`,
   `CREATE TABLE IF NOT EXISTS "Item" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "itemCode" TEXT,
@@ -115,6 +133,9 @@ async function main() {
   }
   if (!columns.some((column) => column.name === "deletedAt")) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "Item" ADD COLUMN "deletedAt" DATETIME`);
+  }
+  if (!columns.some((column) => column.name === "restockPausedUntil")) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Item" ADD COLUMN "restockPausedUntil" DATETIME`);
   }
   if (!columns.some((column) => column.name === "remainingPercent")) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "Item" ADD COLUMN "remainingPercent" REAL NOT NULL DEFAULT 100`);

@@ -9,11 +9,14 @@ export async function GET(request: NextRequest) {
   try {
     const search = request.nextUrl.searchParams.get("q")?.trim();
     const deleted = request.nextUrl.searchParams.get("deleted") === "1";
+    const exportData = request.nextUrl.searchParams.get("export") === "1";
+    const includeDeleted = request.nextUrl.searchParams.get("includeDeleted") === "1";
     const items = await prisma.item.findMany({
-      where: { deletedAt: deleted ? { not: null } : null, ...(search ? { OR: [{ name: { contains: search } }, { category: { contains: search } }, { notes: { contains: search } }] } : {}) },
+      where: { deletedAt: deleted ? { not: null } : includeDeleted ? undefined : null, ...(search ? { OR: [{ name: { contains: search } }, { category: { contains: search } }, { notes: { contains: search } }] } : {}) },
       include: { location: true },
       orderBy: { updatedAt: "desc" },
     });
+    if (exportData) return new NextResponse(JSON.stringify(items, null, 2), { headers: { "Content-Type": "application/json", "Content-Disposition": "attachment; filename=home-inventory-items.json" } });
     return NextResponse.json(items);
   } catch (error) {
     return apiError(error);

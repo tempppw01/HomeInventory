@@ -49,14 +49,42 @@ model Item {
   locationId            String?
   location              Location?     @relation(fields: [locationId], references: [id], onDelete: SetNull)
   priceRecords          PriceRecord[]
+  activities            ActivityLog[]
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
   deletedAt             DateTime?
+  restockPausedUntil    DateTime?
 
   @@index([type])
   @@index([category])
   @@index([locationId])
   @@index([expiryDate])
+  @@index([deletedAt])
+}
+
+model HouseholdMember {
+  id         String        @id @default(cuid())
+  name       String
+  color      String        @default("#7c3aed")
+  activities ActivityLog[]
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+}
+
+model ActivityLog {
+  id         String            @id @default(cuid())
+  action     String
+  itemId     String?
+  itemName   String?
+  memberId   String?
+  detail     String?
+  item       Item?             @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  member     HouseholdMember?  @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  createdAt  DateTime          @default(now())
+
+  @@index([itemId])
+  @@index([memberId])
+  @@index([createdAt])
 }
 
 model PriceRecord {

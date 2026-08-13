@@ -29,6 +29,7 @@ export async function PATCH(request: NextRequest, { params }: Context) {
       const nextType = parsed.type ?? existing.type;
       const data = nextType === "DURABLE" ? { ...parsed, expiryDate: null } : parsed;
       const updated = await tx.item.update({ where: { id }, data, include: { location: true } });
+      await tx.activityLog.create({ data: { action: "UPDATE", itemId: updated.id, itemName: updated.name, detail: "更新物品信息" } });
       if (recordPurchase && updated.price != null) {
         const quantity = Math.max(data.quantity ?? updated.quantity, 1);
         await tx.priceRecord.create({ data: { itemId: updated.id, itemName: updated.name, category: updated.category, unitPrice: updated.price, quantity, totalPrice: updated.price * quantity, purchasedAt: data.purchaseDate || new Date(), store: purchaseStore } });
@@ -58,7 +59,10 @@ export async function DELETE(request: NextRequest, { params }: Context) {
     if (!item) return NextResponse.json({ error: "物品不存在" }, { status: 404 });
     const body = await request.json().catch(() => ({}));
     if (body.permanent === true) await prisma.item.delete({ where: { id } });
-    else await prisma.item.update({ where: { id }, data: { deletedAt: new Date() } });
+    else {
+      await prisma.item.update({ where: { id }, data: { deletedAt: new Date() } });
+      await prisma.activityLog.create({ data: { action: "DELETE", itemId: item.id, itemName: item.name, memberId: typeof body.memberId === "string" ? body.memberId : null, detail: "移入回收站" } });
+    }
     return NextResponse.json({ ok: true, deletedAt: new Date().toISOString() });
   } catch (error) {
     return apiError(error);

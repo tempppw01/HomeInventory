@@ -36,6 +36,7 @@ export const itemSchema = z.object({
   aiReplenishmentAdvice: z.union([z.string().max(800), z.null()]).optional().transform((value) => value || null),
   recordPurchase: z.boolean().optional().default(false),
   purchaseStore: z.union([z.string().trim().max(80), z.literal(""), z.null()]).optional().transform((value) => value || null),
+  restockPausedUntil: z.union([z.string().datetime(), z.literal(""), z.null()]).optional().transform((value) => value ? new Date(value) : null),
 });
 
 export const itemPatchSchema = itemSchema.partial();

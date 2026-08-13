@@ -33,6 +33,7 @@ export interface Item {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+  restockPausedUntil: string | null;
 }
 
 export interface ShoppingItem {
