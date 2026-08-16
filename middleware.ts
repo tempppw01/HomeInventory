@@ -3,7 +3,7 @@ import { ACCOUNT_COOKIE } from "@/lib/account-auth";
 import { userFromToken } from "@/lib/account-auth";
 
 export async function middleware(request: NextRequest) {
-  const publicPath = ["/api/auth/login", "/api/auth/setup", "/api/auth/session", "/api/auth/logout", "/api/health"];
+  const publicPath = ["/api/auth/login", "/api/auth/setup", "/api/auth/session", "/api/auth/logout", "/api/health", "/api/public/consume"];
   if (publicPath.includes(request.nextUrl.pathname)) return NextResponse.next();
   const token = request.cookies.get(ACCOUNT_COOKIE)?.value;
   const user = token ? await userFromToken(token) : null;
