@@ -43,6 +43,9 @@ const statements = [
     "itemName" TEXT,
     "memberId" TEXT,
     "detail" TEXT,
+    "undoOfId" TEXT,
+    "undoneAt" DATETIME,
+    "scanRequestId" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ActivityLog_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "ActivityLog_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "HouseholdMember" ("id") ON DELETE SET NULL ON UPDATE CASCADE
@@ -160,6 +163,9 @@ async function main() {
   if (!memberColumns.some((column) => column.name === "userId")) await prisma.$executeRawUnsafe(`ALTER TABLE "HouseholdMember" ADD COLUMN "userId" TEXT`);
   const activityColumns = await prisma.$queryRawUnsafe<Array<{ name: string }>>(`PRAGMA table_info("ActivityLog")`);
   if (!activityColumns.some((column) => column.name === "userId")) await prisma.$executeRawUnsafe(`ALTER TABLE "ActivityLog" ADD COLUMN "userId" TEXT`);
+  if (!activityColumns.some((column) => column.name === "undoOfId")) await prisma.$executeRawUnsafe(`ALTER TABLE "ActivityLog" ADD COLUMN "undoOfId" TEXT`);
+  if (!activityColumns.some((column) => column.name === "undoneAt")) await prisma.$executeRawUnsafe(`ALTER TABLE "ActivityLog" ADD COLUMN "undoneAt" DATETIME`);
+  if (!activityColumns.some((column) => column.name === "scanRequestId")) await prisma.$executeRawUnsafe(`ALTER TABLE "ActivityLog" ADD COLUMN "scanRequestId" TEXT`);
   if (!ossColumns.some((column) => column.name === "storageMode")) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "OssSetting" ADD COLUMN "storageMode" TEXT NOT NULL DEFAULT 'oss'`);
   }
@@ -171,6 +177,8 @@ async function main() {
   }
   await prisma.$executeRawUnsafe(`UPDATE "Item" SET "expiryDate" = NULL WHERE "type" = 'DURABLE' AND "expiryDate" IS NOT NULL`);
   await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Item_itemCode_key" ON "Item"("itemCode")`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ActivityLog_undoOfId_idx" ON "ActivityLog"("undoOfId")`);
+  await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "ActivityLog_scanRequestId_key" ON "ActivityLog"("scanRequestId")`);
   console.log("SQLite schema is ready.");
 }
 

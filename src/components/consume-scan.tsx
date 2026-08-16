@@ -7,6 +7,7 @@ type ScanItem = { id: string; name: string; category: string; type: "DURABLE" | 
 
 export function ConsumeScan({ item }: { item: ScanItem }) {
   const started = useRef(false);
+  const requestId = useRef<string | null>(null);
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [message, setMessage] = useState("正在登记消耗…");
   const [remaining, setRemaining] = useState(item.quantity);
@@ -14,7 +15,8 @@ export function ConsumeScan({ item }: { item: ScanItem }) {
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    fetch("/api/public/consume", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ itemId: item.id }) })
+    const scanRequestId = requestId.current ||= crypto.randomUUID();
+    fetch("/api/public/consume", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ itemId: item.id, requestId: scanRequestId }) })
       .then(async (response) => {
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.error || "扫码消耗失败");

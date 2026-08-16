@@ -113,6 +113,9 @@ model ActivityLog {
   memberId   String?
   userId     String?
   detail     String?
+  undoOfId   String?
+  undoneAt   DateTime?
+  scanRequestId String?         @unique
   item       Item?             @relation(fields: [itemId], references: [id], onDelete: SetNull)
   member     HouseholdMember?  @relation(fields: [memberId], references: [id], onDelete: SetNull)
   user       User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -122,6 +125,7 @@ model ActivityLog {
   @@index([memberId])
   @@index([userId])
   @@index([createdAt])
+  @@index([undoOfId])
 }
 
 model PriceRecord {

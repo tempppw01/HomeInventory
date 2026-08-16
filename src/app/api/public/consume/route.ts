@@ -4,12 +4,14 @@ import { prisma } from "@/lib/prisma";
 import { isLiquidConsumable } from "@/lib/item-metrics";
 import { apiError } from "@/lib/api";
 
-const consumeSchema = z.object({ itemId: z.string().trim().min(1).max(80) });
+const consumeSchema = z.object({ itemId: z.string().trim().min(1).max(80), requestId: z.string().uuid() });
 
 export async function POST(request: NextRequest) {
   try {
-    const { itemId } = consumeSchema.parse(await request.json());
+    const { itemId, requestId } = consumeSchema.parse(await request.json());
     const result = await prisma.$transaction(async (tx) => {
+      const previous = await tx.activityLog.findUnique({ where: { scanRequestId: requestId }, include: { item: { include: { location: true } } } });
+      if (previous?.item) return { item: previous.item, duplicate: true as const };
       const current = await tx.item.findFirst({ where: { id: itemId, deletedAt: null } });
       if (!current) return { error: "物品不存在", status: 404 as const };
       if (current.type !== "CONSUMABLE") return { error: "耐用品不能通过扫码消耗", status: 409 as const };
@@ -22,7 +24,7 @@ export async function POST(request: NextRequest) {
 
       const item = await tx.item.findUniqueOrThrow({ where: { id: itemId }, include: { location: true } });
       await tx.activityLog.create({
-        data: { action: "CONSUME", itemId: item.id, itemName: item.name, detail: `扫码消耗 1 ${item.unit}` },
+        data: { action: "CONSUME", itemId: item.id, itemName: item.name, detail: `扫码消耗 1 ${item.unit}`, scanRequestId: requestId },
       });
 
       const needsRestock = (item.minQuantity > 0 && item.quantity <= item.minQuantity) || (isLiquidConsumable(item) && item.remainingPercent <= 20);
@@ -34,11 +36,11 @@ export async function POST(request: NextRequest) {
           });
         }
       }
-      return { item };
+      return { item, duplicate: false as const };
     });
 
     if ("error" in result) return NextResponse.json({ error: result.error }, { status: result.status });
-    return NextResponse.json({ ok: true, item: result.item, consumed: 1 });
+    return NextResponse.json({ ok: true, item: result.item, consumed: result.duplicate ? 0 : 1, duplicate: result.duplicate });
   } catch (error) {
     return apiError(error);
   }
