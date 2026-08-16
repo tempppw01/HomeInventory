@@ -21,6 +21,18 @@ const statements = [
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "AuthSession_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
   )`,
+  `CREATE TABLE IF NOT EXISTS "LoginRecord" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "userId" TEXT,
+    "username" TEXT NOT NULL,
+    "ipAddress" TEXT,
+    "device" TEXT NOT NULL,
+    "userAgent" TEXT,
+    "success" BOOLEAN NOT NULL DEFAULT false,
+    "failureReason" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "LoginRecord_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+  )`,
   `CREATE TABLE IF NOT EXISTS "Location" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "name" TEXT NOT NULL,
@@ -126,6 +138,8 @@ const statements = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "AuthSession_tokenHash_key" ON "AuthSession"("tokenHash")`,
   `CREATE INDEX IF NOT EXISTS "AuthSession_userId_idx" ON "AuthSession"("userId")`,
   `CREATE INDEX IF NOT EXISTS "AuthSession_expiresAt_idx" ON "AuthSession"("expiresAt")`,
+  `CREATE INDEX IF NOT EXISTS "LoginRecord_userId_idx" ON "LoginRecord"("userId")`,
+  `CREATE INDEX IF NOT EXISTS "LoginRecord_createdAt_idx" ON "LoginRecord"("createdAt")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "HouseholdMember_userId_key" ON "HouseholdMember"("userId")`,
   `CREATE INDEX IF NOT EXISTS "ActivityLog_userId_idx" ON "ActivityLog"("userId")`,
   `CREATE INDEX IF NOT EXISTS "Item_type_idx" ON "Item"("type")`,

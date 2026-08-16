@@ -33,6 +33,7 @@ model User {
   member       HouseholdMember?
   activities   ActivityLog[]
   sessions     AuthSession[]
+  loginRecords LoginRecord[]
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
 }
@@ -47,6 +48,22 @@ model AuthSession {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+model LoginRecord {
+  id            String   @id @default(cuid())
+  userId        String?
+  username      String
+  ipAddress     String?
+  device        String
+  userAgent     String?
+  success       Boolean  @default(false)
+  failureReason String?
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model Location {

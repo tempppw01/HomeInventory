@@ -6,7 +6,19 @@ export async function GET() {
   try {
     const user = await requireUser();
     if (!canAdmin(user.role)) return NextResponse.json({ error: "只有管理员可以管理账号" }, { status: 403 });
-    return NextResponse.json(await prisma.user.findMany({ select: { id: true, username: true, displayName: true, role: true, active: true, createdAt: true }, orderBy: { createdAt: "asc" } }));
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        role: true,
+        active: true,
+        createdAt: true,
+        loginRecords: { where: { success: true }, orderBy: { createdAt: "desc" }, take: 1, select: { ipAddress: true, device: true, createdAt: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    return NextResponse.json(users.map(({ loginRecords, ...user }) => ({ ...user, lastLogin: loginRecords[0] || null })));
   } catch (error) { return NextResponse.json({ error: error instanceof Error && error.message === "UNAUTHORIZED" ? "请先登录" : "服务器暂时开小差了，请稍后重试" }, { status: error instanceof Error && error.message === "UNAUTHORIZED" ? 401 : 500 }); }
 }
 
