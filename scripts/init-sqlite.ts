@@ -85,6 +85,8 @@ const statements = [
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
     "deletedAt" DATETIME,
+    "consumeRate" REAL NOT NULL DEFAULT 0,
+    "lastRestockedAt" DATETIME,
     CONSTRAINT "Item_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "Location" ("id") ON DELETE SET NULL ON UPDATE CASCADE
   )`,
   `CREATE TABLE IF NOT EXISTS "ShoppingItem" (
@@ -146,6 +148,7 @@ const statements = [
   `CREATE INDEX IF NOT EXISTS "Item_category_idx" ON "Item"("category")`,
   `CREATE INDEX IF NOT EXISTS "Item_locationId_idx" ON "Item"("locationId")`,
   `CREATE INDEX IF NOT EXISTS "Item_expiryDate_idx" ON "Item"("expiryDate")`,
+  `CREATE INDEX IF NOT EXISTS "Item_lastRestockedAt_idx" ON "Item"("lastRestockedAt")`,
   `CREATE INDEX IF NOT EXISTS "ShoppingItem_status_idx" ON "ShoppingItem"("status")`,
   `CREATE INDEX IF NOT EXISTS "PriceRecord_itemId_idx" ON "PriceRecord"("itemId")`,
   `CREATE INDEX IF NOT EXISTS "PriceRecord_purchasedAt_idx" ON "PriceRecord"("purchasedAt")`,
@@ -163,6 +166,12 @@ async function main() {
   }
   if (!columns.some((column) => column.name === "restockPausedUntil")) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "Item" ADD COLUMN "restockPausedUntil" DATETIME`);
+  }
+  if (!columns.some((column) => column.name === "consumeRate")) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Item" ADD COLUMN "consumeRate" REAL NOT NULL DEFAULT 0`);
+  }
+  if (!columns.some((column) => column.name === "lastRestockedAt")) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Item" ADD COLUMN "lastRestockedAt" DATETIME`);
   }
   if (!columns.some((column) => column.name === "remainingPercent")) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "Item" ADD COLUMN "remainingPercent" REAL NOT NULL DEFAULT 100`);

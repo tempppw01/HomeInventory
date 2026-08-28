@@ -37,6 +37,8 @@ export const itemSchema = z.object({
   recordPurchase: z.boolean().optional().default(false),
   purchaseStore: z.union([z.string().trim().max(80), z.literal(""), z.null()]).optional().transform((value) => value || null),
   restockPausedUntil: z.union([z.string().datetime(), z.literal(""), z.null()]).optional().transform((value) => value ? new Date(value) : null),
+  consumeRate: z.coerce.number().min(0).max(999999).optional(),
+  lastRestockedAt: optionalDate,
 });
 
 export const itemPatchSchema = itemSchema.partial();

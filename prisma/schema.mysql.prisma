@@ -103,12 +103,15 @@ model Item {
   updatedAt             DateTime      @updatedAt
   deletedAt             DateTime?
   restockPausedUntil    DateTime?
+  consumeRate           Float         @default(0)
+  lastRestockedAt       DateTime?
 
   @@index([type])
   @@index([category])
   @@index([locationId])
   @@index([expiryDate])
   @@index([deletedAt])
+  @@index([lastRestockedAt])
 }
 
 model HouseholdMember {
