@@ -17,7 +17,8 @@
   --radius-sm: 0.5rem;
   --radius-md: 0.75rem;
   --radius-lg: 1rem;
-  --radius-xl: 1.5rem;
+  /* Large containers stay softly rounded without reading as floating cards. */
+  --radius-xl: 1.125rem;
   --control-height: 2.75rem;
   --icon-button-size: 2.25rem;
   --motion-fast: 140ms;
@@ -41,9 +42,9 @@
   --success: #18a66c;
   --warning: #ef9e38;
   --danger: #eb5b66;
-  --shadow: 0 18px 60px rgba(26, 22, 54, 0.08);
-  --shadow-sm: 0 4px 14px rgba(26, 22, 54, 0.08);
-  --shadow-lg: 0 18px 60px rgba(26, 22, 54, 0.14);
+  --shadow: 0 10px 30px rgba(26, 22, 54, 0.05);
+  --shadow-sm: 0 2px 8px rgba(26, 22, 54, 0.06);
+  --shadow-lg: 0 12px 28px rgba(26, 22, 54, 0.09);
 }
 
 [data-theme="dark"] {
@@ -57,9 +58,9 @@
   --primary: #9278ff;
   --primary-strong: #a18bff;
   --primary-soft: #30294e;
-  --shadow: 0 18px 60px rgba(0, 0, 0, 0.22);
-  --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.18);
-  --shadow-lg: 0 18px 60px rgba(0, 0, 0, 0.35);
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.14);
+  --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.24);
 }
 
 * { box-sizing: border-box; }
@@ -86,7 +87,7 @@ button { cursor: pointer; }
   box-shadow: var(--shadow);
   backdrop-filter: blur(18px);
 }
-.surface, .ds-card { background: var(--surface-solid); border: 1px solid var(--border); border-radius: var(--radius-xl); }
+.surface, .ds-card { background: var(--surface-solid); border: 1px solid var(--border); border-radius: var(--radius-lg); }
 .muted { color: var(--muted); }
 .input {
   width: 100%; border: 1px solid var(--border); background: var(--surface-soft); color: var(--foreground);
@@ -108,7 +109,7 @@ button { cursor: pointer; }
 .ds-icon-button { display: inline-grid; width: var(--icon-button-size); height: var(--icon-button-size); min-height: var(--icon-button-size); place-items: center; padding: 0; }
 .ds-row { display: flex; align-items: center; gap: var(--space-3); }
 .ds-stack { display: flex; flex-direction: column; gap: var(--space-4); }
-.ds-section { padding: var(--space-6); border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--surface-solid); }
+.ds-section { padding: var(--space-6); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-solid); }
 .ds-badge { display: inline-flex; align-items: center; min-height: 1.5rem; padding: 0 var(--space-2); border-radius: 999px; font-size: var(--text-xs); font-weight: 700; }
 .ds-divider { height: 1px; background: var(--border); }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
