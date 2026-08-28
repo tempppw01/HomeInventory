@@ -279,8 +279,11 @@ export function InventoryApp() {
         </AnimatePresence>
       </main>
 
-      <nav className="mobile-only fixed bottom-0 left-0 right-0 z-30 grid grid-cols-5 border-t px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        {mobileNavItems.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setView(id)} className="relative flex flex-col items-center gap-1 py-1 text-[11px] font-semibold" style={{ color: view === id ? "var(--primary)" : "var(--muted)" }}><Icon size={20} /><span>{label}</span>{id === "shopping" && pendingShopping.length > 0 && <span className="absolute right-[26%] top-0 size-2 rounded-full" style={{ background: "var(--danger)" }} />}</button>)}
+      <nav aria-label="移动端主导航" className="mobile-only fixed bottom-0 left-0 right-0 z-30 grid grid-cols-5 gap-1 border-t px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl" style={{ background: "color-mix(in srgb, var(--surface) 94%, transparent)", borderColor: "var(--border)" }}>
+        {mobileNavItems.map(({ id, label, icon: Icon }) => {
+          const active = view === id;
+          return <button key={id} onClick={() => setView(id)} aria-current={active ? "page" : undefined} className="relative flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-[11px] font-semibold transition" style={active ? { color: "var(--primary)", background: "var(--primary-soft)" } : { color: "var(--muted)" }}><Icon size={19} strokeWidth={active ? 2.4 : 2} /><span>{label}</span>{id === "shopping" && pendingShopping.length > 0 && <span className="absolute right-[24%] top-1 size-2 rounded-full" style={{ background: "var(--danger)" }} />}</button>;
+        })}
       </nav>
 
       <AnimatePresence>
