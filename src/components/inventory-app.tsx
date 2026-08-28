@@ -6,7 +6,7 @@ import {
   AlertTriangle, Archive, Bath, Bell, Bot, Boxes, Check, CheckSquare, ChevronDown, ChevronRight, CircleAlert, Cloud, CookingPot,
   Grid2X2, ImagePlus, Info, LayoutDashboard, LayoutGrid, List, MapPin, Minus, Monitor, Moon,
   Package, Plus, Printer, QrCode, Search, Settings, ShoppingBasket, Sofa, Sparkles, Copy, Pencil, ExternalLink,
-  Sun, Trash2, WalletCards, Warehouse, X, Zap,
+  Sun, Trash2, WalletCards, Warehouse, X, Zap, PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DashboardData, Item, ItemType, Location, ShoppingItem } from "@/types";
@@ -103,6 +103,7 @@ export function InventoryApp() {
   const [theme, setTheme] = useState<ThemeMode>("system");
   const [showWelcome, setShowWelcome] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -121,6 +122,12 @@ export function InventoryApp() {
       .catch((error) => { if (active) setToast(error instanceof Error ? error.message : "载入失败"); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
+  }, []);
+  useEffect(() => {
+    const saved = localStorage.getItem("home-inventory-sidebar-collapsed");
+    if (saved === null) return;
+    const frame = requestAnimationFrame(() => setSidebarCollapsed(saved === "true"));
+    return () => cancelAnimationFrame(frame);
   }, []);
   useEffect(() => {
     if (localStorage.getItem(welcomeStorageKey) || legacyWelcomeStorageKeys.some((key) => localStorage.getItem(key))) {
@@ -157,6 +164,13 @@ export function InventoryApp() {
     localStorage.setItem("home-inventory-theme", next);
   };
   const cycleTheme = () => setThemeMode(theme === "light" ? "dark" : theme === "dark" ? "system" : "light");
+  const toggleSidebar = () => {
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      localStorage.setItem("home-inventory-sidebar-collapsed", String(next));
+      return next;
+    });
+  };
 
   const filteredItems = useMemo(() => {
     const term = search.toLowerCase().trim();
@@ -208,28 +222,34 @@ export function InventoryApp() {
   };
 
   return (
-    <div className="min-h-screen md:grid md:grid-cols-[232px_minmax(0,1fr)]">
-      <aside className="desktop-only sticky top-0 h-screen border-r px-4 py-5" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-        <Brand />
+    <div className={`min-h-screen md:grid ${sidebarCollapsed ? "md:grid-cols-[76px_minmax(0,1fr)]" : "md:grid-cols-[232px_minmax(0,1fr)]"}`}>
+      <aside className={`desktop-only sticky top-0 h-screen border-r px-3 py-5 transition-[width] duration-200 ${sidebarCollapsed ? "items-center" : ""}`} style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+        <div className={`flex items-center ${sidebarCollapsed ? "justify-center" : "justify-between gap-2"}`}>
+          <Brand compact={sidebarCollapsed} />
+          <button onClick={toggleSidebar} className="btn-ghost ds-icon-button" aria-label={sidebarCollapsed ? "展开侧栏" : "折叠侧栏"} title={sidebarCollapsed ? "展开侧栏" : "折叠侧栏"}>
+            {sidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+          </button>
+        </div>
         <nav className="mt-9 space-y-1.5">
           {navItems.map(({ id, label, icon: Icon }) => (
-            <button key={id} onClick={() => setView(id)} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold transition"
+            <button key={id} onClick={() => setView(id)} className={`relative flex w-full items-center rounded-xl py-3 text-sm font-semibold transition ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"}`}
+              aria-label={label} title={sidebarCollapsed ? label : undefined}
               style={view === id ? { background: "var(--primary-soft)", color: "var(--primary)" } : { color: "var(--muted)" }}>
-              <Icon size={19} strokeWidth={2.2} /> {label}
-              {id === "shopping" && pendingShopping.length > 0 && <span className="ml-auto rounded-full px-2 py-0.5 text-xs text-white" style={{ background: "var(--danger)" }}>{pendingShopping.length}</span>}
+              <Icon size={19} strokeWidth={2.2} /> {!sidebarCollapsed && label}
+              {id === "shopping" && pendingShopping.length > 0 && <span className={`${sidebarCollapsed ? "absolute ml-7 mt-[-18px]" : "ml-auto"} rounded-full px-2 py-0.5 text-xs text-white`} style={{ background: "var(--danger)" }}>{pendingShopping.length}</span>}
             </button>
           ))}
         </nav>
-        <div className="absolute bottom-5 left-4 right-4">
-          <button onClick={() => setView("settings")} className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold muted hover:bg-[var(--surface-soft)]">
-            <Settings size={19} /> 设置
+        <div className={`absolute bottom-5 ${sidebarCollapsed ? "left-3 right-3" : "left-4 right-4"}`}>
+          <button onClick={() => setView("settings")} className={`flex w-full items-center rounded-xl py-2.5 text-sm font-semibold muted hover:bg-[var(--surface-soft)] ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"}`} aria-label="设置" title={sidebarCollapsed ? "设置" : undefined}>
+            <Settings size={19} /> {!sidebarCollapsed && "设置"}
           </button>
-          <button onClick={() => setModal("recycle")} className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold muted hover:bg-[var(--surface-soft)]"><Trash2 size={19} />回收站</button>
-          <button onClick={() => setView("about")} className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold muted hover:bg-[var(--surface-soft)]"><Info size={19} />关于 <span className="ml-auto text-[10px]">v{APP_VERSION}</span></button>
-          <div className="mt-3 rounded-2xl p-3" style={{ background: "linear-gradient(135deg, var(--primary-soft), var(--surface-soft))" }}>
+          <button onClick={() => setModal("recycle")} className={`flex w-full items-center rounded-xl py-2.5 text-sm font-semibold muted hover:bg-[var(--surface-soft)] ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"}`} aria-label="回收站" title={sidebarCollapsed ? "回收站" : undefined}><Trash2 size={19} />{!sidebarCollapsed && "回收站"}</button>
+          <button onClick={() => setView("about")} className={`flex w-full items-center rounded-xl py-2.5 text-sm font-semibold muted hover:bg-[var(--surface-soft)] ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"}`} aria-label="关于" title={sidebarCollapsed ? `关于 v${APP_VERSION}` : undefined}><Info size={19} />{!sidebarCollapsed && <>关于 <span className="ml-auto text-[10px]">v{APP_VERSION}</span></>}</button>
+          {!sidebarCollapsed && <div className="mt-3 rounded-xl p-3" style={{ background: "linear-gradient(135deg, var(--primary-soft), var(--surface-soft))" }}>
             <div className="flex items-center gap-2 text-sm font-bold"><Sparkles size={16} style={{ color: "var(--primary)" }} /> 今日小结</div>
             <p className="mb-0 mt-2 text-xs leading-5 muted">{lowStock.length ? `${lowStock.length} 件消耗品需要补充` : "库存充足，家里井井有条"}</p>
-          </div>
+          </div>}
         </div>
       </aside>
 
