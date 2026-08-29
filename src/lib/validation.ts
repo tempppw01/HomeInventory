@@ -67,6 +67,7 @@ export const locationSchema = z.object({
   name: z.string().trim().min(1).max(30),
   icon: z.string().max(30).default("Package"),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default("#7c3aed"),
+  thumbnailUrl: z.union([z.string().url().max(1000), z.literal(""), z.null()]).optional().transform((value) => value || null),
 });
 
 export const ossSettingSchema = z.object({

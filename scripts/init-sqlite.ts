@@ -38,6 +38,7 @@ const statements = [
     "name" TEXT NOT NULL,
     "icon" TEXT NOT NULL DEFAULT 'Package',
     "color" TEXT NOT NULL DEFAULT '#7c3aed',
+    "thumbnailUrl" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
   )`,
@@ -158,6 +159,10 @@ const statements = [
 async function main() {
   for (const statement of statements) await prisma.$executeRawUnsafe(statement);
   const columns = await prisma.$queryRawUnsafe<Array<{ name: string }>>(`PRAGMA table_info("Item")`);
+  const locationColumns = await prisma.$queryRawUnsafe<Array<{ name: string }>>(`PRAGMA table_info("Location")`);
+  if (!locationColumns.some((column) => column.name === "thumbnailUrl")) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Location" ADD COLUMN "thumbnailUrl" TEXT`);
+  }
   if (!columns.some((column) => column.name === "itemCode")) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "Item" ADD COLUMN "itemCode" TEXT`);
   }

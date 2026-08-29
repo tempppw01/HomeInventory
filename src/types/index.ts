@@ -6,6 +6,7 @@ export interface Location {
   name: string;
   icon: string;
   color: string;
+  thumbnailUrl: string | null;
   _count?: { items: number };
 }
 

@@ -71,6 +71,7 @@ model Location {
   name      String   @unique
   icon      String   @default("Package")
   color     String   @default("#7c3aed")
+  thumbnailUrl String?
   items     Item[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
