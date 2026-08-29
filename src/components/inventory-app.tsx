@@ -296,7 +296,7 @@ export function InventoryApp() {
         {qrItem && <QrModal item={qrItem} onClose={() => setQrItem(null)} onPrint={() => { setQrItem(null); setPrintItems([qrItem]); }} />}
         {aiItem && <AiAssistantModal item={aiItem} onClose={() => setAiItem(null)} onApplied={async (message) => { setToast(message); await refresh(); }} />}
       </AnimatePresence>
-      {!chatOpen && <button onClick={() => setChatOpen(true)} className="fixed bottom-5 right-5 z-[90] grid size-14 place-items-center rounded-full text-white shadow-xl transition hover:scale-105" style={{ background: "var(--primary)" }} aria-label="打开归物助手" title="归物助手"><Bot size={22} /></button>}
+      {!chatOpen && <button onClick={() => setChatOpen(true)} className="fixed bottom-[calc(76px+env(safe-area-inset-bottom))] right-4 z-[90] grid size-12 place-items-center rounded-full text-white shadow-xl transition hover:scale-105 md:bottom-5 md:right-5 md:size-14" style={{ background: "var(--primary)" }} aria-label="打开归物助手" title="归物助手"><Bot size={21} /></button>}
       {chatOpen && <AiChat onClose={() => setChatOpen(false)} />}
       {printItems && <PrintStudio items={printItems} onClose={() => setPrintItems(null)} />}
       {showWelcome && <WelcomeModal hasDemoData={data?.items.some((item) => item.itemCode?.startsWith("INV-DEMO-")) ?? false} onClose={() => { localStorage.setItem(welcomeStorageKey, "seen"); setShowWelcome(false); }} />}
