@@ -224,12 +224,10 @@ export function InventoryApp() {
   return (
     <div className={`min-h-screen md:grid ${sidebarCollapsed ? "md:grid-cols-[76px_minmax(0,1fr)]" : "md:grid-cols-[232px_minmax(0,1fr)]"}`}>
       <aside className={`desktop-only sticky top-0 h-screen border-r px-3 py-5 transition-[width] duration-200 ${sidebarCollapsed ? "items-center" : ""}`} style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-        <div className={`flex items-center ${sidebarCollapsed ? "flex-col justify-center gap-2" : "justify-between gap-2"}`}>
+        <button onClick={toggleSidebar} className={`flex w-full items-center rounded-xl p-1 text-left transition hover:bg-[var(--surface-soft)] ${sidebarCollapsed ? "justify-center" : "justify-between gap-2"}`} aria-label={sidebarCollapsed ? "展开侧栏" : "折叠侧栏"} title={sidebarCollapsed ? "展开侧栏" : "折叠侧栏"}>
           <Brand compact={sidebarCollapsed} />
-          <button onClick={toggleSidebar} className={`btn-ghost ds-icon-button ${sidebarCollapsed ? "h-8 w-8 min-h-8" : ""}`} aria-label={sidebarCollapsed ? "展开侧栏" : "折叠侧栏"} title={sidebarCollapsed ? "展开侧栏" : "折叠侧栏"}>
-            {sidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
-          </button>
-        </div>
+          <span className="grid size-8 shrink-0 place-items-center rounded-lg muted"><span className="sr-only">{sidebarCollapsed ? "展开侧栏" : "折叠侧栏"}</span>{sidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</span>
+        </button>
         <nav className="mt-9 space-y-1.5">
           {navItems.map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => setView(id)} className={`ds-nav-item flex w-full items-center rounded-xl py-3 text-sm font-semibold transition ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"}`}
@@ -261,7 +259,7 @@ export function InventoryApp() {
           </div>
           <button onClick={cycleTheme} className="btn-ghost grid size-11 place-items-center p-0" aria-label={`当前主题：${theme === "system" ? "跟随系统" : theme === "light" ? "浅色" : "深色"}`} title="切换主题">{theme === "system" ? <Monitor size={19} /> : theme === "light" ? <Moon size={19} /> : <Sun size={19} />}</button>
           <button onClick={() => setModal("notifications")} className="btn-ghost relative grid size-11 place-items-center p-0" aria-label="查看提醒"><Bell size={19} />{lowStock.length + expiring.length + expired.length > 0 && <span className="absolute right-2 top-2 size-2 rounded-full" style={{ background: "var(--danger)" }} />}</button>
-          <button onClick={() => setModal("batch-ai")} className="btn-ghost flex items-center gap-2 whitespace-nowrap"><ImagePlus size={18} /><span className="desktop-only">图片识别</span></button><button onClick={() => setModal("item")} className="btn-primary flex items-center gap-2 whitespace-nowrap"><Plus size={19} /><span className="desktop-only">录入物品</span></button>
+          <button onClick={() => setModal("batch-ai")} className="btn-ghost flex items-center gap-2 whitespace-nowrap"><ImagePlus size={18} /><span className="hidden min-[1100px]:inline">图片识别</span></button><button onClick={() => setModal("item")} className="btn-primary flex items-center gap-2 whitespace-nowrap"><Plus size={19} /><span className="hidden min-[1100px]:inline">录入物品</span></button>
         </header>
 
         <AnimatePresence mode="wait">
@@ -328,10 +326,11 @@ function DashboardView({ data, lowStock, expiring, expired, pending, totalValue,
     { label: "待采购", value: pending.length, suffix: "项", icon: ShoppingBasket, color: "#eb5b66", bg: "#ffe8eb" },
     { label: "估算价值", value: totalValue >= 10000 ? `${(totalValue / 10000).toFixed(1)}万` : `¥${Math.round(totalValue)}`, suffix: "", icon: Zap, color: "#15966a", bg: "#e0f7ef" },
   ];
+  const visibleStats = data.items.length === 0 ? stats.slice(0, 1) : stats.filter(({ label, value }) => label === "全部物品" || (typeof value === "number" ? value > 0 : value !== "¥0"));
   return <>
     <PageTitle title="晚上好，家里一切有序" text={`今天有 ${lowStock.length + expiring.length + expired.length} 条库存与保质期事项值得留意。`} />
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
-      {stats.map(({ label, value, suffix, icon: Icon, color, bg }, index) => <motion.div key={label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * .06 }} className="surface p-4 sm:p-5"><div className="mb-4 grid size-10 place-items-center rounded-xl" style={{ color, background: bg }}><Icon size={20} /></div><div className="flex items-end gap-1"><b className="text-2xl font-black sm:text-3xl">{value}</b><span className="mb-1 text-xs muted">{suffix}</span></div><div className="mt-1 text-xs font-semibold muted">{label}</div></motion.div>)}
+      {visibleStats.map(({ label, value, suffix, icon: Icon, color, bg }, index) => <motion.div layout key={label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * .06 }} className="surface p-3.5 sm:p-4"><div className="mb-3 grid size-9 place-items-center rounded-xl" style={{ color, background: bg }}><Icon size={18} /></div><div className="flex items-end gap-1"><b className="text-2xl font-black sm:text-3xl">{value}</b><span className="mb-1 text-xs muted">{suffix}</span></div><div className="mt-1 text-xs font-semibold muted">{label}</div></motion.div>)}
     </div>
 
     {(lowStock.length > 0 || expiring.length > 0 || expired.length > 0) && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="my-4 flex min-h-16 items-center gap-2.5 rounded-2xl px-3 py-2.5 text-sm sm:gap-3 sm:px-4" style={{ background: "linear-gradient(100deg, #fff1df, #ffe8e8)", color: "#7d491f" }}><div className="grid size-8 shrink-0 place-items-center rounded-xl bg-white/70 sm:size-9"><CircleAlert size={18} /></div><div className="min-w-0 flex-1 leading-tight"><b>{expired.length > 0 ? `${expired.length} 件物品已经过期` : "需要你的关注"}</b><div className="mt-1 truncate text-xs opacity-80">{lowStock.length} 件库存不足 · {expiring.length} 件即将到期</div></div><button onClick={onAlerts} className="flex shrink-0 items-center gap-0.5 text-xs font-bold sm:gap-1 sm:text-sm">查看提醒 <ChevronRight size={15} /></button></motion.div>}
@@ -350,6 +349,7 @@ function RecentItemRow({ item, onEdit, onQr, onAi }: { item: Item; onEdit: () =>
 }
 
 function HomeInsightsCompact({ data }: { data: DashboardData }) {
+  if (data.finance.currentMonthTotal <= 0 && data.finance.averageMonthly <= 0 && !data.finance.recent[0]) return null;
   return <section className="surface p-4 sm:p-5"><h2 className="m-0 text-base font-black">家庭状态</h2><div className="mt-4 grid grid-cols-2 gap-3"><div className="rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}><div className="flex items-center gap-1.5 text-[11px] font-bold muted"><WalletCards size={13} />本月消费</div><div className="mt-2 text-lg font-black">¥{data.finance.currentMonthTotal.toFixed(0)}</div></div><div className="rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}><div className="text-[11px] font-bold muted">近 6 月均值</div><div className="mt-2 text-lg font-black">¥{data.finance.averageMonthly.toFixed(0)}</div></div></div>{data.finance.recent[0] && <div className="mt-3 truncate text-[11px] muted">最近：{data.finance.recent[0].itemName} ¥{data.finance.recent[0].totalPrice.toFixed(2)}</div>}</section>;
 }
 
