@@ -3,10 +3,10 @@
 import { AnimatePresence, motion } from "motion/react";
 import { QRCodeSVG } from "qrcode.react";
 import {
-  AlertTriangle, Archive, Bath, Bell, Bot, Boxes, Check, CheckSquare, ChevronDown, ChevronRight, CircleAlert, Cloud, CookingPot,
+  AlertTriangle, Archive, Bath, Bell, Bot, Boxes, CalendarDays, Check, CheckSquare, ChevronDown, ChevronRight, CircleAlert, Cloud, CookingPot,
   Grid2X2, ImagePlus, Info, LayoutDashboard, LayoutGrid, List, MapPin, Minus, Monitor, Moon,
   Package, Plus, Printer, QrCode, Search, Settings, ShoppingBasket, Sofa, Sparkles, Copy, Pencil, ExternalLink,
-  Sun, Trash2, WalletCards, Warehouse, X, Zap, PanelLeftClose, PanelLeftOpen,
+  History, RotateCcw, Sun, Trash2, WalletCards, Warehouse, X, Zap, PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DashboardData, Item, ItemType, Location, ShoppingItem } from "@/types";
@@ -66,6 +66,15 @@ const units = ["件", "个", "盒", "瓶", "袋", "卷", "包", "台", "kg", "L"
 const welcomeStorageKey = "home-inventory-welcome-seen";
 const legacyWelcomeStorageKeys = ["home-inventory-welcome-0.0.1"];
 const appStartedAt = Date.now();
+
+function dateInputValue(daysFromToday = 0) {
+  const date = new Date();
+  date.setDate(date.getDate() + daysFromToday);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const retryable = !options?.method || ["GET", "PATCH", "DELETE"].includes(options.method.toUpperCase());
@@ -549,9 +558,18 @@ function ItemModal({ locations, item, onClose, onSaved }: { locations: Location[
     {isLiquidConsumable(draft) && <p className="-mt-2 text-xs muted">按整瓶记录库存；日常用量请通过下方“剩余量”调整。</p>}
     {draft.type === "CONSUMABLE" && <div className="rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}><div className="mb-2 flex items-center justify-between text-xs"><span className="font-bold">剩余量</span><span className="font-black" style={{ color: draft.remainingPercent <= 20 ? "var(--danger)" : "var(--primary)" }}>{draft.remainingPercent}%</span></div><input aria-label="剩余量" type="range" min="0" max="100" step="5" className="w-full accent-[var(--primary)]" value={draft.remainingPercent} onChange={(e) => set("remainingPercent", Number(e.target.value))} /></div>}
     <button type="button" onClick={() => setMoreOpen(!moreOpen)} className="flex w-full items-center justify-between rounded-2xl px-3 py-2.5 text-sm font-bold" style={{ background: "var(--surface-soft)" }}><span>更多信息 <span className="ml-1 text-xs font-normal muted">价格、日期、提醒、备注</span></span><ChevronDown size={17} className={`transition ${moreOpen ? "rotate-180" : ""}`} /></button>
-    {moreOpen && <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="space-y-3 overflow-hidden"><div className={`grid gap-3 ${draft.type === "CONSUMABLE" ? "grid-cols-2" : "grid-cols-1"}`}><Field label="购买单价"><input type="number" min="0" step="0.01" className="input" value={draft.price} onChange={(e) => set("price", e.target.value)} placeholder="¥" /></Field>{draft.type === "CONSUMABLE" && <Field label="低库存阈值"><input type="number" min="0" step="0.1" className="input" value={draft.minQuantity} onChange={(e) => set("minQuantity", Number(e.target.value))} /></Field>}</div>{dailyCostPreview && <div className="flex items-center justify-between rounded-2xl p-3 text-sm" style={{ background: "var(--primary-soft)" }}><span className="font-bold">当前日均成本</span><span><b>¥{dailyCostPreview.cost.toFixed(dailyCostPreview.cost >= 10 ? 0 : 2)}</b><span className="ml-1 text-xs muted">/ 天 · 已使用 {dailyCostPreview.days} 天</span></span></div>}{draft.price && <div className="rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}><button type="button" onClick={() => setRecordPurchase(!recordPurchase)} className="flex w-full items-center justify-between text-sm"><span>记入本月消费记录</span><span className="font-bold" style={{ color: recordPurchase ? "var(--success)" : "var(--muted)" }}>{recordPurchase ? "是" : "否"}</span></button>{recordPurchase && <input className="input mt-3" value={purchaseStore} onChange={(e) => setPurchaseStore(e.target.value)} placeholder="购买商店（可选）" />}</div>}<div className={`grid gap-3 ${draft.type === "CONSUMABLE" ? "grid-cols-2" : "grid-cols-1"}`}><Field label="购入日期"><input type="date" className="input" value={draft.purchaseDate} onChange={(e) => set("purchaseDate", e.target.value)} /></Field>{draft.type === "CONSUMABLE" && <Field label="到期日期"><input type="date" className="input" value={draft.expiryDate} onChange={(e) => set("expiryDate", e.target.value)} /></Field>}</div><Field label="备注"><textarea className="input min-h-20 resize-none" value={draft.notes} onChange={(e) => set("notes", e.target.value)} placeholder="规格、保修、使用提示…" /></Field></motion.div>}
+    {moreOpen && <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="space-y-3 overflow-hidden"><div className={`grid gap-3 ${draft.type === "CONSUMABLE" ? "grid-cols-2" : "grid-cols-1"}`}><Field label="购买单价"><input type="number" min="0" step="0.01" className="input" value={draft.price} onChange={(e) => set("price", e.target.value)} placeholder="¥" /></Field>{draft.type === "CONSUMABLE" && <Field label="低库存阈值"><input type="number" min="0" step="0.1" className="input" value={draft.minQuantity} onChange={(e) => set("minQuantity", Number(e.target.value))} /></Field>}</div>{dailyCostPreview && <div className="flex items-center justify-between rounded-2xl p-3 text-sm" style={{ background: "var(--primary-soft)" }}><span className="font-bold">当前日均成本</span><span><b>¥{dailyCostPreview.cost.toFixed(dailyCostPreview.cost >= 10 ? 0 : 2)}</b><span className="ml-1 text-xs muted">/ 天 · 已使用 {dailyCostPreview.days} 天</span></span></div>}{draft.price && <div className="rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}><button type="button" onClick={() => setRecordPurchase(!recordPurchase)} className="flex w-full items-center justify-between text-sm"><span>记入本月消费记录</span><span className="font-bold" style={{ color: recordPurchase ? "var(--success)" : "var(--muted)" }}>{recordPurchase ? "是" : "否"}</span></button>{recordPurchase && <input className="input mt-3" value={purchaseStore} onChange={(e) => setPurchaseStore(e.target.value)} placeholder="购买商店（可选）" />}</div>}<div className={`grid gap-3 ${draft.type === "CONSUMABLE" ? "grid-cols-2" : "grid-cols-1"}`}><DateField label="购入日期" value={draft.purchaseDate} onChange={(value) => set("purchaseDate", value)} />{draft.type === "CONSUMABLE" && <DateField label="到期日期" value={draft.expiryDate} onChange={(value) => set("expiryDate", value)} />}</div><Field label="备注"><textarea className="input min-h-20 resize-none" value={draft.notes} onChange={(e) => set("notes", e.target.value)} placeholder="规格、保修、使用提示…" /></Field></motion.div>}
     {error && <p className="m-0 rounded-xl p-2.5 text-sm text-red-500" style={{ background: "#ffe8eb" }}>{error}</p>}<div className="flex gap-3 pt-1"><button type="button" onClick={onClose} className="btn-ghost flex-1">取消</button><button disabled={saving || uploading || aiLoading} className="btn-primary flex-1 disabled:opacity-60">{saving ? "保存中…" : item ? "保存修改" : "快速保存"}</button></div>
   </form></Modal><AnimatePresence>{quickLocationOpen && <QuickLocationDialog onClose={() => setQuickLocationOpen(false)} onCreated={addLocation} />}</AnimatePresence></>;
+}
+
+function DateField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  const shortcuts = [
+    { label: "今天", icon: CalendarDays, days: 0 },
+    { label: "昨天", icon: RotateCcw, days: -1 },
+    { label: "上周", icon: History, days: -7 },
+  ];
+  return <Field label={label}><div className="flex items-center gap-1.5"><input type="date" className="input min-w-0 flex-1" value={value} onChange={(event) => onChange(event.target.value)} />{shortcuts.map(({ label: shortcutLabel, icon: Icon, days }) => <button key={shortcutLabel} type="button" onClick={() => onChange(dateInputValue(days))} className="btn-ghost grid size-9 shrink-0 place-items-center p-0" aria-label={`设为${shortcutLabel}`} title={shortcutLabel}><Icon size={16} strokeWidth={2.2} /></button>)}</div></Field>;
 }
 
 function QuickLocationDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (location: Location) => void }) {
