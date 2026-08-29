@@ -13,10 +13,11 @@ RUN npx prisma generate --schema prisma/schema.prisma && npm run build
 
 FROM node:22-alpine AS init-tools
 WORKDIR /app
-# The startup migration scripts only need Prisma CLI and tsx. Installing this
-# tiny toolchain separately avoids bringing the whole application dependency
-# tree into the runtime image a second time.
-RUN npm install --omit=dev --ignore-scripts --no-package-lock prisma@6.19.3 tsx@4.23.1 && npm cache clean --force
+# Database initialization runs Prisma CLI and TypeScript scripts at container
+# startup. Use the locked production dependency tree here so Prisma's engines
+# and transitive packages are always present on every target platform.
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
 
 FROM node:22-alpine AS runner
 WORKDIR /app
