@@ -6,7 +6,7 @@
 
 👉 [在线体验 HomeInventory](https://homeinventory-test.up.railway.app/)
 
-## v0.0.6 更新
+## v0.0.7 更新
 
 - 打印工作台支持以毫米设置标签宽高、上下/左右边距与行列间距；参数会自动保存。
 - 标签内容会随较矮标签自动缩放，并限制在纸张可用宽度内，避免内容丢失或超出 A4。
@@ -245,4 +245,4 @@ docker compose up -d
 
 项目使用 Next.js、React、TypeScript、Prisma 和 Tailwind CSS，可部署到 `linux/amd64` 与 `linux/arm64` 设备。
 
-当前版本：`0.0.6`
+当前版本：`0.0.7`
