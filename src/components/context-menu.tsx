@@ -18,17 +18,18 @@ export function useContextMenu() {
   const [menu, setMenu] = useState<MenuState>(null);
   useEffect(() => {
     if (!menu) return;
-    const close = (event: PointerEvent) => {
+    const close = () => setMenu(null);
+    const closeOnOutsidePointerDown = (event: PointerEvent) => {
       const target = event.target;
       if (target instanceof Element && target.closest("[data-context-menu]")) return;
-      setMenu(null);
+      close();
     };
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") close(); };
-    window.addEventListener("pointerdown", close);
+    window.addEventListener("pointerdown", closeOnOutsidePointerDown);
     window.addEventListener("scroll", close, true);
     window.addEventListener("keydown", onKeyDown);
     return () => {
-      window.removeEventListener("pointerdown", close);
+      window.removeEventListener("pointerdown", closeOnOutsidePointerDown);
       window.removeEventListener("scroll", close, true);
       window.removeEventListener("keydown", onKeyDown);
     };
