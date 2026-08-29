@@ -226,7 +226,7 @@ export function InventoryApp() {
       <aside className={`desktop-only sticky top-0 h-screen border-r px-3 py-5 transition-[width] duration-200 ${sidebarCollapsed ? "items-center" : ""}`} style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
         <button onClick={toggleSidebar} className={`flex w-full items-center rounded-xl p-1 text-left transition hover:bg-[var(--surface-soft)] ${sidebarCollapsed ? "justify-center" : "justify-between gap-2"}`} aria-label={sidebarCollapsed ? "展开侧栏" : "折叠侧栏"} title={sidebarCollapsed ? "展开侧栏" : "折叠侧栏"}>
           <Brand compact={sidebarCollapsed} />
-          <span className="grid size-8 shrink-0 place-items-center rounded-lg muted"><span className="sr-only">{sidebarCollapsed ? "展开侧栏" : "折叠侧栏"}</span>{sidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</span>
+          {!sidebarCollapsed && <span className="grid size-8 shrink-0 place-items-center rounded-lg muted"><span className="sr-only">折叠侧栏</span><PanelLeftClose size={17} /></span>}
         </button>
         <nav className="mt-9 space-y-1.5">
           {navItems.map(({ id, label, icon: Icon }) => (
