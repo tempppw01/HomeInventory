@@ -3,6 +3,10 @@
 .next
 node_modules
 data
+*.tsbuildinfo
+.agents
+.codex
+.playwright-cli
 *.log
 .env*
 !.env.example

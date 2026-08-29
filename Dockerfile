@@ -11,18 +11,25 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATABASE_URL="file:../data/build.db"
 RUN npx prisma generate --schema prisma/schema.prisma && npm run build
 
+FROM node:22-alpine AS init-tools
+WORKDIR /app
+# The startup migration scripts only need Prisma CLI and tsx. Installing this
+# tiny toolchain separately avoids bringing the whole application dependency
+# tree into the runtime image a second time.
+RUN npm install --omit=dev --ignore-scripts --no-package-lock prisma@6.19.3 tsx@4.23.1 && npm cache clean --force
+
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 RUN apk add --no-cache curl
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
-COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/scripts ./scripts
+COPY --from=init-tools /app/node_modules ./init-node_modules
 COPY docker/entrypoint.sh /usr/local/bin/home-inventory-entrypoint
 RUN chmod +x /usr/local/bin/home-inventory-entrypoint && mkdir -p /app/data
 EXPOSE 3000
