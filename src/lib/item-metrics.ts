@@ -29,3 +29,16 @@ export function isLiquidConsumable(item: Pick<ItemMetricsInput, "type" | "name" 
   if (["饮品", "清洁"].includes(item.category) || ["瓶", "L", "ml"].includes(item.unit)) return true;
   return /水|奶|饮料|酒|油|液|露|乳|汁|酱|洗发|沐浴/.test(item.name);
 }
+
+/**
+ * Physical count units must not be stored as fractions. Liquids sold by the
+ * bottle are still counted as whole bottles; their in-use amount belongs in
+ * remainingPercent instead of quantity.
+ */
+export function isCountUnit(unit: string) {
+  return ["件", "个", "盒", "瓶", "袋", "卷", "包", "台"].includes(unit);
+}
+
+export function normalizeItemQuantity(quantity: number, unit: string) {
+  return isCountUnit(unit) ? Math.max(0, Math.round(quantity)) : quantity;
+}

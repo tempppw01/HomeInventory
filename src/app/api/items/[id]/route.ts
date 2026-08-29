@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { itemPatchSchema } from "@/lib/validation";
 import { apiError } from "@/lib/api";
-import { isLiquidConsumable } from "@/lib/item-metrics";
+import { isLiquidConsumable, normalizeItemQuantity } from "@/lib/item-metrics";
 import { deleteStoredImage } from "@/lib/oss";
 
 type Context = { params: Promise<{ id: string }> };
@@ -28,7 +28,9 @@ export async function PATCH(request: NextRequest, { params }: Context) {
     const item = await prisma.$transaction(async (tx) => {
       const existing = await tx.item.findUniqueOrThrow({ where: { id } });
       const nextType = parsed.type ?? existing.type;
-      const data = nextType === "DURABLE" ? { ...parsed, expiryDate: null } : parsed;
+      const nextUnit = parsed.unit ?? existing.unit;
+      const normalized = parsed.quantity === undefined ? parsed : { ...parsed, quantity: normalizeItemQuantity(parsed.quantity, nextUnit) };
+      const data = nextType === "DURABLE" ? { ...normalized, expiryDate: null } : normalized;
       const updated = await tx.item.update({ where: { id }, data, include: { location: true } });
       await tx.activityLog.create({ data: { action: "UPDATE", itemId: updated.id, itemName: updated.name, detail: "更新物品信息" } });
       if (recordPurchase && updated.price != null) {

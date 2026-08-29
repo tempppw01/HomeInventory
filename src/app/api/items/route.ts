@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { itemSchema } from "@/lib/validation";
 import { apiError } from "@/lib/api";
 import { createItemCode } from "@/lib/item-code";
-import { isLiquidConsumable } from "@/lib/item-metrics";
+import { isLiquidConsumable, normalizeItemQuantity } from "@/lib/item-metrics";
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,7 +26,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { recordPurchase, purchaseStore, ...parsed } = itemSchema.parse(await request.json());
-    const data = parsed.type === "DURABLE" ? { ...parsed, expiryDate: null } : parsed;
+    const normalized = { ...parsed, quantity: normalizeItemQuantity(parsed.quantity, parsed.unit) };
+    const data = normalized.type === "DURABLE" ? { ...normalized, expiryDate: null } : normalized;
     const item = await prisma.$transaction(async (tx) => {
       const created = await tx.item.create({ data: { ...data, itemCode: createItemCode() }, include: { location: true } });
       if (recordPurchase && data.price != null) {

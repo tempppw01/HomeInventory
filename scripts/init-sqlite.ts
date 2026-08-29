@@ -181,6 +181,10 @@ async function main() {
   if (!columns.some((column) => column.name === "remainingPercent")) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "Item" ADD COLUMN "remainingPercent" REAL NOT NULL DEFAULT 100`);
   }
+  // Count units (including bottles) represent whole packages. Their partial
+  // in-use state lives in remainingPercent, so old fractional data is repaired
+  // on startup without touching weight or volume based inventory.
+  await prisma.$executeRawUnsafe(`UPDATE "Item" SET "quantity" = MAX(1, ROUND("quantity")) WHERE "unit" IN ('件', '个', '盒', '瓶', '袋', '卷', '包', '台') AND "quantity" > 0 AND "quantity" != ROUND("quantity")`);
   for (const column of ["aiSummary", "aiStorageAdvice", "aiUsageAdvice", "aiReplenishmentAdvice"]) {
     if (!columns.some((existing) => existing.name === column)) {
       await prisma.$executeRawUnsafe(`ALTER TABLE "Item" ADD COLUMN "${column}" TEXT`);
