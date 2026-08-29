@@ -8,7 +8,7 @@ import {
   Package, Plus, Printer, QrCode, Search, Settings, ShoppingBasket, Sofa, Sparkles, Copy, Pencil, ExternalLink,
   History, RotateCcw, Sun, Trash2, WalletCards, Warehouse, X, Zap, PanelLeftClose, PanelLeftOpen, Link2, Upload,
 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DashboardData, Item, ItemType, Location, ShoppingItem } from "@/types";
 import { AiSettings } from "@/components/ai-settings";
 import { RecycleBinModal } from "@/components/recycle-bin-modal";
@@ -25,6 +25,7 @@ import { ContextMenu, useContextMenu, type ContextMenuItem } from "@/components/
 
 type View = "dashboard" | "items" | "shopping" | "locations" | "settings" | "about";
 type ThemeMode = "light" | "dark" | "system";
+type AssistantPosition = { x: number; y: number };
 type ItemDraft = {
   name: string; category: string; type: ItemType; quantity: number; minQuantity: number; remainingPercent: number;
   unit: string; price: string; purchaseDate: string; expiryDate: string; locationId: string; notes: string; imageUrl: string;
@@ -66,6 +67,7 @@ const units = ["件", "个", "盒", "瓶", "袋", "卷", "包", "台", "kg", "L"
 const welcomeStorageKey = "home-inventory-welcome-seen";
 const legacyWelcomeStorageKeys = ["home-inventory-welcome-0.0.1"];
 const appStartedAt = Date.now();
+const assistantPositionStorageKey = "home-inventory-ai-assistant-position-v1";
 
 function dateInputValue(daysFromToday = 0) {
   const date = new Date();
@@ -307,13 +309,77 @@ export function InventoryApp() {
         {qrItem && <QrModal item={qrItem} onClose={() => setQrItem(null)} onPrint={() => { setQrItem(null); setPrintItems([qrItem]); }} />}
         {aiItem && <AiAssistantModal item={aiItem} onClose={() => setAiItem(null)} onApplied={async (message) => { setToast(message); await refresh(); }} />}
       </AnimatePresence>
-      {!chatOpen && <button onClick={() => setChatOpen(true)} className="fixed bottom-[calc(76px+env(safe-area-inset-bottom))] right-4 z-[90] grid size-12 place-items-center rounded-full text-white shadow-xl transition hover:scale-105 md:bottom-5 md:right-5 md:size-14" style={{ background: "var(--primary)" }} aria-label="打开归物助手" title="归物助手"><Bot size={21} /></button>}
+      {!chatOpen && <AssistantLauncher onOpen={() => setChatOpen(true)} />}
       {chatOpen && <AiChat onClose={() => setChatOpen(false)} />}
       {printItems && <PrintStudio items={printItems} onClose={() => setPrintItems(null)} />}
       {showWelcome && <WelcomeModal hasDemoData={data?.items.some((item) => item.itemCode?.startsWith("INV-DEMO-")) ?? false} onClose={() => { localStorage.setItem(welcomeStorageKey, "seen"); setShowWelcome(false); }} />}
       <AnimatePresence>{toast && <motion.div initial={{ opacity: 0, y: 20, x: "-50%" }} animate={{ opacity: 1, y: 0, x: "-50%" }} exit={{ opacity: 0, y: 12, x: "-50%" }} className="fixed bottom-24 left-1/2 z-[70] rounded-2xl px-4 py-3 text-sm font-semibold text-white shadow-2xl md:bottom-8" style={{ background: "#24242d" }}>{toast}</motion.div>}</AnimatePresence>
     </div>
   );
+}
+
+function AssistantLauncher({ onOpen }: { onOpen: () => void }) {
+  const buttonSize = 48;
+  const edge = 12;
+  const bottomClearance = 96;
+  const [mobile, setMobile] = useState(false);
+  const [position, setPosition] = useState<AssistantPosition | null>(null);
+  const dragRef = useRef<{ pointerId: number; offsetX: number; offsetY: number; moved: boolean; position: AssistantPosition } | null>(null);
+  const suppressClickRef = useRef(false);
+
+  const clampPosition = useCallback((candidate: AssistantPosition): AssistantPosition => {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const maxY = Math.max(edge, height - buttonSize - bottomClearance);
+    const y = Math.min(Math.max(candidate.y, edge), maxY);
+    const x = Math.min(Math.max(candidate.x, edge), Math.max(edge, width - buttonSize - edge));
+    return { x, y };
+  }, []);
+
+  useEffect(() => {
+    const restore = () => {
+      const isMobile = window.matchMedia("(max-width: 767px)").matches;
+      setMobile(isMobile);
+      if (!isMobile) return;
+      try {
+        const saved = JSON.parse(localStorage.getItem(assistantPositionStorageKey) || "null") as AssistantPosition | null;
+        setPosition(clampPosition(saved && Number.isFinite(saved.x) && Number.isFinite(saved.y) ? saved : { x: window.innerWidth - buttonSize - edge, y: window.innerHeight - buttonSize - bottomClearance }));
+      } catch {
+        setPosition(clampPosition({ x: window.innerWidth - buttonSize - edge, y: window.innerHeight - buttonSize - bottomClearance }));
+      }
+    };
+    restore();
+    window.addEventListener("resize", restore);
+    return () => window.removeEventListener("resize", restore);
+  }, [clampPosition]);
+
+  const onPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!mobile) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = { pointerId: event.pointerId, offsetX: event.clientX - bounds.left, offsetY: event.clientY - bounds.top, moved: false, position: { x: bounds.left, y: bounds.top } };
+  };
+  const onPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (!mobile || !drag || drag.pointerId !== event.pointerId) return;
+    const next = clampPosition({ x: event.clientX - drag.offsetX, y: event.clientY - drag.offsetY });
+    if (Math.abs(next.y - (position?.y ?? next.y)) > 4 || Math.abs(next.x - (position?.x ?? next.x)) > 4) drag.moved = true;
+    drag.position = next;
+    setPosition(next);
+  };
+  const onPointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    dragRef.current = null;
+    if (drag.moved) {
+      suppressClickRef.current = true;
+      localStorage.setItem(assistantPositionStorageKey, JSON.stringify(drag.position));
+    }
+  };
+
+  const mobileStyle = mobile && position ? { left: position.x, top: position.y, right: "auto", bottom: "auto", background: "var(--primary)" } : { background: "var(--primary)" };
+  return <button onClick={() => { if (suppressClickRef.current) { suppressClickRef.current = false; return; } onOpen(); }} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} className="fixed bottom-[calc(76px+env(safe-area-inset-bottom))] right-4 z-[90] grid size-12 touch-none select-none place-items-center rounded-full text-white shadow-xl transition hover:scale-105 md:bottom-5 md:right-5 md:size-14" style={mobileStyle} aria-label="打开归物助手" title="归物助手：可在手机上沿屏幕边缘拖动"><Bot size={21} /></button>;
 }
 
 function Brand({ compact = false }: { compact?: boolean }) {
