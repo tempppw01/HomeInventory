@@ -30,7 +30,9 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/scripts ./scripts
-COPY --from=init-tools /app/node_modules ./init-node_modules
+# Preserve Node's conventional node_modules parent directory. Prisma CLI loads
+# @prisma/engines through normal module resolution at startup.
+COPY --from=init-tools /app/node_modules ./init-tools/node_modules
 COPY docker/entrypoint.sh /usr/local/bin/home-inventory-entrypoint
 RUN chmod +x /usr/local/bin/home-inventory-entrypoint && mkdir -p /app/data
 EXPOSE 3000

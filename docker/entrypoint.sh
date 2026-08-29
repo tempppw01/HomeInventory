@@ -18,11 +18,11 @@ else
   echo "Using SQLite database"
 fi
 
-./init-node_modules/.bin/prisma generate --schema /app/prisma/schema.prisma
+./init-tools/node_modules/.bin/prisma generate --schema /app/prisma/schema.prisma
 
 if [ "$DATABASE_PROVIDER" = "mysql" ]; then
   attempt=1
-  until ./init-node_modules/.bin/prisma db push --schema /app/prisma/schema.prisma --skip-generate; do
+  until ./init-tools/node_modules/.bin/prisma db push --schema /app/prisma/schema.prisma --skip-generate; do
     if [ "$attempt" -ge 12 ]; then
       echo "Database initialization failed after $attempt attempts"
       exit 1
@@ -32,15 +32,15 @@ if [ "$DATABASE_PROVIDER" = "mysql" ]; then
     sleep 5
   done
 else
-  ./init-node_modules/.bin/tsx /app/scripts/init-sqlite.ts
+  ./init-tools/node_modules/.bin/tsx /app/scripts/init-sqlite.ts
 fi
 
 case "${SEED_DEMO_DATA:-auto}" in
   false|0|no|off) echo "Demo data disabled" ;;
-  *) ./init-node_modules/.bin/tsx /app/prisma/seed.ts ;;
+  *) ./init-tools/node_modules/.bin/tsx /app/prisma/seed.ts ;;
 esac
 
-./init-node_modules/.bin/tsx /app/scripts/backfill-item-codes.ts
-./init-node_modules/.bin/tsx /app/scripts/normalize-items.ts
+./init-tools/node_modules/.bin/tsx /app/scripts/backfill-item-codes.ts
+./init-tools/node_modules/.bin/tsx /app/scripts/normalize-items.ts
 
 exec node server.js
