@@ -18,9 +18,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const images = Array.isArray(body.images) ? body.images.filter((image: unknown) => typeof image === "object" && image !== null && typeof (image as Record<string, unknown>).dataUrl === "string").slice(0, maxImages) as { dataUrl: string; fileName?: string }[] : [];
     if (!images.length) return NextResponse.json({ error: "请至少上传一张图片" }, { status: 400 });
-    if (images.some((image) => !image.dataUrl.startsWith("data:image/"))) return NextResponse.json({ error: "图片格式不正确" }, { status: 400 });
+    if (images.some((image) => !image.dataUrl.startsWith("data:image/") && !/^https?:\/\//i.test(image.dataUrl))) return NextResponse.json({ error: "图片格式不正确，请使用上传图片或 http(s) 图片地址" }, { status: 400 });
     const config = await getAiConfig();
     if (!config) return NextResponse.json({ error: "请先在设置中配置 AI 接口" }, { status: 400 });
+    if (config.protocol === "anthropic" && images.some((image) => /^https?:\/\//i.test(image.dataUrl))) return NextResponse.json({ error: "Anthropic 渠道暂不支持远程图片，请切换 OpenAI 兼容渠道或上传图片" }, { status: 400 });
     const instruction = "识别图片中清晰可见的家庭物品，每张图片对应一个物品；如果一张图有多个物品，分别列出。只返回 JSON 对象 {\"items\":[...]}，不要 Markdown。每项字段：sourceIndex(图片序号，从0开始), name, category(日用/食品/饮品/清洁/家电/数码/衣物/医药/户外/其他), type(DURABLE或CONSUMABLE), quantity(数字), unit, purchaseDate(YYYY-MM-DD或null), expiryDate(YYYY-MM-DD或null), notes, confidence(0到1)。sourceIndex 必须对应识别该物品的图片；耐用品 expiryDate 必须为 null，不确定的字段保守填写。图片无法判断购买日期时 purchaseDate 返回 null。";
     const content = [{ type: "text", text: instruction }, ...images.map((image) => ({ type: "image_url", image_url: { url: image.dataUrl, detail: "low" } }))];
     const payload = config.protocol === "anthropic"
