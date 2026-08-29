@@ -164,6 +164,33 @@ code, pre, kbd, .font-mono, .font-code { font-family: var(--font-mono); font-var
 .ds-section { padding: var(--space-6); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-solid); box-shadow: var(--shadow-sm); }
 .ds-badge { display: inline-flex; align-items: center; min-height: 1.5rem; padding: 0 var(--space-2); border-radius: 999px; font-size: var(--text-xs); font-weight: 700; }
 .ds-divider { height: 1px; background: var(--border); }
+.ds-nav-item {
+  position: relative;
+  color: var(--muted);
+}
+.ds-nav-item:hover { color: var(--foreground); background: var(--surface-soft); }
+.ds-nav-item[data-active="true"] { color: var(--primary); background: color-mix(in srgb, var(--primary-soft) 68%, transparent); }
+.ds-nav-item[data-active="true"]::before {
+  position: absolute;
+  left: 0;
+  top: 0.5rem;
+  bottom: 0.5rem;
+  width: 0.1875rem;
+  border-radius: 999px;
+  background: var(--primary);
+  content: "";
+}
+.ds-nav-item[data-compact="true"][data-active="true"]::before { left: 0.125rem; }
+.ds-mobile-nav-item { color: var(--muted); }
+.ds-mobile-nav-item[data-active="true"] { color: var(--primary); }
+.ds-mobile-nav-icon {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 999px;
+}
+.ds-mobile-nav-item[data-active="true"] .ds-mobile-nav-icon { background: var(--primary-soft); }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {

@@ -232,20 +232,20 @@ export function InventoryApp() {
         </div>
         <nav className="mt-9 space-y-1.5">
           {navItems.map(({ id, label, icon: Icon }) => (
-            <button key={id} onClick={() => setView(id)} className={`relative flex w-full items-center rounded-xl py-3 text-sm font-semibold transition ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"}`}
+            <button key={id} onClick={() => setView(id)} className={`ds-nav-item flex w-full items-center rounded-xl py-3 text-sm font-semibold transition ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"}`}
               aria-label={label} title={sidebarCollapsed ? label : undefined}
-              style={view === id ? { background: "var(--primary-soft)", color: "var(--primary)" } : { color: "var(--muted)" }}>
+              data-active={view === id} data-compact={sidebarCollapsed}>
               <Icon size={19} strokeWidth={2.2} /> {!sidebarCollapsed && label}
               {id === "shopping" && pendingShopping.length > 0 && <span className={`${sidebarCollapsed ? "absolute ml-7 mt-[-18px]" : "ml-auto"} rounded-full px-2 py-0.5 text-xs text-white`} style={{ background: "var(--danger)" }}>{pendingShopping.length}</span>}
             </button>
           ))}
         </nav>
         <div className={`absolute bottom-5 ${sidebarCollapsed ? "left-3 right-3" : "left-4 right-4"}`}>
-          <button onClick={() => setView("settings")} className={`flex w-full items-center rounded-xl py-2.5 text-sm font-semibold muted hover:bg-[var(--surface-soft)] ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"}`} aria-label="设置" title={sidebarCollapsed ? "设置" : undefined}>
+          <button onClick={() => setView("settings")} className={`ds-nav-item flex w-full items-center rounded-xl py-2.5 text-sm font-semibold ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"}`} data-active={view === "settings"} data-compact={sidebarCollapsed} aria-label="设置" title={sidebarCollapsed ? "设置" : undefined}>
             <Settings size={19} /> {!sidebarCollapsed && "设置"}
           </button>
           <button onClick={() => setModal("recycle")} className={`flex w-full items-center rounded-xl py-2.5 text-sm font-semibold muted hover:bg-[var(--surface-soft)] ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"}`} aria-label="回收站" title={sidebarCollapsed ? "回收站" : undefined}><Trash2 size={19} />{!sidebarCollapsed && "回收站"}</button>
-          <button onClick={() => setView("about")} className={`flex w-full items-center rounded-xl py-2.5 text-sm font-semibold muted hover:bg-[var(--surface-soft)] ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"}`} aria-label="关于" title={sidebarCollapsed ? `关于 v${APP_VERSION}` : undefined}><Info size={19} />{!sidebarCollapsed && <>关于 <span className="ml-auto text-[10px]">v{APP_VERSION}</span></>}</button>
+          <button onClick={() => setView("about")} className={`ds-nav-item flex w-full items-center rounded-xl py-2.5 text-sm font-semibold ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"}`} data-active={view === "about"} data-compact={sidebarCollapsed} aria-label="关于" title={sidebarCollapsed ? `关于 v${APP_VERSION}` : undefined}><Info size={19} />{!sidebarCollapsed && <>关于 <span className="ml-auto text-[10px]">v{APP_VERSION}</span></>}</button>
           {!sidebarCollapsed && <div className="mt-3 rounded-xl p-3" style={{ background: "linear-gradient(135deg, var(--primary-soft), var(--surface-soft))" }}>
             <div className="flex items-center gap-2 text-sm font-bold"><Sparkles size={16} style={{ color: "var(--primary)" }} /> 今日小结</div>
             <p className="mb-0 mt-2 text-xs leading-5 muted">{lowStock.length ? `${lowStock.length} 件消耗品需要补充` : "库存充足，家里井井有条"}</p>
@@ -282,7 +282,7 @@ export function InventoryApp() {
       <nav aria-label="移动端主导航" className="mobile-only fixed bottom-0 left-0 right-0 z-30 grid grid-cols-5 gap-1 border-t px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl" style={{ background: "color-mix(in srgb, var(--surface) 94%, transparent)", borderColor: "var(--border)" }}>
         {mobileNavItems.map(({ id, label, icon: Icon }) => {
           const active = view === id;
-          return <button key={id} onClick={() => setView(id)} aria-current={active ? "page" : undefined} className="relative flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-[11px] font-semibold transition" style={active ? { color: "var(--primary)", background: "var(--primary-soft)" } : { color: "var(--muted)" }}><Icon size={19} strokeWidth={active ? 2.4 : 2} /><span>{label}</span>{id === "shopping" && pendingShopping.length > 0 && <span className="absolute right-[24%] top-1 size-2 rounded-full" style={{ background: "var(--danger)" }} />}</button>;
+          return <button key={id} onClick={() => setView(id)} aria-current={active ? "page" : undefined} data-active={active} className="ds-mobile-nav-item relative flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-[11px] font-semibold transition"><span className="ds-mobile-nav-icon"><Icon size={19} strokeWidth={active ? 2.4 : 2} /></span><span>{label}</span>{id === "shopping" && pendingShopping.length > 0 && <span className="absolute right-[24%] top-1 size-2 rounded-full" style={{ background: "var(--danger)" }} />}</button>;
         })}
       </nav>
 
