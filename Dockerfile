@@ -30,6 +30,12 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/scripts ./scripts
+# Prisma's CLI resolves the generated client from the application-level
+# node_modules directory while running migrations and seed scripts. Next's
+# standalone tracing does not always include the SQLite WASM runtime, so keep
+# the generated client package (and its engine assets) at its conventional path.
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 # Preserve Node's conventional node_modules parent directory. Prisma CLI loads
 # @prisma/engines through normal module resolution at startup.
 COPY --from=init-tools /app/node_modules ./init-tools/node_modules
