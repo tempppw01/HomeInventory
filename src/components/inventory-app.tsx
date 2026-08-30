@@ -548,7 +548,7 @@ function LocationCard({ location, items, index, onOpen, onEdit, onToast }: { loc
 function SettingsView({ onToast, onAbout, onRecycle }: { onToast: (message: string) => void; onAbout: () => void; onRecycle: () => void }) {
   const [database, setDatabase] = useState<{ databaseLabel: string; storageMode: string } | null>(null);
   useEffect(() => { let active = true; request<{ databaseLabel: string; storageMode: string }>("/api/system/info").then((result) => { if (active) setDatabase(result); }).catch(() => undefined); return () => { active = false; }; }, []);
-  return <><PageTitle title="设置" text="按类别展开需要修改的设置，保持页面简洁。" action={<button onClick={onRecycle} className="btn-ghost flex items-center gap-2"><Trash2 size={16} />回收站</button>} /><div className="grid max-w-5xl items-start gap-4 lg:grid-cols-2">
+  return <><PageTitle title="设置" text="按类别展开需要修改的设置，保持页面简洁。" action={<button onClick={onRecycle} className="btn-ghost grid size-10 shrink-0 place-items-center p-0 sm:flex sm:h-auto sm:w-auto sm:gap-2 sm:px-3" aria-label="打开回收站" title="回收站"><Trash2 size={16} /><span className="hidden sm:inline">回收站</span></button>} /><div className="grid max-w-5xl items-start gap-4 lg:grid-cols-2">
     <AccountSettings onToast={onToast} />
     <AiSettings onToast={onToast} />
     <DataTools onToast={onToast} />
