@@ -197,6 +197,9 @@ code, pre, kbd, .font-mono, .font-code { font-family: var(--font-mono); font-var
   border-radius: 999px;
 }
 .ds-mobile-nav-item[data-active="true"] .ds-mobile-nav-icon { background: var(--primary-soft); }
+.item-card-ai { width: 100%; max-width: 100%; }
+.item-card-ai > div { min-width: 0; max-width: 100%; overflow: hidden; }
+.item-card-ai span, .item-card-ai div > div { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .browse-layout { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: var(--space-5); align-items: start; }
 .browse-rail { position: sticky; top: 1.5rem; display: flex; flex-direction: column; gap: .2rem; padding-right: var(--space-3); border-right: 1px solid var(--border); }
 .browse-rail-item { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: var(--space-2); border: 0; border-radius: var(--radius-md); padding: .55rem .65rem; color: var(--muted); background: transparent; font-size: var(--text-sm); font-weight: 650; text-align: left; transition: color var(--motion-base) var(--ease-standard), background-color var(--motion-base) var(--ease-standard); }
