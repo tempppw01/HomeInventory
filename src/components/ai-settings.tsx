@@ -115,7 +115,7 @@ export function AiSettings({ onToast }: { onToast: (message: string) => void }) 
         <h3 className="m-0 text-sm font-black">AI 模型与识别</h3>
         <p className="mb-0 mt-1 truncate text-xs muted">{loading ? "正在检测配置" : form.configured ? `${provider.name} · ${form.model}` : "选择供应商并配置模型"}</p>
       </div>
-      <span className="rounded-full px-2.5 py-1 text-[10px] font-bold" style={{ background: form.configured ? "#e0f7ef" : "var(--surface-soft)", color: form.configured ? "var(--success)" : "var(--muted)" }}>{form.configured ? "已配置" : "未配置"}</span>
+      <span className="rounded-full px-2.5 py-1 text-[10px] font-bold" style={{ background: form.configured ? "var(--success-soft)" : "var(--surface-soft)", color: form.configured ? "var(--success)" : "var(--muted)" }}>{form.configured ? "已配置" : "未配置"}</span>
       <ChevronDown size={17} className="muted transition-transform group-open:rotate-180" />
     </summary>
 
