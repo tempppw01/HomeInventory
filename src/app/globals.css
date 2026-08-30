@@ -246,15 +246,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     display: grid;
     width: 3.15rem;
     height: 3.15rem;
-    margin-top: -1.15rem;
+    position: absolute;
+    left: 50%;
+    top: -1.15rem;
+    margin: 0;
     place-items: center;
-    align-self: start;
+    justify-self: center;
+    line-height: 0;
+    transform: translateX(-50%);
     border: 4px solid var(--background);
     border-radius: 999px;
     color: white;
     background: var(--primary);
     box-shadow: 0 8px 18px color-mix(in srgb, var(--primary) 34%, transparent);
   }
+  .mobile-bottom-nav { position: fixed; }
   .ai-chat-panel {
     right: .5rem;
     bottom: calc(.5rem + env(safe-area-inset-bottom));
