@@ -191,6 +191,13 @@ code, pre, kbd, .font-mono, .font-code { font-family: var(--font-mono); font-var
   border-radius: 999px;
 }
 .ds-mobile-nav-item[data-active="true"] .ds-mobile-nav-icon { background: var(--primary-soft); }
+.browse-layout { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+.browse-rail { position: sticky; top: 1.5rem; display: flex; flex-direction: column; gap: .2rem; padding-right: var(--space-3); border-right: 1px solid var(--border); }
+.browse-rail-item { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: var(--space-2); border: 0; border-radius: var(--radius-md); padding: .55rem .65rem; color: var(--muted); background: transparent; font-size: var(--text-sm); font-weight: 650; text-align: left; transition: color var(--motion-base) var(--ease-standard), background-color var(--motion-base) var(--ease-standard); }
+.browse-rail-item:hover { color: var(--foreground); background: var(--surface-soft); }
+.browse-rail-item[data-active="true"] { color: var(--primary); background: var(--primary-soft); }
+.browse-rail-count { flex: 0 0 auto; color: var(--muted); font-family: var(--font-mono); font-size: .6875rem; font-weight: 600; }
+.browse-rail-item[data-active="true"] .browse-rail-count { color: var(--primary); }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -240,5 +247,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .browse-layout { display: block; }
+  .browse-rail { position: static; flex-direction: row; gap: .4rem; margin: 0 -1rem 1rem; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); padding: 0 1rem .7rem; scrollbar-width: none; }
+  .browse-rail::-webkit-scrollbar { display: none; }
+  .browse-rail-item { flex: 0 0 auto; min-height: 2.25rem; padding: .45rem .7rem; border: 1px solid transparent; font-size: .8125rem; white-space: nowrap; }
+  .browse-rail-item[data-active="true"] { border-color: color-mix(in srgb, var(--primary) 22%, var(--border)); }
 }
 @media (min-width: 768px) { .mobile-only { display: none !important; } }
