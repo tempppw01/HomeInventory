@@ -35,6 +35,18 @@ const statements = [
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "LoginRecord_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
   )`,
+  `CREATE TABLE IF NOT EXISTS "AiChatMessage" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "userId" TEXT NOT NULL,
+    "position" INTEGER NOT NULL,
+    "role" TEXT NOT NULL,
+    "content" TEXT NOT NULL,
+    "attachments" TEXT,
+    "itemDraft" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "AiChatMessage_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
   `CREATE TABLE IF NOT EXISTS "Location" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "name" TEXT NOT NULL,
@@ -145,6 +157,8 @@ const statements = [
   `CREATE INDEX IF NOT EXISTS "AuthSession_expiresAt_idx" ON "AuthSession"("expiresAt")`,
   `CREATE INDEX IF NOT EXISTS "LoginRecord_userId_idx" ON "LoginRecord"("userId")`,
   `CREATE INDEX IF NOT EXISTS "LoginRecord_createdAt_idx" ON "LoginRecord"("createdAt")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "AiChatMessage_userId_position_key" ON "AiChatMessage"("userId", "position")`,
+  `CREATE INDEX IF NOT EXISTS "AiChatMessage_userId_updatedAt_idx" ON "AiChatMessage"("userId", "updatedAt")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "HouseholdMember_userId_key" ON "HouseholdMember"("userId")`,
   `CREATE INDEX IF NOT EXISTS "ActivityLog_userId_idx" ON "ActivityLog"("userId")`,
   `CREATE INDEX IF NOT EXISTS "Item_type_idx" ON "Item"("type")`,
