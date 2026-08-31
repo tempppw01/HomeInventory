@@ -6,6 +6,12 @@
 
 👉 [在线体验 HomeInventory](https://homeinventory-test.up.railway.app/)
 
+## v0.0.8 更新
+
+- 医药快捷视图只显示医药分类，不再混入无关分类标签。
+- 物品与采购页面收敛为一个明确的“添加采购项”入口，减少重复操作。
+- 医药 AI 助手聚焦说明书要点、适应症、常见用量和用药提醒，并明确提示以药品包装、药师或医生指导为准。
+
 ## v0.0.7 更新
 
 - 打印工作台支持以毫米设置标签宽高、上下/左右边距与行列间距；参数会自动保存。
@@ -245,4 +251,4 @@ docker compose up -d
 
 项目使用 Next.js、React、TypeScript、Prisma 和 Tailwind CSS，可部署到 `linux/amd64` 与 `linux/arm64` 设备。
 
-当前版本：`0.0.7`
+当前版本：`0.0.8`

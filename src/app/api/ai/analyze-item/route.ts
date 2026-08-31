@@ -100,12 +100,28 @@ export async function POST(request: NextRequest) {
     const config = await getAiConfig();
     if (!config) return NextResponse.json({ error: "请先在设置中配置 OpenAI 兼容接口" }, { status: 400 });
 
-    const task = input.action === "identify" ? "识别或纠正物品基本信息" : input.action === "shelf_life" ? "分析保质期和到期风险" : "完成全面的家庭库存分析";
-    const text = `当前日期：${new Date().toISOString().slice(0, 10)}\n任务：${task}\n现有物品信息：${JSON.stringify(input.item || {})}\n用户补充：${input.hint || "无"}\n请返回严格 JSON，不要 Markdown。字段：name, category, type(DURABLE或CONSUMABLE), unit, suggestedExpiryDate(YYYY-MM-DD或null), shelfLifeDays(数字或null), expiryReason, storageAdvice, usageAdvice, replenishmentAdvice, suggestedNotes, confidence(0到1), summary。耐用品不设置保质期，如果 type 为 DURABLE，suggestedExpiryDate 和 shelfLifeDays 必须返回 null。不能确认时保留现有值或返回 null，不要虚构精确保质期。`;
+    const isMedicine = input.item?.category === "医药";
+    const task = isMedicine
+      ? input.action === "identify"
+        ? "核对药品名称、剂型与基本说明书信息"
+        : input.action === "shelf_life"
+          ? "分析药品有效期与保存风险"
+          : "补全药品说明书要点、适应症、常见用量与安全提醒"
+      : input.action === "identify"
+        ? "识别或纠正物品基本信息"
+        : input.action === "shelf_life"
+          ? "分析保质期和到期风险"
+          : "完成全面的家庭库存分析";
+    const medicineRules = isMedicine
+      ? "这是医药物品：summary 请简短说明药品用途；storageAdvice 请写说明书或保存要点；usageAdvice 请写适应症与常见成人用法用量（仅在包装或说明书信息明确时填写）；replenishmentAdvice 请写禁忌、特殊人群、就医或药师提醒。不得根据图片或名称猜测处方剂量、儿童剂量、相互作用或诊断；任何无法确认的信息都必须明确写“请以包装说明书或药师指导为准”。"
+      : "";
+    const text = `当前日期：${new Date().toISOString().slice(0, 10)}\n任务：${task}\n现有物品信息：${JSON.stringify(input.item || {})}\n用户补充：${input.hint || "无"}\n${medicineRules}\n请返回严格 JSON，不要 Markdown。字段：name, category, type(DURABLE或CONSUMABLE), unit, suggestedExpiryDate(YYYY-MM-DD或null), shelfLifeDays(数字或null), expiryReason, storageAdvice, usageAdvice, replenishmentAdvice, suggestedNotes, confidence(0到1), summary。耐用品不设置保质期，如果 type 为 DURABLE，suggestedExpiryDate 和 shelfLifeDays 必须返回 null。不能确认时保留现有值或返回 null，不要虚构精确保质期。`;
     const userContent = input.imageUrl
       ? [{ type: "text", text }, { type: "image_url", image_url: { url: input.imageUrl, detail: "low" } }]
       : text;
-    const system = "你是家庭物品管理助手，擅长识别日用品、推断合理分类、保质期风险和存储方式。所有结论要保守，并明确不确定性。";
+    const system = isMedicine
+      ? "你是谨慎的家庭药箱信息整理助手。你只整理包装和说明书中可确认的信息，不提供诊断、处方、个体化剂量或替代医生、药师建议。所有不确定的药品信息都必须提示以包装说明书、药师或医生指导为准。"
+      : "你是家庭物品管理助手，擅长识别日用品、推断合理分类、保质期风险和存储方式。所有结论要保守，并明确不确定性。";
     let body: JsonRecord = config.protocol === "anthropic" ? {
       model: config.model,
       max_tokens: 1400,
