@@ -32,6 +32,7 @@ type ItemDraft = {
   unit: string; price: string; purchaseDate: string; expiryDate: string; locationId: string; notes: string; imageUrl: string;
   aiSummary: string; aiStorageAdvice: string; aiUsageAdvice: string; aiReplenishmentAdvice: string;
 };
+type SavedItemTemplate = Pick<ItemDraft, "name" | "category" | "type" | "quantity" | "minQuantity" | "remainingPercent" | "unit" | "expiryDate" | "locationId" | "notes"> & { id: string; usedAt: number };
 
 const emptyDraft: ItemDraft = {
   name: "", category: "日用", type: "DURABLE", quantity: 1, minQuantity: 0, remainingPercent: 100,
@@ -76,6 +77,7 @@ const welcomeStorageKey = "home-inventory-welcome-seen";
 const legacyWelcomeStorageKeys = ["home-inventory-welcome-0.0.1"];
 const appStartedAt = Date.now();
 const assistantPositionStorageKey = "home-inventory-ai-assistant-position-v1";
+const itemTemplateStorageKey = "home-inventory-item-templates-v1";
 
 function dateInputValue(daysFromToday = 0) {
   const date = new Date();
@@ -328,7 +330,14 @@ export function InventoryApp() {
   };
 
   const toggleShopping = async (item: ShoppingItem) => {
-    await request(`/api/shopping/${item.id}`, { method: "PATCH", body: JSON.stringify({ status: item.status === "PENDING" ? "PURCHASED" : "PENDING" }) });
+    const status = item.status === "PENDING" ? "PURCHASED" : "PENDING";
+    let replenishItemId: string | undefined;
+    if (status === "PURCHASED" && item.source === "restock-suggestion") {
+      const matches = (data?.items ?? []).filter((entry) => normalizedItemName(entry.name) === normalizedItemName(item.name));
+      if (matches.length === 1 && confirm(`“${item.name}”已买到。要同时补货到原物品吗？`)) replenishItemId = matches[0].id;
+    }
+    await request(`/api/shopping/${item.id}`, { method: "PATCH", body: JSON.stringify({ status, replenishItemId }) });
+    setToast(replenishItemId ? "采购已完成，并已补货到物品" : status === "PURCHASED" ? "采购项已完成" : "已恢复为待采购");
     await refresh();
   };
 
@@ -381,7 +390,7 @@ export function InventoryApp() {
             ) : view === "locations" ? (
               <LocationsView locations={data!.locations} items={data!.items} onAdd={() => { setEditingLocation(null); setModal("location"); }} onOpen={(name) => { setSearch(name); openView("items"); }} onEdit={(location) => { setEditingLocation(location); setModal("location"); }} onToast={setToast} />
             ) : view === "audit" ? (
-              <AuditView items={data!.items.filter((item) => item.quantity > 0)} onRefresh={refresh} onToast={setToast} />
+              <AuditView items={data!.items.filter((item) => item.quantity > 0)} locations={data!.locations} onRefresh={refresh} onToast={setToast} />
             ) : view === "settings" ? <SettingsView onToast={setToast} onAbout={() => openView("about")} onAudit={() => openView("audit")} onRecycle={() => setModal("recycle")} /> : <AboutView />}
           </motion.div>
         </AnimatePresence>
@@ -537,12 +546,16 @@ function HomeInsightsCompact({ data }: { data: DashboardData }) {
   return <section className="surface p-4 sm:p-5"><h2 className="m-0 text-base font-black">家庭状态</h2><div className="mt-4 grid grid-cols-2 gap-3"><div className="rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}><div className="flex items-center gap-1.5 text-[11px] font-bold muted"><WalletCards size={13} />本月消费</div><div className="mt-2 text-lg font-black">¥{data.finance.currentMonthTotal.toFixed(0)}</div></div><div className="rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}><div className="text-[11px] font-bold muted">近 6 月均值</div><div className="mt-2 text-lg font-black">¥{data.finance.averageMonthly.toFixed(0)}</div></div></div>{data.finance.recent[0] && <div className="mt-3 truncate text-[11px] muted">最近：{data.finance.recent[0].itemName} ¥{data.finance.recent[0].totalPrice.toFixed(2)}</div>}</section>;
 }
 
-function AuditView({ items, onRefresh, onToast }: { items: Item[]; onRefresh: () => Promise<void>; onToast: (message: string) => void }) {
+function AuditView({ items, locations, onRefresh, onToast }: { items: Item[]; locations: Location[]; onRefresh: () => Promise<void>; onToast: (message: string) => void }) {
   const storageKey = "home-inventory-audit-confirmed-v1";
+  const historyKey = "home-inventory-audit-history-v1";
   const [confirmed, setConfirmed] = useState<Set<string>>(new Set());
   const [scanValue, setScanValue] = useState("");
   const [finished, setFinished] = useState(false);
   const [working, setWorking] = useState(false);
+  const [locationId, setLocationId] = useState("ALL");
+  const [history, setHistory] = useState<{ at: string; total: number; confirmed: number; locationName: string }[]>([]);
+  const scopedItems = locationId === "ALL" ? items : items.filter((item) => item.locationId === locationId);
 
   useEffect(() => {
     try {
@@ -550,6 +563,9 @@ function AuditView({ items, onRefresh, onToast }: { items: Item[]; onRefresh: ()
       setConfirmed(new Set(saved.filter((id) => items.some((item) => item.id === id))));
     } catch { setConfirmed(new Set()); }
   }, [items]);
+  useEffect(() => {
+    try { setHistory(JSON.parse(localStorage.getItem(historyKey) || "[]")); } catch { setHistory([]); }
+  }, []);
   const updateConfirmed = (next: Set<string>) => {
     setConfirmed(next);
     localStorage.setItem(storageKey, JSON.stringify([...next]));
@@ -559,12 +575,12 @@ function AuditView({ items, onRefresh, onToast }: { items: Item[]; onRefresh: ()
     next.has(id) ? next.delete(id) : next.add(id);
     updateConfirmed(next);
   };
-  const unconfirmed = items.filter((item) => !confirmed.has(item.id));
+  const unconfirmed = scopedItems.filter((item) => !confirmed.has(item.id));
   const handleScan = (raw = scanValue) => {
     const value = raw.trim();
     if (!value) return;
     const id = value.match(/\/items\/([^/?#]+)/)?.[1] || value;
-    const match = items.find((item) => item.id === id || item.itemCode?.toLowerCase() === value.toLowerCase());
+    const match = scopedItems.find((item) => item.id === id || item.itemCode?.toLowerCase() === value.toLowerCase());
     if (!match) { onToast("没有找到这个物品，请检查二维码或编号"); return; }
     if (confirmed.has(match.id)) { onToast(`${match.name} 已确认，无需重复盘点`); setScanValue(""); return; }
     updateConfirmed(new Set([...confirmed, match.id]));
@@ -588,17 +604,22 @@ function AuditView({ items, onRefresh, onToast }: { items: Item[]; onRefresh: ()
     finally { setWorking(false); }
   };
   const finish = () => {
+    const entry = { at: new Date().toISOString(), total: scopedItems.length, confirmed: scopedItems.filter((item) => confirmed.has(item.id)).length, locationName: locationId === "ALL" ? "全部空间" : locations.find((location) => location.id === locationId)?.name || "当前空间" };
+    const nextHistory = [entry, ...history].slice(0, 5);
+    setHistory(nextHistory);
+    localStorage.setItem(historyKey, JSON.stringify(nextHistory));
     setFinished(true);
     if (!unconfirmed.length) localStorage.removeItem(storageKey);
   };
 
   if (finished) return <><PageTitle title="本次盘点完成" text={unconfirmed.length ? "还有一些物品等你决定怎么处理。" : "全部物品均已核对，家里井井有条。"} action={<button className="btn-ghost" onClick={() => setFinished(false)}>返回盘点</button>} />
-    <section className="surface max-w-3xl p-5 sm:p-6"><div className="flex items-center gap-3"><div className="grid size-11 place-items-center rounded-2xl" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><ClipboardCheck size={22} /></div><div><h2 className="m-0 text-lg font-black">已确认 {confirmed.size} / {items.length} 件</h2><p className="mb-0 mt-1 text-sm muted">{unconfirmed.length ? `${unconfirmed.length} 件尚未确认，可继续核对或集中处理。` : "没有遗漏，辛苦啦。"}</p></div></div>{unconfirmed.length > 0 && <div className="mt-5 flex flex-wrap gap-2"><button onClick={() => void handleUnconfirmed("empty")} disabled={working} className="btn-ghost text-amber-700">标记未确认项耗尽</button><button onClick={() => void handleUnconfirmed("lost")} disabled={working} className="btn-ghost text-red-500">未确认项移入回收站</button></div>}</section></>;
+    <section className="surface max-w-3xl p-5 sm:p-6"><div className="flex items-center gap-3"><div className="grid size-11 place-items-center rounded-2xl" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><ClipboardCheck size={22} /></div><div><h2 className="m-0 text-lg font-black">已确认 {scopedItems.filter((item) => confirmed.has(item.id)).length} / {scopedItems.length} 件</h2><p className="mb-0 mt-1 text-sm muted">{unconfirmed.length ? `${unconfirmed.length} 件尚未确认，可继续核对或集中处理。` : "没有遗漏，辛苦啦。"}</p></div></div>{unconfirmed.length > 0 && <div className="mt-5 flex flex-wrap gap-2"><button onClick={() => void handleUnconfirmed("empty")} disabled={working} className="btn-ghost text-amber-700">标记未确认项耗尽</button><button onClick={() => void handleUnconfirmed("lost")} disabled={working} className="btn-ghost text-red-500">未确认项移入回收站</button></div>}</section></>;
 
   return <><PageTitle title="家庭盘点" text="逐件确认物品仍在；扫码、输入编号或直接点选都可以。" action={<button className="btn-primary flex items-center gap-2" onClick={finish}><Check size={16} />结束盘点</button>} />
+    <div className="mb-4 flex flex-wrap items-center gap-2"><label className="flex items-center gap-2 text-xs font-bold muted">盘点范围<select className="input h-9 w-auto py-1 text-xs" value={locationId} onChange={(event) => setLocationId(event.target.value)}><option value="ALL">全部空间</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>{history[0] && <span className="text-xs muted">最近盘点：{new Date(history[0].at).toLocaleDateString("zh-CN")} · {history[0].confirmed}/{history[0].total} 件 · {history[0].locationName}</span>}</div>
     <section className="mb-5 flex flex-col gap-3 rounded-2xl border p-3 sm:flex-row sm:items-center" style={{ borderColor: "var(--border)", background: "var(--surface-soft)" }}><div className="grid size-9 shrink-0 place-items-center rounded-xl" style={{ background: "var(--surface-solid)", color: "var(--primary)" }}><QrCode size={17} /></div><form className="flex min-w-0 flex-1 gap-2" onSubmit={(event) => { event.preventDefault(); handleScan(); }}><input value={scanValue} onChange={(event) => setScanValue(event.target.value)} className="input min-w-0 flex-1" placeholder="扫描二维码或输入物品编号" aria-label="扫描二维码或输入物品编号" /><button type="submit" className="btn-primary shrink-0 px-3">确认</button></form></section>
-    <div className="mb-4 flex items-center justify-between gap-3 text-sm"><span className="font-black">进度 <span style={{ color: "var(--primary)" }}>{confirmed.size} / {items.length}</span></span><button onClick={() => { if (confirm("重新开始本次盘点？当前确认记录会清空。")) updateConfirmed(new Set()); }} className="text-xs font-bold muted hover:text-[var(--foreground)]">重新开始</button></div><div className="h-2 overflow-hidden rounded-full" style={{ background: "var(--surface-soft)" }}><div className="h-full rounded-full transition-all" style={{ width: `${items.length ? confirmed.size / items.length * 100 : 0}%`, background: "var(--primary)" }} /></div>
-    {items.length ? <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{items.map((item) => { const checked = confirmed.has(item.id); return <button type="button" key={item.id} onClick={() => toggle(item.id)} className="flex min-w-0 items-center gap-3 rounded-2xl border p-3 text-left transition hover:-translate-y-px" style={{ borderColor: checked ? "var(--primary)" : "var(--border)", background: checked ? "var(--primary-soft)" : "var(--surface-solid)" }}><span className="grid size-7 shrink-0 place-items-center rounded-full border" style={{ borderColor: checked ? "var(--primary)" : "var(--border)", background: checked ? "var(--primary)" : "transparent", color: "white" }}>{checked && <Check size={15} strokeWidth={3} />}</span><div className="min-w-0 flex-1"><div className="truncate text-sm font-black">{item.name}</div><div className="mt-0.5 truncate text-xs muted">{item.itemCode || item.id} · {item.location?.name || "未设置位置"}</div></div><span className="shrink-0 text-xs font-bold muted">{item.quantity}{item.unit}</span></button>; })}</div> : <div className="surface mt-5 rounded-3xl py-16"><EmptyState icon={ClipboardCheck} title="没有可盘点的物品" text="录入物品后，再回来做一次轻松的家庭盘点。" /></div>}
+    <div className="mb-4 flex items-center justify-between gap-3 text-sm"><span className="font-black">进度 <span style={{ color: "var(--primary)" }}>{scopedItems.filter((item) => confirmed.has(item.id)).length} / {scopedItems.length}</span></span><button onClick={() => { if (confirm("重新开始本次盘点？当前确认记录会清空。")) updateConfirmed(new Set()); }} className="text-xs font-bold muted hover:text-[var(--foreground)]">重新开始</button></div><div className="h-2 overflow-hidden rounded-full" style={{ background: "var(--surface-soft)" }}><div className="h-full rounded-full transition-all" style={{ width: `${scopedItems.length ? scopedItems.filter((item) => confirmed.has(item.id)).length / scopedItems.length * 100 : 0}%`, background: "var(--primary)" }} /></div>
+    {scopedItems.length ? <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{scopedItems.map((item) => { const checked = confirmed.has(item.id); return <button type="button" key={item.id} onClick={() => toggle(item.id)} className="flex min-w-0 items-center gap-3 rounded-2xl border p-3 text-left transition hover:-translate-y-px" style={{ borderColor: checked ? "var(--primary)" : "var(--border)", background: checked ? "var(--primary-soft)" : "var(--surface-solid)" }}><span className="grid size-7 shrink-0 place-items-center rounded-full border" style={{ borderColor: checked ? "var(--primary)" : "var(--border)", background: checked ? "var(--primary)" : "transparent", color: "white" }}>{checked && <Check size={15} strokeWidth={3} />}</span><div className="min-w-0 flex-1"><div className="truncate text-sm font-black">{item.name}</div><div className="mt-0.5 truncate text-xs muted">{item.itemCode || item.id} · {item.location?.name || "未设置位置"}</div></div><span className="shrink-0 text-xs font-bold muted">{item.quantity}{item.unit}</span></button>; })}</div> : <div className="surface mt-5 rounded-3xl py-16"><EmptyState icon={ClipboardCheck} title="这个空间没有可盘点的物品" text="换一个空间，或先录入物品后再来核对。" /></div>}
     {unconfirmed.length > 0 && <section className="mt-7 border-t pt-5" style={{ borderColor: "var(--border)" }}><h2 className="m-0 text-base font-black">未确认物品</h2><p className="mb-3 mt-1 text-xs muted">盘点结束前，你可以保留它们待下次核对，或统一处理。</p><div className="flex flex-wrap gap-2"><button onClick={() => void handleUnconfirmed("empty")} disabled={working} className="btn-ghost text-amber-700">标记为耗尽</button><button onClick={() => void handleUnconfirmed("lost")} disabled={working} className="btn-ghost text-red-500">移入回收站</button></div></section>}</>;
 }
 
@@ -769,6 +790,7 @@ function QrModal({ item, onClose, onPrint }: { item: Item; onClose: () => void; 
 
 function ItemModal({ locations, allItems, item, onClose, onSaved }: { locations: Location[]; allItems: Item[]; item: Item | null; onClose: () => void; onSaved: () => void }) {
   const [draft, setDraft] = useState<ItemDraft>(() => item ? { name: item.name, category: item.category, type: item.type, quantity: item.quantity, minQuantity: item.minQuantity, remainingPercent: item.remainingPercent, unit: item.unit, price: item.price?.toString() ?? "", purchaseDate: item.purchaseDate?.slice(0, 10) ?? "", expiryDate: item.type === "CONSUMABLE" ? item.expiryDate?.slice(0, 10) ?? "" : "", locationId: item.locationId ?? "", notes: item.notes ?? "", imageUrl: item.imageUrl ?? "", aiSummary: item.aiSummary ?? "", aiStorageAdvice: item.aiStorageAdvice ?? "", aiUsageAdvice: item.aiUsageAdvice ?? "", aiReplenishmentAdvice: item.aiReplenishmentAdvice ?? "" } : emptyDraft);
+  const [savedTemplates, setSavedTemplates] = useState<SavedItemTemplate[]>([]);
   const [saving, setSaving] = useState(false); const [uploading, setUploading] = useState(false); const [aiLoading, setAiLoading] = useState(false); const [moreOpen, setMoreOpen] = useState(false); const [imagePreviewOpen, setImagePreviewOpen] = useState(false); const [error, setError] = useState("");
   const [imageMode, setImageMode] = useState<"upload" | "link">(item?.imageUrl ? "link" : "upload");
   const [imageUrlDraft, setImageUrlDraft] = useState(item?.imageUrl ?? "");
@@ -776,6 +798,13 @@ function ItemModal({ locations, allItems, item, onClose, onSaved }: { locations:
   const [purchaseStore, setPurchaseStore] = useState("");
   const [availableLocations, setAvailableLocations] = useState(locations);
   const [quickLocationOpen, setQuickLocationOpen] = useState(false);
+  useEffect(() => {
+    if (item) return;
+    try {
+      const parsed = JSON.parse(localStorage.getItem(itemTemplateStorageKey) || "[]");
+      if (Array.isArray(parsed)) setSavedTemplates(parsed.filter((entry): entry is SavedItemTemplate => Boolean(entry && typeof entry.id === "string" && typeof entry.name === "string")).slice(0, 8));
+    } catch { /* ignore malformed local preferences */ }
+  }, [item]);
   const normalizedName = normalizedItemName(draft.name);
   const commonTemplate = !item && normalizedName ? findCommonItemTemplate(draft.name) : null;
   const duplicates = !item && normalizedName ? allItems.filter((entry) => normalizedItemName(entry.name) === normalizedName) : [];
@@ -799,6 +828,34 @@ function ItemModal({ locations, allItems, item, onClose, onSaved }: { locations:
       locationId: !current.locationId && suggestedLocation ? suggestedLocation.id : current.locationId,
     }));
   };
+  const applySavedTemplate = (template: SavedItemTemplate) => {
+    setDraft((current) => ({
+      ...current,
+      name: template.name,
+      category: template.category,
+      type: template.type,
+      quantity: normalizeItemQuantity(template.quantity, template.unit),
+      minQuantity: template.minQuantity,
+      remainingPercent: template.remainingPercent,
+      unit: template.unit,
+      expiryDate: template.type === "CONSUMABLE" ? template.expiryDate : "",
+      locationId: locations.some((location) => location.id === template.locationId) ? template.locationId : "",
+      notes: template.notes,
+    }));
+    setSavedTemplates((current) => {
+      const next = current.map((entry) => entry.id === template.id ? { ...entry, usedAt: Date.now() } : entry).sort((a, b) => b.usedAt - a.usedAt);
+      localStorage.setItem(itemTemplateStorageKey, JSON.stringify(next));
+      return next;
+    });
+  };
+  const saveAsTemplate = () => {
+    if (!draft.name.trim()) { setError("先填写物品名称，再保存模板"); return; }
+    const template: SavedItemTemplate = { id: crypto.randomUUID(), name: draft.name.trim(), category: draft.category, type: draft.type, quantity: draft.quantity, minQuantity: draft.minQuantity, remainingPercent: draft.remainingPercent, unit: draft.unit, expiryDate: draft.expiryDate, locationId: draft.locationId, notes: draft.notes, usedAt: Date.now() };
+    const next = [template, ...savedTemplates.filter((entry) => normalizedItemName(entry.name) !== normalizedItemName(template.name))].slice(0, 8);
+    setSavedTemplates(next);
+    localStorage.setItem(itemTemplateStorageKey, JSON.stringify(next));
+    setError("模板已保存，下次录入时可以直接使用");
+  };
   const set = (key: keyof ItemDraft, value: string | number) => setDraft((old) => ({ ...old, [key]: value }));
   const uploadImage = async (file?: File) => { if (!file) return; setUploading(true); setError(""); try { const compressed = await compressImage(file); const form = new FormData(); form.append("file", compressed); const response = await fetch("/api/upload", { method: "POST", body: form }); const result = await response.json(); if (!response.ok) throw new Error(result.error || "上传失败"); set("imageUrl", result.url); } catch (e) { setError(e instanceof Error ? e.message : "上传失败"); } finally { setUploading(false); } };
   const applyImageUrl = () => { const value = imageUrlDraft.trim(); if (!value) { set("imageUrl", ""); setError(""); return; } try { const url = new URL(value); if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error(); set("imageUrl", value); setError(""); } catch { setError("请粘贴以 http:// 或 https:// 开头的图片地址"); } };
@@ -809,6 +866,7 @@ function ItemModal({ locations, allItems, item, onClose, onSaved }: { locations:
   const draftAi = itemAiHighlights(draft);
   const addLocation = (location: Location) => { setAvailableLocations((current) => [...current, location]); set("locationId", location.id); setQuickLocationOpen(false); };
   return <><Modal title={item ? "编辑物品" : "录入新物品"} subtitle={item?.itemCode || "只填名称和数量也可以，其他信息稍后补充"} onClose={onClose}><form onSubmit={submit} className="space-y-4">
+    {!item && savedTemplates.length > 0 && <div className="-mt-1 overflow-x-auto pb-1"><div className="mb-1.5 flex items-center justify-between"><span className="text-[11px] font-bold muted">最近使用 / 我的模板</span><button type="button" onClick={() => { setSavedTemplates([]); localStorage.removeItem(itemTemplateStorageKey); }} className="text-[11px] muted hover:text-[var(--danger)]">清空</button></div><div className="flex min-w-max gap-2">{savedTemplates.slice().sort((a, b) => b.usedAt - a.usedAt).map((template) => <button key={template.id} type="button" onClick={() => applySavedTemplate(template)} className="rounded-xl border px-2.5 py-1.5 text-left text-xs font-bold transition hover:border-[var(--primary)] hover:bg-[var(--primary-soft)]" style={{ borderColor: "var(--border)" }}><span className="block max-w-32 truncate">{template.name}</span><span className="mt-0.5 block text-[10px] font-normal muted">{template.category} · {template.unit}</span></button>)}</div></div>}
     <div className="flex gap-3">{draft.imageUrl ? <button type="button" onClick={() => setImagePreviewOpen(true)} className="group relative grid size-20 shrink-0 place-items-center overflow-hidden rounded-2xl border bg-cover bg-center transition hover:brightness-90 focus-visible:outline-offset-2" style={{ backgroundImage: `url(${draft.imageUrl})`, borderColor: "var(--primary)" }} aria-label="放大查看物品图片" title="点击放大查看"><span className="absolute inset-x-0 bottom-0 bg-black/55 py-1 text-[10px] font-bold text-white opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">放大</span></button> : <div className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-2xl border border-dashed" style={{ borderColor: "var(--border)", background: "var(--surface-soft)" }}>{uploading ? <Sparkles className="animate-pulse" size={22} /> : <ImagePlus className="muted" size={24} />}</div>}<div className="min-w-0 flex-1"><label className="mb-1.5 block text-xs font-bold muted">物品名称 *</label><input required className="input" value={draft.name} onChange={(e) => set("name", e.target.value)} placeholder="拍照让 AI 识别，或直接输入名称" /><div className="mt-2 flex gap-2"><button type="button" disabled={aiLoading || (!draft.name && !draft.imageUrl)} onClick={() => runAi("identify")} className="btn-ghost flex items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-40"><Sparkles size={14} />{aiLoading ? "分析中…" : "AI 补全"}</button>{draft.type === "CONSUMABLE" && <button type="button" disabled={aiLoading || (!draft.name && !draft.imageUrl)} onClick={() => runAi("shelf_life")} className="btn-ghost flex items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-40"><Bot size={14} />分析保质期</button>}</div></div></div>
     <div className="rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}><div className="mb-2 flex items-center gap-1 border-b" style={{ borderColor: "var(--border)" }}><button type="button" onClick={() => setImageMode("upload")} className="flex items-center gap-1.5 border-b-2 px-2 py-1.5 text-xs font-bold transition" style={{ borderColor: imageMode === "upload" ? "var(--primary)" : "transparent", color: imageMode === "upload" ? "var(--primary)" : "var(--muted)" }}><Upload size={14} />上传</button><button type="button" onClick={() => setImageMode("link")} className="flex items-center gap-1.5 border-b-2 px-2 py-1.5 text-xs font-bold transition" style={{ borderColor: imageMode === "link" ? "var(--primary)" : "transparent", color: imageMode === "link" ? "var(--primary)" : "var(--muted)" }}><Link2 size={14} />链接</button>{draft.imageUrl && <button type="button" onClick={() => { set("imageUrl", ""); setImageUrlDraft(""); }} className="ml-auto text-xs font-bold text-red-500">移除图片</button>}</div>{imageMode === "upload" ? <label className="flex cursor-pointer items-center gap-2 py-1 text-sm font-bold"><ImagePlus size={16} style={{ color: "var(--primary)" }} />{uploading ? "正在压缩并上传…" : "选择图片上传"}<span className="ml-auto text-xs font-normal muted">最大 5MB</span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" disabled={uploading} onChange={(e) => uploadImage(e.target.files?.[0])} /></label> : <div className="flex gap-2"><input className="input min-w-0 flex-1" value={imageUrlDraft} onChange={(event) => setImageUrlDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); applyImageUrl(); } }} onPaste={(event) => setImageUrlDraft(event.clipboardData.getData("text"))} placeholder="粘贴图片地址，例如 https://…" /><button type="button" onClick={applyImageUrl} className="btn-primary shrink-0 px-3 text-xs">应用</button></div>}<p className="mb-0 mt-2 text-[11px] muted">像 Notion 一样，可上传图片或直接粘贴网络图片地址。</p></div>
     <div className="grid grid-cols-2 gap-3"><label className="cursor-pointer rounded-2xl border px-3 py-2.5 transition" style={draft.type === "DURABLE" ? { borderColor: "var(--primary)", background: "var(--primary-soft)" } : { borderColor: "var(--border)" }}><input type="radio" className="hidden" checked={draft.type === "DURABLE"} onChange={() => setDraft((old) => ({ ...old, type: "DURABLE", expiryDate: "" }))} /><div className="text-sm font-bold">📦 耐用品</div></label><label className="cursor-pointer rounded-2xl border px-3 py-2.5 transition" style={draft.type === "CONSUMABLE" ? { borderColor: "var(--primary)", background: "var(--primary-soft)" } : { borderColor: "var(--border)" }}><input type="radio" className="hidden" checked={draft.type === "CONSUMABLE"} onChange={() => set("type", "CONSUMABLE")} /><div className="text-sm font-bold">🧴 消耗品</div></label></div>
@@ -820,7 +878,7 @@ function ItemModal({ locations, allItems, item, onClose, onSaved }: { locations:
     {draft.type === "CONSUMABLE" && <div className="rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}><div className="mb-2 flex items-center justify-between text-xs"><span className="font-bold">剩余量</span><span className="font-black" style={{ color: draft.remainingPercent <= 20 ? "var(--danger)" : "var(--primary)" }}>{draft.remainingPercent}%</span></div><input aria-label="剩余量" type="range" min="0" max="100" step="5" className="w-full accent-[var(--primary)]" value={draft.remainingPercent} onChange={(e) => set("remainingPercent", Number(e.target.value))} /></div>}
     <button type="button" onClick={() => setMoreOpen(!moreOpen)} className="flex w-full items-center justify-between rounded-2xl px-3 py-2.5 text-sm font-bold" style={{ background: "var(--surface-soft)" }}><span>更多信息 <span className="ml-1 text-xs font-normal muted">价格、日期、提醒、备注</span></span><ChevronDown size={17} className={`transition ${moreOpen ? "rotate-180" : ""}`} /></button>
     {moreOpen && <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="space-y-3 overflow-hidden"><div className={`grid gap-3 ${draft.type === "CONSUMABLE" ? "grid-cols-2" : "grid-cols-1"}`}><Field label="购买单价"><input type="text" inputMode="decimal" autoComplete="off" className="input" value={draft.price} onChange={(event) => { const next = event.target.value; if (isMoneyInput(next)) set("price", next); }} onBlur={() => { const amount = moneyValue(draft.price); if (amount !== null) set("price", amount.toFixed(2)); }} placeholder="¥ 0.00" aria-describedby="price-hint" /></Field>{draft.type === "CONSUMABLE" && <Field label="低库存阈值"><input type="number" min="0" step="0.1" className="input" value={draft.minQuantity} onChange={(e) => set("minQuantity", Number(e.target.value))} /></Field>}</div><p id="price-hint" className="-mt-1 text-[11px] muted">支持键盘输入小数，例如 19.90</p>{dailyCostPreview && <div className="flex items-center justify-between rounded-2xl p-3 text-sm" style={{ background: "var(--primary-soft)" }}><span className="font-bold">当前日均成本</span><span><b>¥{dailyCostPreview.cost.toFixed(dailyCostPreview.cost >= 10 ? 0 : 2)}</b><span className="ml-1 text-xs muted">/ 天 · 已使用 {dailyCostPreview.days} 天</span></span></div>}{draft.price && <div className="rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}><button type="button" onClick={() => setRecordPurchase(!recordPurchase)} className="flex w-full items-center justify-between text-sm"><span>记入本月消费记录</span><span className="font-bold" style={{ color: recordPurchase ? "var(--success)" : "var(--muted)" }}>{recordPurchase ? "是" : "否"}</span></button>{recordPurchase && <input className="input mt-3" value={purchaseStore} onChange={(e) => setPurchaseStore(e.target.value)} placeholder="购买商店（可选）" />}</div>}<div className={`grid gap-3 ${draft.type === "CONSUMABLE" ? "grid-cols-2" : "grid-cols-1"}`}><DateField label="购入日期" value={draft.purchaseDate} onChange={(value) => set("purchaseDate", value)} />{draft.type === "CONSUMABLE" && <DateField label="到期日期" value={draft.expiryDate} onChange={(value) => set("expiryDate", value)} />}</div><Field label="备注"><textarea className="input min-h-20 resize-none" value={draft.notes} onChange={(e) => set("notes", e.target.value)} placeholder="规格、保修、使用提示…" /></Field></motion.div>}
-    {error && <p className="m-0 rounded-xl p-2.5 text-sm text-red-500" style={{ background: "#ffe8eb" }}>{error}</p>}<div className="flex gap-3 pt-1"><button type="button" onClick={onClose} className="btn-ghost flex-1">取消</button><button disabled={saving || uploading || aiLoading} className="btn-primary flex-1 disabled:opacity-60">{saving ? "保存中…" : item ? "保存修改" : "快速保存"}</button></div>
+    {error && <p className="m-0 rounded-xl p-2.5 text-sm text-red-500" style={{ background: "#ffe8eb" }}>{error}</p>}<div className="flex gap-3 pt-1"><button type="button" onClick={onClose} className="btn-ghost flex-1">取消</button>{!item && <button type="button" onClick={saveAsTemplate} className="btn-ghost shrink-0 px-3" title="保存名称、分类、单位和常用设置">存为模板</button>}<button disabled={saving || uploading || aiLoading} className="btn-primary flex-1 disabled:opacity-60">{saving ? "保存中…" : item ? "保存修改" : "快速保存"}</button></div>
   </form></Modal><AnimatePresence>{imagePreviewOpen && draft.imageUrl && <motion.div className="fixed inset-0 z-[70] grid place-items-center bg-black/75 p-5 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => event.target === event.currentTarget && setImagePreviewOpen(false)}><motion.div className="relative max-h-full max-w-full" initial={{ opacity: 0, scale: .96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: .96 }}><img src={draft.imageUrl} alt={draft.name || "物品图片"} className="max-h-[82dvh] max-w-[92vw] rounded-2xl object-contain shadow-2xl" /><button type="button" onClick={() => setImagePreviewOpen(false)} className="absolute -right-3 -top-3 grid size-9 place-items-center rounded-full bg-white text-black shadow-lg" aria-label="关闭图片预览"><X size={18} /></button></motion.div></motion.div>}</AnimatePresence><AnimatePresence>{quickLocationOpen && <QuickLocationDialog onClose={() => setQuickLocationOpen(false)} onCreated={addLocation} />}</AnimatePresence></>;
 }
 
