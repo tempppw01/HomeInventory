@@ -120,6 +120,7 @@ export function InventoryApp() {
   const [aiItem, setAiItem] = useState<Item | null>(null);
   const [memberId, setMemberId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [toastAction, setToastAction] = useState<{ label: string; onClick: () => void } | null>(null);
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState<ThemeMode>("system");
   const [showWelcome, setShowWelcome] = useState(false);
@@ -176,9 +177,9 @@ export function InventoryApp() {
   useEffect(() => { request<{ id: string }[]>("/api/members").then((members) => setMemberId(members[0]?.id ?? null)).catch(() => undefined); }, []);
   useEffect(() => {
     if (!toast) return;
-    const timer = setTimeout(() => setToast(null), 2600);
+    const timer = setTimeout(() => { setToast(null); setToastAction(null); }, toastAction ? 5200 : 2600);
     return () => clearTimeout(timer);
-  }, [toast]);
+  }, [toast, toastAction]);
 
   const setThemeMode = (next: ThemeMode) => {
     setTheme(next);
@@ -196,16 +197,17 @@ export function InventoryApp() {
   const filteredItems = useMemo(() => {
     const term = search.toLowerCase().trim();
     return (data?.items ?? []).filter((item) =>
+      item.quantity > 0 &&
       (typeFilter === "ALL" || item.type === typeFilter) &&
       (categoryFilter === "ALL" || item.category === categoryFilter) &&
       (!term || [item.name, item.itemCode, item.category, item.location?.name].some((value) => value?.toLowerCase().includes(term))),
     );
   }, [categoryFilter, data, search, typeFilter]);
 
-  const lowStock = (data?.items ?? []).filter((item) => item.type === "CONSUMABLE" && (!item.restockPausedUntil || new Date(item.restockPausedUntil).getTime() <= appStartedAt) && ((item.minQuantity > 0 && item.quantity <= item.minQuantity) || (isLiquidConsumable(item) && item.remainingPercent <= 20)));
+  const lowStock = (data?.items ?? []).filter((item) => item.quantity > 0 && item.type === "CONSUMABLE" && (!item.restockPausedUntil || new Date(item.restockPausedUntil).getTime() <= appStartedAt) && ((item.minQuantity > 0 && item.quantity <= item.minQuantity) || (isLiquidConsumable(item) && item.remainingPercent <= 20)));
   const pendingShopping = (data?.shopping ?? []).filter((item) => item.status === "PENDING");
-  const expiring = (data?.items ?? []).filter((item) => item.type === "CONSUMABLE" && item.expiryDate && new Date(item.expiryDate).getTime() - appStartedAt < 14 * 86400000 && new Date(item.expiryDate).getTime() > appStartedAt);
-  const expired = (data?.items ?? []).filter((item) => item.type === "CONSUMABLE" && item.expiryDate && new Date(item.expiryDate).getTime() <= appStartedAt);
+  const expiring = (data?.items ?? []).filter((item) => item.quantity > 0 && item.type === "CONSUMABLE" && item.expiryDate && new Date(item.expiryDate).getTime() - appStartedAt < 14 * 86400000 && new Date(item.expiryDate).getTime() > appStartedAt);
+  const expired = (data?.items ?? []).filter((item) => item.quantity > 0 && item.type === "CONSUMABLE" && item.expiryDate && new Date(item.expiryDate).getTime() <= appStartedAt);
   const totalValue = (data?.items ?? []).reduce((sum, item) => sum + (item.price ?? 0) * item.quantity, 0);
 
   const openEdit = (item: Item) => { setEditing(item); setModal("item"); };
@@ -218,9 +220,13 @@ export function InventoryApp() {
       return;
     }
     if (item.quantity <= 0) return;
+    const previousQuantity = item.quantity;
+    const nextQuantity = Math.max(0, previousQuantity - 1);
     try {
-      await request(`/api/items/${item.id}`, { method: "PATCH", body: JSON.stringify({ quantity: Math.max(0, item.quantity - 1) }) });
-      setToast(`${item.name} 已使用 1 ${item.unit}`); await refresh();
+      await request(`/api/items/${item.id}`, { method: "PATCH", body: JSON.stringify({ quantity: nextQuantity }) });
+      setData((current) => current ? { ...current, items: current.items.map((entry) => entry.id === item.id ? { ...entry, quantity: nextQuantity } : entry) } : current);
+      setToast(`${item.name} 已使用 1 ${item.unit}${nextQuantity === 0 ? "，已从物品列表隐藏" : ""}`);
+      setToastAction({ label: "撤销", onClick: async () => { try { await request(`/api/items/${item.id}`, { method: "PATCH", body: JSON.stringify({ quantity: previousQuantity }) }); setToastAction(null); setToast(`${item.name} 已恢复`); await refresh(); } catch (error) { setToast(error instanceof Error ? error.message : "撤销失败"); } } });
     } catch (error) { setToast(error instanceof Error ? error.message : "操作失败"); }
   };
 
@@ -299,9 +305,9 @@ export function InventoryApp() {
         <AnimatePresence mode="wait">
           <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: .22 }}>
             {loading ? <LoadingView /> : view === "dashboard" ? (
-              <DashboardView data={data!} lowStock={lowStock} expiring={expiring} expired={expired} pending={pendingShopping} totalValue={totalValue} onNavigate={setView} onEdit={openEdit} onConsume={consume} onDelete={removeItem} onAddRestock={addRestockSuggestion} onQr={setQrItem} onAi={setAiItem} onAlerts={() => setModal("notifications")} />
+              <DashboardView data={{ ...data!, items: data!.items.filter((item) => item.quantity > 0) }} lowStock={lowStock} expiring={expiring} expired={expired} pending={pendingShopping} totalValue={totalValue} onNavigate={setView} onEdit={openEdit} onConsume={consume} onDelete={removeItem} onAddRestock={addRestockSuggestion} onQr={setQrItem} onAi={setAiItem} onAlerts={() => setModal("notifications")} />
             ) : view === "items" ? (
-              <ItemsView allItems={data!.items} locations={data!.locations} items={filteredItems} shopping={data!.shopping} search={search} setSearch={setSearch} filter={typeFilter} setFilter={setTypeFilter} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter} onEdit={openEdit} onConsume={consume} onRemainingChange={updateRemaining} onDelete={removeItem} onQr={setQrItem} onAi={setAiItem} onPrint={setPrintItems} onToast={setToast} onCopy={(item) => copyText(item.itemCode || item.id, "物品编号已复制")} onToggleShopping={toggleShopping} onAddShopping={() => setModal("shopping")} onDeleteShopping={async (id) => { await request(`/api/shopping/${id}`, { method: "DELETE" }); await refresh(); }} />
+              <ItemsView allItems={data!.items.filter((item) => item.quantity > 0)} locations={data!.locations} items={filteredItems} shopping={data!.shopping} search={search} setSearch={setSearch} filter={typeFilter} setFilter={setTypeFilter} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter} onEdit={openEdit} onConsume={consume} onRemainingChange={updateRemaining} onDelete={removeItem} onQr={setQrItem} onAi={setAiItem} onPrint={setPrintItems} onToast={setToast} onCopy={(item) => copyText(item.itemCode || item.id, "物品编号已复制")} onToggleShopping={toggleShopping} onAddShopping={() => setModal("shopping")} onDeleteShopping={async (id) => { await request(`/api/shopping/${id}`, { method: "DELETE" }); await refresh(); }} />
             ) : view === "locations" ? (
               <LocationsView locations={data!.locations} items={data!.items} onAdd={() => { setEditingLocation(null); setModal("location"); }} onOpen={(name) => { setSearch(name); setView("items"); }} onEdit={(location) => { setEditingLocation(location); setModal("location"); }} onToast={setToast} />
             ) : view === "settings" ? <SettingsView onToast={setToast} onAbout={() => setView("about")} onRecycle={() => setModal("recycle")} /> : <AboutView />}
@@ -331,7 +337,7 @@ export function InventoryApp() {
       {chatOpen && <AiChat onClose={() => setChatOpen(false)} />}
       {printItems && <PrintStudio items={printItems} onClose={() => setPrintItems(null)} />}
       {showWelcome && <WelcomeModal hasDemoData={data?.items.some((item) => item.itemCode?.startsWith("INV-DEMO-")) ?? false} onClose={() => { localStorage.setItem(welcomeStorageKey, "seen"); setShowWelcome(false); }} onAction={(action) => { localStorage.setItem(welcomeStorageKey, "seen"); setShowWelcome(false); if (action === "item") setModal("item"); else if (action === "location") setModal("location"); else setModal("shopping"); }} />}
-      <AnimatePresence>{toast && <motion.div initial={{ opacity: 0, y: 20, x: "-50%" }} animate={{ opacity: 1, y: 0, x: "-50%" }} exit={{ opacity: 0, y: 12, x: "-50%" }} className="fixed bottom-24 left-1/2 z-[70] rounded-2xl px-4 py-3 text-sm font-semibold text-white shadow-2xl md:bottom-8" style={{ background: "#24242d" }}>{toast}</motion.div>}</AnimatePresence>
+      <AnimatePresence>{toast && <motion.div initial={{ opacity: 0, y: 20, x: "-50%" }} animate={{ opacity: 1, y: 0, x: "-50%" }} exit={{ opacity: 0, y: 12, x: "-50%" }} className="fixed bottom-24 left-1/2 z-[70] flex max-w-[calc(100vw-32px)] items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-white shadow-2xl md:bottom-8" style={{ background: "#24242d" }}><span className="min-w-0">{toast}</span>{toastAction && <button type="button" onClick={() => void toastAction.onClick()} className="shrink-0 rounded-lg px-2 py-1 text-xs font-black" style={{ background: "rgba(255,255,255,.16)" }}>{toastAction.label}</button>}</motion.div>}</AnimatePresence>
     </div>
   );
 }
