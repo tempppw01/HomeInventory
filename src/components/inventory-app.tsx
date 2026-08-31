@@ -190,12 +190,36 @@ export function InventoryApp() {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
+  const openView = useCallback((nextView: View) => {
+    setView(nextView);
+    void refresh();
+  }, [refresh]);
+  const changeTypeFilter = useCallback((nextFilter: ItemQuickFilter) => {
+    setTypeFilter(nextFilter);
+    if (nextFilter === "MEDICINE") setCategoryFilter("ALL");
+    void refresh();
+  }, [refresh]);
+  const changeCategoryFilter = useCallback((nextFilter: string) => {
+    setCategoryFilter(nextFilter);
+    void refresh();
+  }, [refresh]);
   useEffect(() => {
     const saved = localStorage.getItem("home-inventory-sidebar-collapsed");
     if (saved === null) return;
     const frame = requestAnimationFrame(() => setSidebarCollapsed(saved === "true"));
     return () => cancelAnimationFrame(frame);
   }, []);
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [refresh]);
   useEffect(() => {
     if (localStorage.getItem(welcomeStorageKey) || legacyWelcomeStorageKeys.some((key) => localStorage.getItem(key))) {
       localStorage.setItem(welcomeStorageKey, "seen");
@@ -316,7 +340,7 @@ export function InventoryApp() {
         </button>
         <nav className="mt-9 space-y-1.5">
           {navItems.map(({ id, label, icon: Icon }) => (
-            <button key={id} onClick={() => setView(id)} className={`ds-nav-item flex w-full items-center rounded-xl py-3 text-sm font-semibold transition ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"}`}
+            <button key={id} onClick={() => openView(id)} className={`ds-nav-item flex w-full items-center rounded-xl py-3 text-sm font-semibold transition ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"}`}
               aria-label={label} title={sidebarCollapsed ? label : undefined}
               data-active={view === id} data-compact={sidebarCollapsed}>
               <Icon size={19} strokeWidth={2.2} /> {!sidebarCollapsed && label}
@@ -324,11 +348,11 @@ export function InventoryApp() {
           ))}
         </nav>
         <div className={`absolute bottom-5 ${sidebarCollapsed ? "left-3 right-3" : "left-4 right-4"}`}>
-          <button onClick={() => setView("settings")} className={`ds-nav-item flex w-full items-center rounded-xl py-2.5 text-sm font-semibold ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"}`} data-active={view === "settings"} data-compact={sidebarCollapsed} aria-label="设置" title={sidebarCollapsed ? "设置" : undefined}>
+          <button onClick={() => openView("settings")} className={`ds-nav-item flex w-full items-center rounded-xl py-2.5 text-sm font-semibold ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"}`} data-active={view === "settings"} data-compact={sidebarCollapsed} aria-label="设置" title={sidebarCollapsed ? "设置" : undefined}>
             <Settings size={19} /> {!sidebarCollapsed && "设置"}
           </button>
           <button onClick={() => setModal("recycle")} className={`flex w-full items-center rounded-xl py-2.5 text-sm font-semibold muted hover:bg-[var(--surface-soft)] ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"}`} aria-label="回收站" title={sidebarCollapsed ? "回收站" : undefined}><Trash2 size={19} />{!sidebarCollapsed && "回收站"}</button>
-          <button onClick={() => setView("about")} className={`ds-nav-item flex w-full items-center rounded-xl py-2.5 text-sm font-semibold ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"}`} data-active={view === "about"} data-compact={sidebarCollapsed} aria-label="关于" title={sidebarCollapsed ? `关于 v${APP_VERSION}` : undefined}><Info size={19} />{!sidebarCollapsed && <>关于 <span className="ml-auto text-[10px]">v{APP_VERSION}</span></>}</button>
+          <button onClick={() => openView("about")} className={`ds-nav-item flex w-full items-center rounded-xl py-2.5 text-sm font-semibold ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"}`} data-active={view === "about"} data-compact={sidebarCollapsed} aria-label="关于" title={sidebarCollapsed ? `关于 v${APP_VERSION}` : undefined}><Info size={19} />{!sidebarCollapsed && <>关于 <span className="ml-auto text-[10px]">v{APP_VERSION}</span></>}</button>
           {!sidebarCollapsed && <div className="mt-3 rounded-xl p-3" style={{ background: "linear-gradient(135deg, var(--primary-soft), var(--surface-soft))" }}>
             <div className="flex items-center gap-2 text-sm font-bold"><Sparkles size={16} style={{ color: "var(--primary)" }} /> 今日小结</div>
             <p className="mb-0 mt-2 text-xs leading-5 muted">{lowStock.length ? `${lowStock.length} 件消耗品需要补充` : "库存充足，家里井井有条"}</p>
@@ -340,7 +364,7 @@ export function InventoryApp() {
         <header className="mobile-topbar mb-7 flex items-center gap-3">
           <div className="mobile-only"><Brand compact /></div>
           <div className="desktop-only max-w-md flex-1">
-            <SearchBox items={data?.items ?? []} value={search} onChange={setSearch} onSelect={(item) => { setSearch(item.name); setView("items"); }} onFocus={() => setView("items")} placeholder="搜索名称、编号、分类或位置…" />
+            <SearchBox items={data?.items ?? []} value={search} onChange={setSearch} onSelect={(item) => { setSearch(item.name); openView("items"); }} onFocus={() => openView("items")} placeholder="搜索名称、编号、分类或位置…" />
           </div>
           <button onClick={cycleTheme} className="btn-ghost grid size-11 place-items-center p-0" aria-label={`当前主题：${theme === "system" ? "跟随系统" : theme === "light" ? "浅色" : "深色"}`} title="切换主题">{theme === "system" ? <Monitor size={19} /> : theme === "light" ? <Moon size={19} /> : <Sun size={19} />}</button>
           <button onClick={() => setModal("notifications")} className="btn-ghost relative grid size-11 place-items-center p-0" aria-label="查看提醒"><Bell size={19} />{lowStock.length + expiring.length + expired.length > 0 && <span className="absolute right-2 top-2 size-2 rounded-full" style={{ background: "var(--danger)" }} />}</button>
@@ -350,12 +374,12 @@ export function InventoryApp() {
         <AnimatePresence mode="wait">
           <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: .22 }}>
             {loading ? <LoadingView /> : view === "dashboard" ? (
-              <DashboardView data={{ ...data!, items: data!.items.filter((item) => item.quantity > 0) }} lowStock={lowStock} expiring={expiring} expired={expired} pending={pendingShopping} totalValue={totalValue} onNavigate={setView} onEdit={openEdit} onConsume={consume} onDelete={removeItem} onAddRestock={addRestockSuggestion} onQr={setQrItem} onAi={setAiItem} onAlerts={() => setModal("notifications")} />
+              <DashboardView data={{ ...data!, items: data!.items.filter((item) => item.quantity > 0) }} lowStock={lowStock} expiring={expiring} expired={expired} pending={pendingShopping} totalValue={totalValue} onNavigate={openView} onEdit={openEdit} onConsume={consume} onDelete={removeItem} onAddRestock={addRestockSuggestion} onQr={setQrItem} onAi={setAiItem} onAlerts={() => setModal("notifications")} />
             ) : view === "items" ? (
-              <ItemsView allItems={data!.items.filter((item) => item.quantity > 0)} locations={data!.locations} items={filteredItems} shopping={data!.shopping} search={search} setSearch={setSearch} filter={typeFilter} setFilter={setTypeFilter} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter} onEdit={openEdit} onConsume={consume} onRemainingChange={updateRemaining} onDelete={removeItem} onQr={setQrItem} onAi={setAiItem} onPrint={setPrintItems} onToast={setToast} onCopy={(item) => copyText(item.itemCode || item.id, "物品编号已复制")} onToggleShopping={toggleShopping} onAddShopping={() => setModal("shopping")} onDeleteShopping={async (id) => { await request(`/api/shopping/${id}`, { method: "DELETE" }); await refresh(); }} />
+              <ItemsView allItems={data!.items.filter((item) => item.quantity > 0)} locations={data!.locations} items={filteredItems} shopping={data!.shopping} search={search} setSearch={setSearch} filter={typeFilter} setFilter={changeTypeFilter} categoryFilter={categoryFilter} setCategoryFilter={changeCategoryFilter} onEdit={openEdit} onConsume={consume} onRemainingChange={updateRemaining} onDelete={removeItem} onQr={setQrItem} onAi={setAiItem} onPrint={setPrintItems} onToast={setToast} onCopy={(item) => copyText(item.itemCode || item.id, "物品编号已复制")} onToggleShopping={toggleShopping} onAddShopping={() => setModal("shopping")} onDeleteShopping={async (id) => { await request(`/api/shopping/${id}`, { method: "DELETE" }); await refresh(); }} />
             ) : view === "locations" ? (
-              <LocationsView locations={data!.locations} items={data!.items} onAdd={() => { setEditingLocation(null); setModal("location"); }} onOpen={(name) => { setSearch(name); setView("items"); }} onEdit={(location) => { setEditingLocation(location); setModal("location"); }} onToast={setToast} />
-            ) : view === "settings" ? <SettingsView onToast={setToast} onAbout={() => setView("about")} onRecycle={() => setModal("recycle")} /> : <AboutView />}
+              <LocationsView locations={data!.locations} items={data!.items} onAdd={() => { setEditingLocation(null); setModal("location"); }} onOpen={(name) => { setSearch(name); openView("items"); }} onEdit={(location) => { setEditingLocation(location); setModal("location"); }} onToast={setToast} />
+            ) : view === "settings" ? <SettingsView onToast={setToast} onAbout={() => openView("about")} onRecycle={() => setModal("recycle")} /> : <AboutView />}
           </motion.div>
         </AnimatePresence>
       </main>
@@ -363,7 +387,7 @@ export function InventoryApp() {
       <nav aria-label="移动端主导航" className="mobile-only mobile-bottom-nav fixed bottom-0 left-0 right-0 z-30 grid grid-cols-5 gap-1 border-t px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl" style={{ background: "color-mix(in srgb, var(--surface) 94%, transparent)", borderColor: "var(--border)" }}>
         {mobileNavItems.map(({ id, label, icon: Icon }, index) => {
           const active = view === id;
-          return <button key={id} onClick={() => setView(id)} aria-current={active ? "page" : undefined} data-active={active} className="ds-mobile-nav-item relative flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-[11px] font-semibold transition" style={{ gridColumn: index > 1 ? index + 2 : index + 1 }}><span className="ds-mobile-nav-icon"><Icon size={19} strokeWidth={active ? 2.4 : 2} /></span><span>{label}</span></button>;
+          return <button key={id} onClick={() => openView(id)} aria-current={active ? "page" : undefined} data-active={active} className="ds-mobile-nav-item relative flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-[11px] font-semibold transition" style={{ gridColumn: index > 1 ? index + 2 : index + 1 }}><span className="ds-mobile-nav-icon"><Icon size={19} strokeWidth={active ? 2.4 : 2} /></span><span>{label}</span></button>;
         })}
         <button onClick={() => setModal("item")} className="mobile-add-button" aria-label="添加物品" title="添加物品"><Plus size={23} strokeWidth={2.2} /></button>
       </nav>
@@ -372,7 +396,7 @@ export function InventoryApp() {
         {modal === "item" && <ItemModal locations={data?.locations ?? []} allItems={data?.items ?? []} item={editing} onClose={closeModal} onSaved={async () => { closeModal(); setToast(editing ? "物品已更新" : "物品已录入"); await refresh(); }} />}
         {modal === "shopping" && <ShoppingModal onClose={closeModal} onSaved={async () => { closeModal(); setToast("已加入采购清单"); await refresh(); }} />}
         {modal === "location" && <LocationModal location={editingLocation} onClose={closeModal} onSaved={async () => { const wasEditing = Boolean(editingLocation); closeModal(); setToast(wasEditing ? "空间已更新" : "新空间已创建"); await refresh(); }} />}
-        {modal === "notifications" && <NotificationsModal lowStock={lowStock} expiring={expiring} expired={expired} onClose={closeModal} onOpenItem={(item) => { closeModal(); openEdit(item); }} onDispose={removeItem} onShopping={() => { closeModal(); setView("items"); }} />}
+        {modal === "notifications" && <NotificationsModal lowStock={lowStock} expiring={expiring} expired={expired} onClose={closeModal} onOpenItem={(item) => { closeModal(); openEdit(item); }} onDispose={removeItem} onShopping={() => { closeModal(); openView("items"); }} />}
         {modal === "recycle" && <RecycleBinModal onClose={closeModal} onRestored={async () => { setToast("物品已恢复"); await refresh(); }} onToast={setToast} />}
         {modal === "batch-ai" && <BatchAiImport locations={data?.locations ?? []} onClose={closeModal} onSaved={refresh} onToast={setToast} />}
         {qrItem && <QrModal item={qrItem} onClose={() => setQrItem(null)} onPrint={() => { setQrItem(null); setPrintItems([qrItem]); }} />}
@@ -522,7 +546,7 @@ function ItemsView({ allItems, locations, items, shopping, search, setSearch, fi
   const pendingShopping = shopping.filter((item) => item.status === "PENDING");
   const categoryOptions = ["ALL", ...Array.from(new Set([...categories, ...allItems.map((item) => item.category).filter(Boolean)]))];
   return <><PageTitle title="物品与采购" text="知道家里有什么，也记得还要买什么。" action={<button onClick={onAddShopping} className="btn-ghost hidden items-center gap-1.5 text-xs sm:flex"><ShoppingBasket size={15} />添加采购项</button>} />
-    <div className="mb-4 space-y-3"><div className="md:hidden"><SearchBox items={allItems} value={search} onChange={setSearch} onSelect={(item) => setSearch(item.name)} placeholder="搜索名称或物品编号…" /></div>{selected.size === 0 ? <div className="flex min-w-0 items-center gap-3 overflow-x-auto pb-1"><div className="flex shrink-0 rounded-xl p-1" style={{ background: "var(--surface-soft)" }}>{([ ["ALL", "全部"], ["DURABLE", "耐用品"], ["CONSUMABLE", "消耗品"], ["MEDICINE", "医药"] ] as const).map(([id, label]) => <button key={id} onClick={() => { setFilter(id); if (id === "MEDICINE") setCategoryFilter("ALL"); }} className="rounded-lg px-3 py-1.5 text-sm font-bold transition" style={filter === id ? { background: "var(--surface-solid)", color: "var(--primary)", boxShadow: "var(--shadow-sm)" } : { color: "var(--muted)" }}>{label}</button>)}</div><span className="shrink-0 text-xs muted">{items.length} 件</span><span className="h-5 w-px shrink-0" style={{ background: "var(--border)" }} /><button onClick={selectVisible} disabled={items.length === 0} className="flex shrink-0 items-center gap-1.5 text-xs font-bold muted transition hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"><CheckSquare size={15} />选择当前结果</button></div> : <div className="flex min-w-0 items-center gap-2 overflow-x-auto pb-1"><span className="shrink-0 text-xs font-black" style={{ color: "var(--primary)" }}>已选 {selected.size} 件</span><span className="h-5 w-px shrink-0" style={{ background: "var(--border)" }} /><button onClick={() => bulk({ category: items.find((item) => selected.has(item.id))?.category || "日用" })} className="btn-ghost shrink-0 px-3 py-1.5 text-xs">沿用分类</button><button onClick={() => { setBulkLocationId(selectedItems[0]?.locationId ?? ""); setBulkLocationOpen(true); }} className="btn-ghost shrink-0 px-3 py-1.5 text-xs">批量移动位置</button><button onClick={() => onPrint(selectedItems)} className="btn-primary flex shrink-0 items-center gap-1.5 px-3 py-1.5 text-xs"><Printer size={15} />打印二维码</button><button onClick={bulkDelete} className="btn-ghost shrink-0 px-3 py-1.5 text-xs text-red-500">移入回收站</button><button onClick={() => setSelected(new Set())} className="shrink-0 px-2 py-1.5 text-xs font-bold muted hover:text-[var(--foreground)]">取消</button></div>}</div>
+    <div className="mb-4 space-y-3"><div className="md:hidden"><SearchBox items={allItems} value={search} onChange={setSearch} onSelect={(item) => setSearch(item.name)} placeholder="搜索名称或物品编号…" /></div>{selected.size === 0 ? <div className="flex min-w-0 items-center gap-3 overflow-x-auto pb-1"><div className="flex shrink-0 rounded-xl p-1" style={{ background: "var(--surface-soft)" }}>{([ ["ALL", "全部"], ["DURABLE", "耐用品"], ["CONSUMABLE", "消耗品"], ["MEDICINE", "医药"] ] as const).map(([id, label]) => <button key={id} onClick={() => setFilter(id)} className="rounded-lg px-3 py-1.5 text-sm font-bold transition" style={filter === id ? { background: "var(--surface-solid)", color: "var(--primary)", boxShadow: "var(--shadow-sm)" } : { color: "var(--muted)" }}>{label}</button>)}</div><span className="shrink-0 text-xs muted">{items.length} 件</span><span className="h-5 w-px shrink-0" style={{ background: "var(--border)" }} /><button onClick={selectVisible} disabled={items.length === 0} className="flex shrink-0 items-center gap-1.5 text-xs font-bold muted transition hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"><CheckSquare size={15} />选择当前结果</button></div> : <div className="flex min-w-0 items-center gap-2 overflow-x-auto pb-1"><span className="shrink-0 text-xs font-black" style={{ color: "var(--primary)" }}>已选 {selected.size} 件</span><span className="h-5 w-px shrink-0" style={{ background: "var(--border)" }} /><button onClick={() => bulk({ category: items.find((item) => selected.has(item.id))?.category || "日用" })} className="btn-ghost shrink-0 px-3 py-1.5 text-xs">沿用分类</button><button onClick={() => { setBulkLocationId(selectedItems[0]?.locationId ?? ""); setBulkLocationOpen(true); }} className="btn-ghost shrink-0 px-3 py-1.5 text-xs">批量移动位置</button><button onClick={() => onPrint(selectedItems)} className="btn-primary flex shrink-0 items-center gap-1.5 px-3 py-1.5 text-xs"><Printer size={15} />打印二维码</button><button onClick={bulkDelete} className="btn-ghost shrink-0 px-3 py-1.5 text-xs text-red-500">移入回收站</button><button onClick={() => setSelected(new Set())} className="shrink-0 px-2 py-1.5 text-xs font-bold muted hover:text-[var(--foreground)]">取消</button></div>}</div>
     <div className="browse-layout"><nav className="browse-rail" aria-label="物品分类">{categoryOptions.map((category) => { const count = category === "ALL" ? allItems.length : allItems.filter((item) => item.category === category).length; return <button key={category} type="button" className="browse-rail-item" data-active={categoryFilter === category} onClick={() => setCategoryFilter(category)}><span>{category === "ALL" ? "全部分类" : category}</span><span className="browse-rail-count">{count}</span></button>; })}</nav><div className="min-w-0">{items.length ? <><p className="mb-3 text-xs muted">需要批量操作时，点击卡片左上角的选择圆点即可。</p><div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">{items.map((item, index) => <motion.div className="h-full min-w-0" key={item.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index * .025, .2) }}><ItemCard item={item} selected={selected.has(item.id)} onSelect={() => toggle(item.id)} onEdit={() => onEdit(item)} onConsume={() => onConsume(item)} onRemainingChange={(remainingPercent) => onRemainingChange(item, remainingPercent)} onDelete={() => onDelete(item)} onQr={() => onQr(item)} onAi={() => onAi(item)} onCopy={() => onCopy(item)} /></motion.div>)}</div></> : <div className="surface rounded-3xl py-16"><EmptyState icon={Search} title="没有找到物品" text="换个关键词或筛选条件试试" /></div>}</div></div>
     <section className="mt-7 border-t pt-5" style={{ borderColor: "var(--border)" }}><div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="m-0 text-base font-black">采购清单</h2><p className="mb-0 mt-1 text-xs muted">{pendingShopping.length ? `${pendingShopping.length} 项等你顺路带回家` : "暂时没有需要采购的东西"}</p></div><button onClick={onAddShopping} className="icon-action md:mr-16" aria-label="添加采购项" title="添加采购项"><Plus size={18} /></button></div>{pendingShopping.length ? <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{pendingShopping.map((item) => <ShoppingRow key={item.id} item={item} onToggle={() => onToggleShopping(item)} onDelete={() => onDeleteShopping(item.id)} />)}</div> : <button onClick={onAddShopping} className="flex items-center gap-2 text-xs font-bold" style={{ color: "var(--primary)" }}><Plus size={15} />添加第一项采购</button>}</section>
     {bulkLocationOpen && <Modal title="批量移动位置" subtitle={`已选 ${selected.size} 件物品，统一移动到新的存放位置。`} onClose={() => setBulkLocationOpen(false)}><div className="space-y-4"><Field label="新的存放位置"><select autoFocus className="input" value={bulkLocationId} onChange={(e) => setBulkLocationId(e.target.value)}>{[{ id: "", name: "未设置 / 清空位置" }, ...locations].map((location) => <option key={location.id || "empty"} value={location.id}>{location.name}</option>)}</select></Field><p className="m-0 text-xs muted">确认后会更新全部已选物品的存放位置。</p><div className="flex gap-3 pt-2"><button type="button" onClick={() => setBulkLocationOpen(false)} className="btn-ghost flex-1">取消</button><button type="button" onClick={() => void bulk({ locationId: bulkLocationId || null }, "批量移动位置已完成")} className="btn-primary flex-1">确认移动</button></div></div></Modal>}
