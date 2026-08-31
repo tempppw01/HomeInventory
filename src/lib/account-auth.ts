@@ -1,6 +1,7 @@
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
+import { summarizeDevice } from "@/lib/login-record";
 
 export const ACCOUNT_COOKIE = "home_inventory_session";
 const SESSION_DAYS = 30;
@@ -20,9 +21,15 @@ export function verifyPassword(password: string, stored: string) {
 
 export function sessionHash(token: string) { return createHash("sha256").update(token).digest("hex"); }
 
-export async function createSession(userId: string) {
+export async function createSession(userId: string, metadata?: { userAgent?: string | null; ipAddress?: string | null }) {
   const token = randomBytes(32).toString("base64url");
-  await prisma.authSession.create({ data: { tokenHash: sessionHash(token), userId, expiresAt: new Date(Date.now() + SESSION_DAYS * 86400000) } });
+  await prisma.authSession.create({ data: {
+    tokenHash: sessionHash(token),
+    userId,
+    device: summarizeDevice(metadata?.userAgent || ""),
+    ipAddress: metadata?.ipAddress || null,
+    expiresAt: new Date(Date.now() + SESSION_DAYS * 86400000),
+  } });
   return token;
 }
 

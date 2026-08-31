@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { canAdmin, hashPassword, requireUser } from "@/lib/account-auth";
+import { ACCOUNT_COOKIE, canAdmin, hashPassword, requireUser, sessionHash } from "@/lib/account-auth";
 
 export async function GET() {
   try {
@@ -15,10 +16,13 @@ export async function GET() {
         active: true,
         createdAt: true,
         loginRecords: { where: { success: true }, orderBy: { createdAt: "desc" }, take: 1, select: { ipAddress: true, device: true, createdAt: true } },
+        sessions: { where: { expiresAt: { gt: new Date() } }, orderBy: { createdAt: "desc" }, select: { id: true, device: true, ipAddress: true, createdAt: true, expiresAt: true } },
       },
       orderBy: { createdAt: "asc" },
     });
-    return NextResponse.json(users.map(({ loginRecords, ...user }) => ({ ...user, lastLogin: loginRecords[0] || null })));
+    const currentToken = (await cookies()).get(ACCOUNT_COOKIE)?.value;
+    const currentSession = currentToken ? await prisma.authSession.findUnique({ where: { tokenHash: sessionHash(currentToken) }, select: { id: true } }) : null;
+    return NextResponse.json(users.map(({ loginRecords, ...user }) => ({ ...user, lastLogin: loginRecords[0] || null, sessions: user.sessions.map((session) => ({ ...session, isCurrent: session.id === currentSession?.id })) })));
   } catch (error) { return NextResponse.json({ error: error instanceof Error && error.message === "UNAUTHORIZED" ? "请先登录" : "服务器暂时开小差了，请稍后重试" }, { status: error instanceof Error && error.message === "UNAUTHORIZED" ? 401 : 500 }); }
 }
 

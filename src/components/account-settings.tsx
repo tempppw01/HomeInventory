@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { CheckCircle2, ChevronDown, History, LogOut, UserPlus, Users, XCircle } from "lucide-react";
+import { CheckCircle2, ChevronDown, History, LogOut, MonitorX, ShieldCheck, UserPlus, Users, XCircle } from "lucide-react";
 
 type User = {
   id: string;
@@ -10,6 +10,7 @@ type User = {
   role: "ADMIN" | "MEMBER" | "VIEWER";
   active: boolean;
   lastLogin: { ipAddress: string | null; device: string; createdAt: string } | null;
+  sessions: { id: string; device: string; ipAddress: string | null; createdAt: string; expiresAt: string; isCurrent: boolean }[];
 };
 
 type LoginRecord = {
@@ -72,6 +73,15 @@ export function AccountSettings({ onToast }: { onToast: (message: string) => voi
     onToast("账号已删除");
   };
 
+  const revokeSession = async (user: User, session: User["sessions"][number]) => {
+    if (!confirm(`确定踢出“${user.displayName}”在 ${session.device} 上的登录吗？该设备需要重新登录。`)) return;
+    const response = await fetch(`/api/auth/sessions/${session.id}`, { method: "DELETE" });
+    const result = await response.json();
+    if (!response.ok) { onToast(result.error || "踢出设备失败"); return; }
+    await load();
+    onToast("该设备已退出登录");
+  };
+
   const logout = async () => { await fetch("/api/auth/logout", { method: "POST" }); location.reload(); };
 
   return <details className="surface group rounded-3xl p-5">
@@ -95,6 +105,13 @@ export function AccountSettings({ onToast }: { onToast: (message: string) => voi
           <button onClick={() => { const password = prompt("输入新密码（至少 8 位）"); if (password) void updateUser(user, { password }); }} className="btn-ghost px-2.5 py-1.5 text-xs">重置密码</button>
           <button onClick={() => void removeUser(user)} className="btn-ghost px-2.5 py-1.5 text-xs text-red-500">删除</button>
           <span className="text-xs muted">{user.active ? "正常" : "已停用"}</span>
+          {user.sessions.length > 0 && <div className="basis-full border-t pt-2" style={{ borderColor: "var(--border)" }}>
+            <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold muted"><ShieldCheck size={13} />已登录设备 · {user.sessions.length}</div>
+            <div className="space-y-1.5">{user.sessions.map((session) => <div key={session.id} className="flex min-w-0 items-center gap-2 text-[11px] muted">
+              <span className="min-w-0 flex-1 truncate">{session.device}{session.ipAddress ? ` · ${session.ipAddress}` : ""} · {formatLoginTime(session.createdAt)}</span>
+              {session.isCurrent ? <span className="shrink-0" style={{ color: "var(--primary)" }}>当前设备</span> : <button type="button" onClick={() => void revokeSession(user, session)} className="btn-ghost flex h-7 shrink-0 items-center gap-1 px-2 text-[11px] text-red-500" title="踢出此设备"><MonitorX size={13} />踢出</button>}
+            </div>)}</div>
+          </div>}
         </div>)}
       </div>
 

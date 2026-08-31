@@ -3,6 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { ACCOUNT_COOKIE, createSession, verifyPassword } from "@/lib/account-auth";
 import { recordLoginAttempt } from "@/lib/login-record";
 
+function requestIp(request: NextRequest) {
+  return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || null;
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const username = typeof body.username === "string" ? body.username.trim().toLowerCase() : "";
@@ -20,7 +24,7 @@ export async function POST(request: NextRequest) {
     await recordLoginAttempt(request, { userId: user.id, username, success: false, failureReason: "密码错误" });
     return NextResponse.json({ error: "用户名或密码不正确" }, { status: 401 });
   }
-  const token = await createSession(user.id);
+  const token = await createSession(user.id, { userAgent: request.headers.get("user-agent"), ipAddress: requestIp(request) });
   await recordLoginAttempt(request, { userId: user.id, username, success: true });
   const response = NextResponse.json({ user: { id: user.id, username: user.username, displayName: user.displayName, role: user.role } });
   response.cookies.set(ACCOUNT_COOKIE, token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 30, path: "/" });

@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createSession, hashPassword } from "@/lib/account-auth";
 
+function requestIp(request: NextRequest) {
+  return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || null;
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const username = typeof body.username === "string" ? body.username.trim().toLowerCase() : "";
@@ -17,7 +21,7 @@ export async function POST(request: NextRequest) {
     await tx.activityLog.create({ data: { action: "ACCOUNT_SETUP", userId: created.id, detail: "初始化管理员账号" } });
     return created;
   });
-  const token = await createSession(user.id);
+  const token = await createSession(user.id, { userAgent: request.headers.get("user-agent"), ipAddress: requestIp(request) });
   const response = NextResponse.json({ ok: true });
   response.cookies.set("home_inventory_session", token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 30, path: "/" });
   return response;

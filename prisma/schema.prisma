@@ -43,6 +43,8 @@ model AuthSession {
   tokenHash String   @unique
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device    String   @default("未知设备")
+  ipAddress String?
   expiresAt DateTime
   createdAt DateTime @default(now())
 

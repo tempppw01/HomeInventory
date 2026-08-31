@@ -17,6 +17,8 @@ const statements = [
     "id" TEXT NOT NULL PRIMARY KEY,
     "tokenHash" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
+    "device" TEXT NOT NULL DEFAULT '未知设备',
+    "ipAddress" TEXT,
     "expiresAt" DATETIME NOT NULL,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "AuthSession_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
@@ -159,6 +161,7 @@ const statements = [
 async function main() {
   for (const statement of statements) await prisma.$executeRawUnsafe(statement);
   const columns = await prisma.$queryRawUnsafe<Array<{ name: string }>>(`PRAGMA table_info("Item")`);
+  const sessionColumns = await prisma.$queryRawUnsafe<Array<{ name: string }>>(`PRAGMA table_info("AuthSession")`);
   const locationColumns = await prisma.$queryRawUnsafe<Array<{ name: string }>>(`PRAGMA table_info("Location")`);
   if (!locationColumns.some((column) => column.name === "thumbnailUrl")) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "Location" ADD COLUMN "thumbnailUrl" TEXT`);
@@ -180,6 +183,12 @@ async function main() {
   }
   if (!columns.some((column) => column.name === "remainingPercent")) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "Item" ADD COLUMN "remainingPercent" REAL NOT NULL DEFAULT 100`);
+  }
+  if (!sessionColumns.some((column) => column.name === "device")) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "AuthSession" ADD COLUMN "device" TEXT NOT NULL DEFAULT '未知设备'`);
+  }
+  if (!sessionColumns.some((column) => column.name === "ipAddress")) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "AuthSession" ADD COLUMN "ipAddress" TEXT`);
   }
   // Count units (including bottles) represent whole packages. Their partial
   // in-use state lives in remainingPercent, so old fractional data is repaired
