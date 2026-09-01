@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { apiError } from "@/lib/api";
+import { apiError, requireAdminUser } from "@/lib/api";
 import { aiIsManagedByEnvironment, DEFAULT_AI_MODEL, getAiConfig } from "@/lib/ai";
 import { prisma } from "@/lib/prisma";
 import { aiSettingSchema } from "@/lib/validation";
@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    await requireAdminUser();
     const config = await getAiConfig();
     return NextResponse.json({
       configured: Boolean(config),
@@ -23,6 +24,7 @@ export async function GET() {
 
 export async function PATCH(request: NextRequest) {
   try {
+    await requireAdminUser();
     if (aiIsManagedByEnvironment()) return NextResponse.json({ error: "AI 当前由环境变量管理，请在部署平台修改" }, { status: 409 });
     const input = aiSettingSchema.parse(await request.json());
     const existing = await prisma.aiSetting.findUnique({ where: { id: "default" } });

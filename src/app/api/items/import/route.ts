@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { apiError } from "@/lib/api";
+import { apiError, requireWritableUser } from "@/lib/api";
 import { createItemCode } from "@/lib/item-code";
 import { itemSchema } from "@/lib/validation";
+import { normalizeItemQuantity } from "@/lib/item-metrics";
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await requireWritableUser();
     const body = await request.json();
     const rows = Array.isArray(body) ? body : body.items;
     if (!Array.isArray(rows)) return NextResponse.json({ error: "导入文件格式不正确" }, { status: 400 });
@@ -48,10 +50,13 @@ export async function POST(request: NextRequest) {
       let createdCount = 0;
       for (const data of parsedRows) {
         const { recordPurchase, purchaseStore, ...itemData } = data;
-        void recordPurchase;
-        void purchaseStore;
-        const item = await tx.item.create({ data: { ...itemData, expiryDate: itemData.type === "DURABLE" ? null : itemData.expiryDate, itemCode: createItemCode() } });
-        await tx.activityLog.create({ data: { action: "CREATE", itemId: item.id, itemName: item.name, detail: "JSON 导入" } });
+        const normalized = { ...itemData, quantity: normalizeItemQuantity(itemData.quantity, itemData.unit) };
+        const item = await tx.item.create({ data: { ...normalized, expiryDate: normalized.type === "DURABLE" ? null : normalized.expiryDate, itemCode: createItemCode() } });
+        if (recordPurchase && normalized.price != null) {
+          const quantity = Math.max(normalized.quantity, 1);
+          await tx.priceRecord.create({ data: { itemId: item.id, itemName: item.name, category: item.category, unitPrice: normalized.price, quantity, totalPrice: normalized.price * quantity, purchasedAt: normalized.purchaseDate || new Date(), store: purchaseStore } });
+        }
+        await tx.activityLog.create({ data: { action: "CREATE", itemId: item.id, itemName: item.name, userId: user.id, detail: "JSON 导入" } });
         createdCount += 1;
       }
       return createdCount;

@@ -75,7 +75,6 @@ const commonItemTemplates = [
 ] as const;
 const welcomeStorageKey = "home-inventory-welcome-seen";
 const legacyWelcomeStorageKeys = ["home-inventory-welcome-0.0.1"];
-const appStartedAt = Date.now();
 const assistantPositionStorageKey = "home-inventory-ai-assistant-position-v1";
 const itemTemplateStorageKey = "home-inventory-item-templates-v1";
 
@@ -107,12 +106,17 @@ function findCommonItemTemplate(name: string) {
   return commonItemTemplates.find((template) => template.keywords.some((keyword) => normalized.includes(keyword))) ?? null;
 }
 
-function expiryDays(item: Item) {
-  return Math.ceil((new Date(item.expiryDate!).getTime() - appStartedAt) / 86400000);
+function localDayTimestamp(value: Date | string) {
+  const date = new Date(value);
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }
 
-function expiryDateLabel(item: Item) {
-  const days = expiryDays(item);
+function expiryDays(item: Item, now = Date.now()) {
+  return Math.round((localDayTimestamp(item.expiryDate!) - localDayTimestamp(new Date(now))) / 86400000);
+}
+
+function expiryDateLabel(item: Item, now = Date.now()) {
+  const days = expiryDays(item, now);
   if (days < 0) return `已过期 ${Math.abs(days)} 天`;
   if (days === 0) return "今天到期";
   if (days === 1) return "明天到期";
@@ -126,9 +130,9 @@ function expiryAdvice(item: Item) {
   return "尽快处理";
 }
 
-function expiryGroupLabel(date: string) {
+function expiryGroupLabel(date: string, now = Date.now()) {
   const target = new Date(date);
-  const days = Math.ceil((target.getTime() - appStartedAt) / 86400000);
+  const days = Math.round((localDayTimestamp(target) - localDayTimestamp(new Date(now))) / 86400000);
   if (days < 0) return "已经过期";
   if (days === 0) return "今天";
   if (days === 1) return "明天";
@@ -174,6 +178,12 @@ export function InventoryApp() {
   const [showWelcome, setShowWelcome] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -276,10 +286,10 @@ export function InventoryApp() {
     );
   }, [categoryFilter, data, search, typeFilter]);
 
-  const lowStock = (data?.items ?? []).filter((item) => item.quantity > 0 && item.type === "CONSUMABLE" && (!item.restockPausedUntil || new Date(item.restockPausedUntil).getTime() <= appStartedAt) && ((item.minQuantity > 0 && item.quantity <= item.minQuantity) || (isLiquidConsumable(item) && item.remainingPercent <= 20)));
+  const lowStock = (data?.items ?? []).filter((item) => item.quantity > 0 && item.type === "CONSUMABLE" && (!item.restockPausedUntil || new Date(item.restockPausedUntil).getTime() <= now) && ((item.minQuantity > 0 && item.quantity <= item.minQuantity) || (isLiquidConsumable(item) && item.remainingPercent <= 20)));
   const pendingShopping = (data?.shopping ?? []).filter((item) => item.status === "PENDING");
-  const expiring = (data?.items ?? []).filter((item) => item.quantity > 0 && item.type === "CONSUMABLE" && item.expiryDate && new Date(item.expiryDate).getTime() - appStartedAt < 14 * 86400000 && new Date(item.expiryDate).getTime() > appStartedAt);
-  const expired = (data?.items ?? []).filter((item) => item.quantity > 0 && item.type === "CONSUMABLE" && item.expiryDate && new Date(item.expiryDate).getTime() <= appStartedAt);
+  const expiring = (data?.items ?? []).filter((item) => item.quantity > 0 && item.type === "CONSUMABLE" && item.expiryDate && expiryDays(item, now) > 0 && expiryDays(item, now) < 14);
+  const expired = (data?.items ?? []).filter((item) => item.quantity > 0 && item.type === "CONSUMABLE" && item.expiryDate && expiryDays(item, now) <= 0);
   const totalValue = (data?.items ?? []).reduce((sum, item) => sum + (item.price ?? 0) * item.quantity, 0);
 
   const openEdit = (item: Item) => { setEditing(item); setModal("item"); };
@@ -292,13 +302,11 @@ export function InventoryApp() {
       return;
     }
     if (item.quantity <= 0) return;
-    const previousQuantity = item.quantity;
-    const nextQuantity = Math.max(0, previousQuantity - 1);
     try {
-      await request(`/api/items/${item.id}`, { method: "PATCH", body: JSON.stringify({ quantity: nextQuantity }) });
-      setData((current) => current ? { ...current, items: current.items.map((entry) => entry.id === item.id ? { ...entry, quantity: nextQuantity } : entry) } : current);
-      setToast(`${item.name} 已使用 1 ${item.unit}${nextQuantity === 0 ? "，已从物品列表隐藏" : ""}`);
-      setToastAction({ label: "撤销", onClick: async () => { try { await request(`/api/items/${item.id}`, { method: "PATCH", body: JSON.stringify({ quantity: previousQuantity }) }); setToastAction(null); setToast(`${item.name} 已恢复`); await refresh(); } catch (error) { setToast(error instanceof Error ? error.message : "撤销失败"); } } });
+      const result = await request<{ item: Item; activityId: string }>(`/api/items/${item.id}/consume`, { method: "POST" });
+      setData((current) => current ? { ...current, items: current.items.map((entry) => entry.id === item.id ? result.item : entry) } : current);
+      setToast(`${item.name} 已使用 1 ${item.unit}${result.item.quantity === 0 ? "，已从物品列表隐藏" : ""}`);
+      setToastAction({ label: "撤销消耗", onClick: async () => { try { await request(`/api/activity/${result.activityId}/undo`, { method: "POST" }); setToastAction(null); setToast(`${item.name} 已恢复`); await refresh(); } catch (error) { setToast(error instanceof Error ? error.message : "撤销失败"); } } });
     } catch (error) { setToast(error instanceof Error ? error.message : "操作失败"); }
   };
 
@@ -384,7 +392,7 @@ export function InventoryApp() {
         <AnimatePresence mode="wait">
           <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: .22 }}>
             {loading ? <LoadingView /> : view === "dashboard" ? (
-              <DashboardView data={{ ...data!, items: data!.items.filter((item) => item.quantity > 0) }} lowStock={lowStock} expiring={expiring} expired={expired} pending={pendingShopping} totalValue={totalValue} onNavigate={openView} onEdit={openEdit} onConsume={consume} onDelete={removeItem} onAddRestock={addRestockSuggestion} onQr={setQrItem} onAi={setAiItem} onAlerts={() => setModal("notifications")} />
+              <DashboardView data={{ ...data!, items: data!.items.filter((item) => item.quantity > 0) }} now={now} lowStock={lowStock} expiring={expiring} expired={expired} pending={pendingShopping} totalValue={totalValue} onNavigate={openView} onEdit={openEdit} onConsume={consume} onDelete={removeItem} onAddRestock={addRestockSuggestion} onQr={setQrItem} onAi={setAiItem} onAlerts={() => setModal("notifications")} />
             ) : view === "items" ? (
               <ItemsView allItems={data!.items.filter((item) => item.quantity > 0)} locations={data!.locations} items={filteredItems} shopping={data!.shopping} search={search} setSearch={setSearch} filter={typeFilter} setFilter={changeTypeFilter} categoryFilter={categoryFilter} setCategoryFilter={changeCategoryFilter} onEdit={openEdit} onConsume={consume} onRemainingChange={updateRemaining} onDelete={removeItem} onQr={setQrItem} onAi={setAiItem} onPrint={setPrintItems} onToast={setToast} onCopy={(item) => copyText(item.itemCode || item.id, "物品编号已复制")} onToggleShopping={toggleShopping} onAddShopping={() => setModal("shopping")} onDeleteShopping={async (id) => { await request(`/api/shopping/${id}`, { method: "DELETE" }); await refresh(); }} />
             ) : view === "locations" ? (
@@ -495,7 +503,7 @@ function PageTitle({ title, text, action }: { title: string; text: string; actio
   return <div className="mb-4 flex items-end justify-between gap-3 sm:mb-5"><div><h1 className="m-0 text-2xl font-black tracking-tight sm:text-3xl">{title}</h1><p className="mb-0 mt-1.5 text-sm muted">{text}</p></div>{action}</div>;
 }
 
-function DashboardView({ data, lowStock, expiring, expired, pending, totalValue, onNavigate, onEdit, onConsume, onDelete, onAddRestock, onQr, onAi, onAlerts }: { data: DashboardData; lowStock: Item[]; expiring: Item[]; expired: Item[]; pending: ShoppingItem[]; totalValue: number; onNavigate: (v: View) => void; onEdit: (i: Item) => void; onConsume: (i: Item) => void; onDelete: (i: Item) => void; onAddRestock: (i: Item) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onAlerts: () => void }) {
+function DashboardView({ data, now, lowStock, expiring, expired, pending, totalValue, onNavigate, onEdit, onConsume, onDelete, onAddRestock, onQr, onAi, onAlerts }: { data: DashboardData; now: number; lowStock: Item[]; expiring: Item[]; expired: Item[]; pending: ShoppingItem[]; totalValue: number; onNavigate: (v: View) => void; onEdit: (i: Item) => void; onConsume: (i: Item) => void; onDelete: (i: Item) => void; onAddRestock: (i: Item) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onAlerts: () => void }) {
   const [recentView, setRecentView] = useState<"cards" | "list">("list");
   useEffect(() => {
     const saved = localStorage.getItem("home-inventory-recent-view-v2");
@@ -513,7 +521,7 @@ function DashboardView({ data, lowStock, expiring, expired, pending, totalValue,
   const visibleStats = data.items.length === 0 ? stats.slice(0, 1) : stats.filter(({ label, value }) => label === "全部物品" || (typeof value === "number" ? value > 0 : value !== "¥0"));
   const pendingNames = new Set(pending.map((item) => item.name.trim().toLocaleLowerCase()));
   const restockSuggestions = lowStock.filter((item) => !pendingNames.has(item.name.trim().toLocaleLowerCase())).slice(0, 3);
-  const urgentExpiry = [...expired, ...expiring.filter((item) => new Date(item.expiryDate!).getTime() - appStartedAt <= 7 * 86400000)]
+  const urgentExpiry = [...expired, ...expiring.filter((item) => expiryDays(item, now) <= 7)]
     .sort((a, b) => new Date(a.expiryDate!).getTime() - new Date(b.expiryDate!).getTime());
   const expiryGroups = urgentExpiry.reduce<Record<string, Item[]>>((groups, item) => {
     const key = item.expiryDate!.slice(0, 10);
@@ -530,7 +538,7 @@ function DashboardView({ data, lowStock, expiring, expired, pending, totalValue,
 
     <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(300px,.7fr)]">
       <section className="surface min-w-0 p-3 sm:p-4"><div className="flex items-center justify-between gap-3"><h2 className="m-0 text-base font-black">最近更新</h2><div className="flex items-center gap-2"><div className="flex rounded-xl p-1" style={{ background: "var(--surface-soft)" }}><button data-testid="recent-view-cards" onClick={() => changeRecentView("cards")} className="grid size-8 place-items-center rounded-lg" style={recentView === "cards" ? { background: "var(--surface-solid)", color: "var(--primary)", boxShadow: "0 1px 4px rgba(0,0,0,.08)" } : { color: "var(--muted)" }} aria-label="卡片显示" title="卡片显示"><LayoutGrid size={15} /></button><button data-testid="recent-view-list" onClick={() => changeRecentView("list")} className="grid size-8 place-items-center rounded-lg" style={recentView === "list" ? { background: "var(--surface-solid)", color: "var(--primary)", boxShadow: "0 1px 4px rgba(0,0,0,.08)" } : { color: "var(--muted)" }} aria-label="列表显示" title="列表显示"><List size={16} /></button></div><button onClick={() => onNavigate("items")} className="flex items-center gap-1 text-xs font-bold" style={{ color: "var(--primary)" }}>查看全部<ChevronRight size={14} /></button></div></div>{recentView === "cards" ? <div data-testid="recent-cards" className="mt-3 grid gap-3 sm:grid-cols-2">{data.items.slice(0, 6).map((item) => <ItemCard key={item.id} item={item} onEdit={() => onEdit(item)} onConsume={() => onConsume(item)} onQr={() => onQr(item)} onAi={() => onAi(item)} compact />)}{data.items.length === 0 && <EmptyState icon={Boxes} title="还没有物品" text="点击右上角，录入家里的第一件物品" />}</div> : <div data-testid="recent-list" className="mt-3 space-y-1.5">{data.items.slice(0, 8).map((item) => <RecentItemRow key={item.id} item={item} onEdit={() => onEdit(item)} onQr={() => onQr(item)} onAi={() => onAi(item)} />)}{data.items.length === 0 && <EmptyState icon={Boxes} title="还没有物品" text="点击右上角，录入家里的第一件物品" />}</div>}</section>
-      <div className="space-y-4"><HomeInsightsCompact data={data} />{restockSuggestions.length > 0 && <section className="surface p-4 sm:p-5"><SectionHead title="补货建议" action="查看物品与采购" onClick={() => onNavigate("items")} /><p className="mb-3 mt-1 text-xs muted">低库存但尚未在采购清单中，点一下就记好。</p><div className="space-y-1.5">{restockSuggestions.map((item) => <div key={item.id} className="flex items-center gap-2 rounded-xl px-2.5 py-2" style={{ background: "var(--surface-soft)" }}><CircleAlert size={15} style={{ color: "#e37d25" }} /><div className="min-w-0 flex-1"><div className="truncate text-sm font-bold">{item.name}</div><div className="text-[11px] muted">{isLiquidConsumable(item) ? `余量 ${Math.round(item.remainingPercent)}%` : `建议补 ${Math.max(item.minQuantity - item.quantity, 1)} ${item.unit}`}</div></div><button type="button" onClick={() => onAddRestock(item)} className="btn-ghost shrink-0 px-2.5 py-1.5 text-xs" style={{ color: "var(--primary)" }}>加入</button></div>)}</div></section>}{urgentExpiry.length > 0 && <section className="surface p-4 sm:p-5"><SectionHead title="本周处理" action="查看提醒" onClick={onAlerts} /><p className="mb-3 mt-1 text-xs muted">按到期日排好啦，先处理最要紧的几件。</p><div className="space-y-3">{Object.entries(expiryGroups).map(([date, items]) => <div key={date}><div className="mb-1.5 flex items-center gap-2 text-[11px] font-black uppercase tracking-wide muted"><span className="size-1.5 rounded-full" style={{ background: date < new Date().toISOString().slice(0, 10) ? "var(--danger)" : "var(--warning)" }} />{expiryGroupLabel(date)}</div><div className="space-y-1.5">{items.map((item) => { const isExpired = expired.some((entry) => entry.id === item.id); return <div key={item.id} className="flex items-center gap-2 rounded-xl px-2.5 py-2" style={{ background: "var(--surface-soft)" }}><AlertTriangle size={15} style={{ color: isExpired ? "var(--danger)" : "var(--warning)" }} /><div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-1.5"><div className="truncate text-sm font-bold">{item.name}</div><span className="shrink-0 text-[10px] muted">{item.category}</span></div><div className="text-[11px] muted">{expiryDateLabel(item)} · {expiryAdvice(item)}</div></div><button type="button" onClick={() => isExpired ? onDelete(item) : onEdit(item)} className="btn-ghost shrink-0 px-2.5 py-1.5 text-xs" style={{ color: isExpired ? "var(--danger)" : "var(--primary)" }}>{isExpired ? "处理" : "查看"}</button></div>; })}</div></div>)}</div></section>}<section className="surface p-4 sm:p-5"><SectionHead title="采购清单" action="查看物品与采购" onClick={() => onNavigate("items")} /><div className="mt-4 space-y-2">{pending.slice(0, 4).map((item) => <div key={item.id} className="flex items-center gap-3 rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}><span className="size-2 rounded-full" style={{ background: item.priority === 2 ? "var(--danger)" : "var(--warning)" }} /><div className="min-w-0 flex-1"><div className="truncate text-sm font-bold">{item.name}</div><div className="mt-0.5 text-xs muted">{item.quantity} {item.unit} · {item.category || "未分类"}</div></div></div>)}{pending.length === 0 && <EmptyState icon={Check} title="清单已完成" text="暂时没有需要采购的物品" />}</div></section></div>
+      <div className="space-y-4"><HomeInsightsCompact data={data} />{restockSuggestions.length > 0 && <section className="surface p-4 sm:p-5"><SectionHead title="补货建议" action="查看物品与采购" onClick={() => onNavigate("items")} /><p className="mb-3 mt-1 text-xs muted">低库存但尚未在采购清单中，点一下就记好。</p><div className="space-y-1.5">{restockSuggestions.map((item) => <div key={item.id} className="flex items-center gap-2 rounded-xl px-2.5 py-2" style={{ background: "var(--surface-soft)" }}><CircleAlert size={15} style={{ color: "#e37d25" }} /><div className="min-w-0 flex-1"><div className="truncate text-sm font-bold">{item.name}</div><div className="text-[11px] muted">{isLiquidConsumable(item) ? `余量 ${Math.round(item.remainingPercent)}%` : `建议补 ${Math.max(item.minQuantity - item.quantity, 1)} ${item.unit}`}</div></div><button type="button" onClick={() => onAddRestock(item)} className="btn-ghost shrink-0 px-2.5 py-1.5 text-xs" style={{ color: "var(--primary)" }}>加入</button></div>)}</div></section>}{urgentExpiry.length > 0 && <section className="surface p-4 sm:p-5"><SectionHead title="本周处理" action="查看提醒" onClick={onAlerts} /><p className="mb-3 mt-1 text-xs muted">按到期日排好啦，先处理最要紧的几件。</p><div className="space-y-3">{Object.entries(expiryGroups).map(([date, items]) => <div key={date}><div className="mb-1.5 flex items-center gap-2 text-[11px] font-black uppercase tracking-wide muted"><span className="size-1.5 rounded-full" style={{ background: date < new Date().toISOString().slice(0, 10) ? "var(--danger)" : "var(--warning)" }} />{expiryGroupLabel(date, now)}</div><div className="space-y-1.5">{items.map((item) => { const isExpired = expired.some((entry) => entry.id === item.id); return <div key={item.id} className="flex items-center gap-2 rounded-xl px-2.5 py-2" style={{ background: "var(--surface-soft)" }}><AlertTriangle size={15} style={{ color: isExpired ? "var(--danger)" : "var(--warning)" }} /><div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-1.5"><div className="truncate text-sm font-bold">{item.name}</div><span className="shrink-0 text-[10px] muted">{item.category}</span></div><div className="text-[11px] muted">{expiryDateLabel(item, now)} · {expiryAdvice(item)}</div></div><button type="button" onClick={() => isExpired ? onDelete(item) : onEdit(item)} className="btn-ghost shrink-0 px-2.5 py-1.5 text-xs" style={{ color: isExpired ? "var(--danger)" : "var(--primary)" }}>{isExpired ? "处理" : "查看"}</button></div>; })}</div></div>)}</div></section>}<section className="surface p-4 sm:p-5"><SectionHead title="采购清单" action="查看物品与采购" onClick={() => onNavigate("items")} /><div className="mt-4 space-y-2">{pending.slice(0, 4).map((item) => <div key={item.id} className="flex items-center gap-3 rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}><span className="size-2 rounded-full" style={{ background: item.priority === 2 ? "var(--danger)" : "var(--warning)" }} /><div className="min-w-0 flex-1"><div className="truncate text-sm font-bold">{item.name}</div><div className="mt-0.5 text-xs muted">{item.quantity} {item.unit} · {item.category || "未分类"}</div></div></div>)}{pending.length === 0 && <EmptyState icon={Check} title="清单已完成" text="暂时没有需要采购的物品" />}</div></section></div>
     </div>
   </>;
 }
@@ -653,8 +661,7 @@ function ItemCard({ item, onEdit, onConsume, onRemainingChange, onDelete, onQr, 
   const contextItems: ContextMenuItem[] = [{ label: "编辑物品", icon: Pencil, onClick: onEdit }, ...(onCopy ? [{ label: "复制物品编号", icon: Copy, onClick: onCopy }] : []), { label: "显示二维码", icon: QrCode, onClick: onQr }, { label: isMedicine ? "AI 补全药品说明" : "AI 识别与建议", icon: Sparkles, onClick: onAi }];
   if (!compact && item.type === "CONSUMABLE" && !isLiquidConsumable(item)) contextItems.push({ label: "用掉 1 个单位", icon: Minus, onClick: onConsume, separatorBefore: true });
   if (onDelete) contextItems.push({ label: "移入回收站", icon: Trash2, onClick: onDelete, danger: true, separatorBefore: true });
-  return <><div onClick={onEdit} onContextMenu={context.onContextMenu} className={`group relative flex h-full min-w-0 cursor-pointer flex-col overflow-hidden rounded-xl border transition duration-200 hover:border-[color-mix(in_srgb,var(--primary)_38%,var(--border))] ${compact ? "p-3" : "min-h-40 p-4"}`} style={{ background: "var(--surface-solid)", borderColor: selected ? "var(--primary)" : "var(--border)", boxShadow: selected ? "0 0 0 2px color-mix(in srgb, var(--primary) 18%, transparent)" : undefined }}>
-    {onSelect && <button onClick={(event) => { event.stopPropagation(); onSelect(); }} className="absolute left-2 top-2 z-10 grid size-7 place-items-center rounded-full border-2 text-xs shadow-sm transition hover:scale-105" style={selected ? { background: "var(--primary)", borderColor: "var(--surface-solid)", color: "white", boxShadow: "0 0 0 2px var(--primary)" } : { background: "var(--surface-solid)", borderColor: "var(--border)" }} aria-label={selected ? "取消选择" : "选择物品"} title={selected ? "取消选择" : "选择物品"}>{selected ? <X size={14} strokeWidth={2.8} /> : <span className="sr-only">选择</span>}</button>}
+  return <><div onContextMenu={context.onContextMenu} className={`group relative flex h-full min-w-0 flex-col overflow-hidden rounded-xl border transition duration-200 hover:border-[color-mix(in_srgb,var(--primary)_38%,var(--border))] ${compact ? "p-3" : "min-h-40 p-4"}`} style={{ background: "var(--surface-solid)", borderColor: selected ? "var(--primary)" : "var(--border)", boxShadow: selected ? "0 0 0 2px color-mix(in srgb, var(--primary) 18%, transparent)" : undefined }}>
     <div className="flex min-w-0 flex-1 items-start gap-3">
       <div className={`${compact ? "size-12 text-xl" : "size-14 text-2xl"} grid shrink-0 place-items-center rounded-2xl bg-cover bg-center`} style={item.imageUrl ? { backgroundImage: `url(${item.imageUrl})` } : { background: "var(--surface-soft)" }}>{!item.imageUrl && emoji}</div>
       <div className="min-w-0 flex-1">
@@ -664,7 +671,7 @@ function ItemCard({ item, onEdit, onConsume, onRemainingChange, onDelete, onQr, 
       </div>
       {showRemaining && <RemainingLevel value={item.remainingPercent} onChange={onRemainingChange} />}
     </div>
-    <div className={`mt-auto flex h-8 items-center gap-2 ${compact ? "pt-2" : "pt-4"}`}><div className="flex min-w-0 flex-1 items-center">{!compact && <><span className="text-xl font-black leading-none">{item.quantity}</span><span className="ml-1 text-xs muted">{item.unit}</span></>}</div><div className="flex h-8 shrink-0 items-center gap-1.5"><button onClick={(event) => { event.stopPropagation(); onAi(); }} className="icon-action" aria-label={isMedicine ? "AI 补全药品说明" : "AI 物品助手"} title={isMedicine ? "AI 补全说明书、用量与适应症" : "AI 物品助手"}><Bot size={15} /></button><button onClick={(event) => { event.stopPropagation(); onQr(); }} className="icon-action" aria-label="显示二维码" title="显示二维码"><QrCode size={15} /></button>{!compact && item.type === "CONSUMABLE" && !isLiquidConsumable(item) && <button onClick={(event) => { event.stopPropagation(); onConsume(); }} className="btn-ghost flex h-8 min-h-8 items-center gap-1 px-2.5 py-0 text-xs"><Minus size={14} /> 用掉</button>}{!compact && onDelete && <button onClick={(event) => { event.stopPropagation(); onDelete(); }} className="icon-action hidden text-red-500 group-hover:inline-grid" aria-label="删除物品"><Trash2 size={14} /></button>}</div></div>
+    <div className={`mt-auto flex h-8 items-center gap-2 ${compact ? "pt-2" : "pt-4"}`}><div className="flex min-w-0 flex-1 items-center">{!compact && <><span className="text-xl font-black leading-none">{item.quantity}</span><span className="ml-1 text-xs muted">{item.unit}</span></>}</div><div className="flex h-8 shrink-0 items-center gap-1.5">{onSelect && <button onClick={onSelect} className="icon-action" style={selected ? { background: "var(--primary)", color: "white" } : undefined} aria-label={selected ? "取消选择" : "选择物品"} title={selected ? "取消选择" : "选择物品"}>{selected ? <X size={15} /> : <CheckSquare size={15} />}</button>}<button onClick={onEdit} className="icon-action" aria-label="编辑物品" title="编辑物品"><Pencil size={15} /></button><button onClick={onAi} className="icon-action" aria-label={isMedicine ? "AI 补全药品说明" : "AI 物品助手"} title={isMedicine ? "AI 补全说明书、用量与适应症" : "AI 物品助手"}><Bot size={15} /></button><button onClick={onQr} className="icon-action" aria-label="显示二维码" title="显示二维码"><QrCode size={15} /></button>{!compact && item.type === "CONSUMABLE" && !isLiquidConsumable(item) && <button onClick={onConsume} className="btn-ghost flex h-8 min-h-8 items-center gap-1 px-2.5 py-0 text-xs"><Minus size={14} /> 用掉</button>}{!compact && onDelete && <button onClick={onDelete} className="icon-action hidden text-red-500 group-hover:inline-grid" aria-label="删除物品"><Trash2 size={14} /></button>}</div></div>
   </div><ContextMenu menu={context.menu} items={contextItems} onClose={context.close} /></>;
 }
 

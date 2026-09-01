@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/api";
+import { requireUser } from "@/lib/account-auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    await requireUser();
     const now = new Date();
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const sixMonthStart = new Date(now.getFullYear(), now.getMonth() - 5, 1);

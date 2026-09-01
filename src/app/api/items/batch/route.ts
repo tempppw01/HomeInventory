@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { apiError } from "@/lib/api";
+import { apiError, requireWritableUser } from "@/lib/api";
 import { createItemCode } from "@/lib/item-code";
 import { batchItemSchema } from "@/lib/validation";
 import { isLiquidConsumable } from "@/lib/item-metrics";
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await requireWritableUser();
     const body = await request.json().catch(() => ({}));
     if (!Array.isArray(body.items) || body.items.length === 0) {
       return NextResponse.json({ error: "请至少提供一件物品" }, { status: 400 });
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
       for (const data of parsed) {
         const normalized = data.type === "DURABLE" ? { ...data, expiryDate: null } : data;
         const item = await tx.item.create({ data: { ...normalized, itemCode: createItemCode() }, include: { location: true } });
-        await tx.activityLog.create({ data: { action: "CREATE", itemId: item.id, itemName: item.name, detail: "AI 批量录入物品" } });
+        await tx.activityLog.create({ data: { action: "CREATE", itemId: item.id, itemName: item.name, userId: user.id, detail: "AI 批量录入物品" } });
         records.push(item);
       }
       return records;

@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { apiError } from "@/lib/api";
+import { apiError, requireAdminUser } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
 /** Export user data without credentials or AI/OSS secrets. */
 export async function GET() {
   try {
+    await requireAdminUser();
     const [items, locations, shopping, priceRecords, members, activities] = await Promise.all([
       prisma.item.findMany({ orderBy: { createdAt: "asc" } }),
       prisma.location.findMany({ orderBy: { createdAt: "asc" } }),

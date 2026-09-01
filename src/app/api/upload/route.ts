@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import OSS from "ali-oss";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { apiError } from "@/lib/api";
+import { apiError, requireWritableUser } from "@/lib/api";
 import { getOssConfig } from "@/lib/oss";
 
 export const runtime = "nodejs";
@@ -24,7 +24,9 @@ function safeLocalPath(root: string, objectName: string) {
 }
 
 export async function POST(request: NextRequest) {
+  let localObject: string | null = null;
   try {
+    await requireWritableUser();
     const config = await getOssConfig();
     if (!config) return NextResponse.json({ error: "请先在设置中配置图片存储方式" }, { status: 400 });
 
@@ -41,7 +43,7 @@ export async function POST(request: NextRequest) {
     let url = "";
 
     if (config.storageMode === "local" || config.storageMode === "both") {
-      const localObject = safeLocalPath(config.localDirectory, objectName);
+      localObject = safeLocalPath(config.localDirectory, objectName);
       await mkdir(path.dirname(localObject), { recursive: true });
       await writeFile(localObject, bytes, { flag: "wx" });
       url = `/api/uploads/${objectName}`;
@@ -56,6 +58,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ url, objectName, storageMode: config.storageMode });
   } catch (error) {
+    if (localObject) await unlink(localObject).catch(() => undefined);
     return apiError(error);
   }
 }

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiError } from "@/lib/api";
+import { requireUser } from "@/lib/account-auth";
 import { anthropicMessagesUrl, chatCompletionsUrl, getAiConfig } from "@/lib/ai";
 import { AiImageError, compressAiImageDataUrl } from "@/lib/ai-image";
+import { localUploadDataUrl } from "@/lib/oss";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -13,8 +15,9 @@ type ItemDraft = { name: string; category: string; type: "DURABLE" | "CONSUMABLE
 async function prepareMessageImages(message: Message): Promise<Message> {
   const attachments = await Promise.all((message.attachments || []).map(async (attachment) => {
     if (attachment.kind !== "image" || !attachment.dataUrl) return attachment;
-    if (!attachment.dataUrl.startsWith("data:")) return attachment;
-    return { ...attachment, dataUrl: await compressAiImageDataUrl(attachment.dataUrl) };
+    const dataUrl = attachment.dataUrl.startsWith("data:") ? attachment.dataUrl : await localUploadDataUrl(attachment.dataUrl);
+    if (!dataUrl) return attachment;
+    return { ...attachment, dataUrl: await compressAiImageDataUrl(dataUrl) };
   }));
   return { ...message, attachments };
 }
@@ -47,6 +50,7 @@ function extractItemDraft(answer: string): { answer: string; itemDraft?: ItemDra
 
 export async function POST(request: NextRequest) {
   try {
+    await requireUser();
     const body = await request.json().catch(() => ({}));
     const messages: Message[] = Array.isArray(body.messages) ? body.messages.filter((entry: unknown): entry is Message => Boolean(entry && typeof entry === "object" && ["user", "assistant"].includes((entry as Message).role) && typeof (entry as Message).content === "string")).slice(-12).map((message: Message) => ({ ...message, attachments: Array.isArray(message.attachments) ? message.attachments.filter((attachment: Attachment) => attachment && typeof attachment === "object" && ["image", "text", "file"].includes(attachment.kind)).slice(0, 4) : [] })) : [];
     const question = messages.at(-1)?.content?.trim();

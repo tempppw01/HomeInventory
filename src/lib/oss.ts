@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import path from "node:path";
-import { unlink } from "node:fs/promises";
+import { readFile, unlink } from "node:fs/promises";
 import OSS from "ali-oss";
 
 export type OssConfig = {
@@ -41,6 +41,25 @@ export async function deleteStoredImage(imageUrl: string | null | undefined) {
         await client.delete(key).catch(() => undefined);
       }
     }
+  }
+}
+
+/** Converts a protected local upload URL to an in-process data URL for AI providers. */
+export async function localUploadDataUrl(imageUrl: string | null | undefined) {
+  if (!imageUrl?.startsWith("/api/uploads/")) return null;
+  const config = await getOssConfig();
+  if (!config || (config.storageMode !== "local" && config.storageMode !== "both")) return null;
+  const objectName = imageUrl.slice("/api/uploads/".length);
+  const root = path.resolve(config.localDirectory);
+  const target = path.resolve(root, objectName);
+  if (!target.startsWith(`${root}${path.sep}`)) return null;
+  const extension = path.extname(target).slice(1).toLowerCase();
+  const mime = ({ jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif" } as Record<string, string>)[extension];
+  if (!mime) return null;
+  try {
+    return `data:${mime};base64,${(await readFile(target)).toString("base64")}`;
+  } catch {
+    return null;
   }
 }
 

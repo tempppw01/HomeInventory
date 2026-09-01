@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { itemSchema } from "@/lib/validation";
-import { apiError } from "@/lib/api";
+import { apiError, requireWritableUser } from "@/lib/api";
+import { requireUser } from "@/lib/account-auth";
 import { createItemCode } from "@/lib/item-code";
 import { isLiquidConsumable, normalizeItemQuantity } from "@/lib/item-metrics";
 
 export async function GET(request: NextRequest) {
   try {
+    await requireUser();
     const search = request.nextUrl.searchParams.get("q")?.trim();
     const deleted = request.nextUrl.searchParams.get("deleted") === "1";
     const exportData = request.nextUrl.searchParams.get("export") === "1";
@@ -25,6 +27,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await requireWritableUser();
     const { recordPurchase, purchaseStore, ...parsed } = itemSchema.parse(await request.json());
     const normalized = { ...parsed, quantity: normalizeItemQuantity(parsed.quantity, parsed.unit) };
     const data = normalized.type === "DURABLE" ? { ...normalized, expiryDate: null } : normalized;
@@ -33,7 +36,7 @@ export async function POST(request: NextRequest) {
       if (recordPurchase && data.price != null) {
         await tx.priceRecord.create({ data: { itemId: created.id, itemName: created.name, category: created.category, unitPrice: data.price, quantity: Math.max(data.quantity, 1), totalPrice: data.price * Math.max(data.quantity, 1), purchasedAt: data.purchaseDate || new Date(), store: purchaseStore } });
       }
-      await tx.activityLog.create({ data: { action: "CREATE", itemId: created.id, itemName: created.name, detail: "录入物品" } });
+      await tx.activityLog.create({ data: { action: "CREATE", itemId: created.id, itemName: created.name, userId: user.id, detail: "录入物品" } });
       return created;
     });
 

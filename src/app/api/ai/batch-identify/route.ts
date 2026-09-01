@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { anthropicMessagesUrl, chatCompletionsUrl, getAiConfig } from "@/lib/ai";
 import { apiError } from "@/lib/api";
+import { requireUser } from "@/lib/account-auth";
 
 export const runtime = "nodejs";
 const maxImages = 8;
@@ -15,6 +16,7 @@ function parseJson(text: string): unknown[] {
 
 export async function POST(request: NextRequest) {
   try {
+    await requireUser();
     const body = await request.json().catch(() => ({}));
     const mode = body.mode === "receipt" ? "receipt" : "items";
     const images = Array.isArray(body.images) ? body.images.filter((image: unknown) => typeof image === "object" && image !== null && typeof (image as Record<string, unknown>).dataUrl === "string").slice(0, mode === "receipt" ? 1 : maxImages) as { dataUrl: string; fileName?: string }[] : [];

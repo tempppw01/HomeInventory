@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { apiError } from "@/lib/api";
+import { apiError, requireAdminUser } from "@/lib/api";
 import { modelsUrl } from "@/lib/ai";
 import { providerForBaseUrl } from "@/lib/ai-providers";
 import { prisma } from "@/lib/prisma";
@@ -33,6 +33,7 @@ function modelId(value: unknown) {
 
 export async function POST(request: NextRequest) {
   try {
+    await requireAdminUser();
     const input = aiModelsSchema.parse(await request.json());
     const stored = await prisma.aiSetting.findUnique({ where: { id: "default" } });
     const baseUrl = (process.env.OPENAI_BASE_URL || input.baseUrl || stored?.baseUrl || "").trim();

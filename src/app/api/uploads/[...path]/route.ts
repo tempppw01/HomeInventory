@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { getOssConfig } from "@/lib/oss";
+import { requireUser } from "@/lib/account-auth";
 
 export const runtime = "nodejs";
 
 const contentTypes: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif" };
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+  try { await requireUser(); } catch { return new NextResponse("Unauthorized", { status: 401 }); }
   const config = await getOssConfig();
   if (!config || (config.storageMode !== "local" && config.storageMode !== "both")) return new NextResponse("Not found", { status: 404 });
   const route = await params;

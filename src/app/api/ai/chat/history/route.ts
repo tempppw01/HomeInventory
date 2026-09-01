@@ -42,14 +42,20 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   try {
     const user = await requireUser();
-    const messages = asMessages((await request.json().catch(() => ({}))).messages);
+    const body = await request.json().catch(() => ({}));
+    const messages = asMessages(body.messages);
+    const expectedUpdatedAt = typeof body.expectedUpdatedAt === "string" ? new Date(body.expectedUpdatedAt) : null;
+    const latest = await prisma.aiChatMessage.findFirst({ where: { userId: user.id }, orderBy: { updatedAt: "desc" } });
+    if (expectedUpdatedAt && latest && latest.updatedAt.getTime() > expectedUpdatedAt.getTime()) {
+      const current = await prisma.aiChatMessage.findMany({ where: { userId: user.id }, orderBy: { position: "asc" }, take: 40 });
+      return NextResponse.json({ error: "聊天记录已在其他设备更新", messages: current.map((row) => ({ role: row.role, content: row.content, attachments: parse<Attachment[]>(row.attachments) || [], itemDraft: parse<ItemDraft>(row.itemDraft) })), updatedAt: latest.updatedAt.toISOString() }, { status: 409 });
+    }
     await prisma.$transaction(async (tx) => {
       await tx.aiChatMessage.deleteMany({ where: { userId: user.id } });
       if (messages.length) await tx.aiChatMessage.createMany({ data: messages.map((message, position) => ({ userId: user.id, position, role: message.role, content: message.content, attachments: message.attachments?.length ? JSON.stringify(message.attachments) : null, itemDraft: message.itemDraft ? JSON.stringify(message.itemDraft) : null })) });
     });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, updatedAt: new Date().toISOString() });
   } catch (error) {
     return apiError(error);
   }
 }
-

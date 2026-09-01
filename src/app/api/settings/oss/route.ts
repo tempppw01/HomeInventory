@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { apiError } from "@/lib/api";
+import { apiError, requireAdminUser } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { getOssConfig, ossIsManagedByEnvironment } from "@/lib/oss";
 import { ossSettingSchema } from "@/lib/validation";
@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    await requireAdminUser();
     const config = await getOssConfig();
     return NextResponse.json({
       configured: Boolean(config),
@@ -29,6 +30,7 @@ export async function GET() {
 
 export async function PATCH(request: NextRequest) {
   try {
+    await requireAdminUser();
     if (ossIsManagedByEnvironment()) {
       return NextResponse.json({ error: "OSS 当前由环境变量管理，请在部署平台修改" }, { status: 409 });
     }
