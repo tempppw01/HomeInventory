@@ -22,6 +22,7 @@ import { dailyUsageCost, isCountUnit, isLiquidConsumable, normalizeItemQuantity 
 import { itemAiHighlights } from "@/lib/item-ai";
 import { APP_VERSION } from "@/lib/version";
 import { ContextMenu, useContextMenu, type ContextMenuItem } from "@/components/context-menu";
+import { isMedicineCategory, MEDICINE_CATEGORIES, medicineCategoryLabel, suggestMedicineCategory } from "@/lib/categories";
 
 type View = "dashboard" | "items" | "locations" | "audit" | "settings" | "about";
 type ThemeMode = "light" | "dark" | "system";
@@ -64,7 +65,7 @@ const navItems = [
 const mobileNavItems = [...navItems.filter((item) => item.id !== "audit"), { id: "settings" as View, label: "设置", icon: Settings }];
 
 const iconMap = { Package, CookingPot, Sofa, Bath, Warehouse };
-const categories = ["日用", "食品", "饮品", "清洁", "家电", "数码", "衣物", "医药", "户外", "其他"];
+const categories = ["日用", "食品", "饮品", "清洁", "家电", "数码", "衣物", "医药", ...MEDICINE_CATEGORIES, "户外", "其他"];
 const units = ["件", "个", "盒", "瓶", "袋", "卷", "包", "台", "kg", "L", "ml"];
 const commonItemTemplates = [
   { keywords: ["冷冻", "虾", "饺子", "雪糕", "冰淇淋"], category: "食品", type: "CONSUMABLE" as ItemType, locationKeywords: ["冷冻", "冰箱"] },
@@ -124,7 +125,7 @@ function expiryDateLabel(item: Item, now = Date.now()) {
 }
 
 function expiryAdvice(item: Item) {
-  if (item.category === "医药") return "核对后处理";
+  if (isMedicineCategory(item.category)) return "核对后处理";
   if (["食品", "饮品"].includes(item.category)) return "优先食用";
   if (item.category === "清洁") return "尽快使用";
   return "尽快处理";
@@ -221,7 +222,8 @@ export function InventoryApp() {
   }, [refresh]);
   const changeTypeFilter = useCallback((nextFilter: ItemQuickFilter) => {
     setTypeFilter(nextFilter);
-    if (nextFilter === "MEDICINE") setCategoryFilter("医药");
+    // 类型切换后重置分类，避免从“医药”切回“全部”时仍被旧分类条件卡住。
+    setCategoryFilter(nextFilter === "MEDICINE" ? "MEDICINE" : "ALL");
     void refresh();
   }, [refresh]);
   const changeCategoryFilter = useCallback((nextFilter: string) => {
@@ -302,8 +304,8 @@ export function InventoryApp() {
     const term = search.toLowerCase().trim();
     return (data?.items ?? []).filter((item) =>
       item.quantity > 0 &&
-      (typeFilter === "ALL" || (typeFilter === "MEDICINE" ? item.category === "医药" : item.type === typeFilter)) &&
-      (categoryFilter === "ALL" || item.category === categoryFilter) &&
+      (typeFilter === "ALL" || (typeFilter === "MEDICINE" ? isMedicineCategory(item.category) : item.type === typeFilter)) &&
+      (categoryFilter === "ALL" || (categoryFilter === "MEDICINE" ? isMedicineCategory(item.category) : item.category === categoryFilter)) &&
       (!term || [item.name, item.itemCode, item.category, item.location?.name].some((value) => value?.toLowerCase().includes(term))),
     );
   }, [categoryFilter, data, search, typeFilter]);
@@ -315,6 +317,19 @@ export function InventoryApp() {
   const totalValue = (data?.items ?? []).reduce((sum, item) => sum + (item.price ?? 0) * item.quantity, 0);
 
   const openEdit = (item: Item) => { setEditing(item); setModal("item"); };
+  const openDetail = (item: Item) => { window.location.assign(`/items/${encodeURIComponent(item.id)}`); };
+  const uploadItemImage = async (item: Item, file?: File) => {
+    if (!file) return;
+    try {
+      const compressed = await compressImage(file);
+      const form = new FormData(); form.append("file", compressed);
+      const response = await fetch("/api/upload", { method: "POST", body: form });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "上传失败");
+      await request(`/api/items/${item.id}`, { method: "PATCH", body: JSON.stringify({ imageUrl: result.url }) });
+      setToast(`${item.name} 的图片已更新`); await refresh();
+    } catch (error) { setToast(error instanceof Error ? error.message : "图片上传失败"); }
+  };
   const duplicateItem = async (item: Item) => {
     try {
       await request<Item>("/api/items", { method: "POST", body: JSON.stringify({
@@ -429,9 +444,9 @@ export function InventoryApp() {
         <AnimatePresence mode="wait">
           <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: .22 }}>
             {loading ? <LoadingView /> : view === "dashboard" ? (
-              <DashboardView data={{ ...data!, items: data!.items.filter((item) => item.quantity > 0) }} now={now} lowStock={lowStock} expiring={expiring} expired={expired} pending={pendingShopping} totalValue={totalValue} onNavigate={openView} onEdit={openEdit} onDuplicate={duplicateItem} onConsume={consume} onDelete={removeItem} onAddRestock={addRestockSuggestion} onQr={setQrItem} onAi={setAiItem} onAlerts={() => setModal("notifications")} />
+              <DashboardView data={{ ...data!, items: data!.items.filter((item) => item.quantity > 0) }} now={now} lowStock={lowStock} expiring={expiring} expired={expired} pending={pendingShopping} totalValue={totalValue} onNavigate={openView} onEdit={openEdit} onOpenDetail={openDetail} onImageUpload={uploadItemImage} onDuplicate={duplicateItem} onConsume={consume} onDelete={removeItem} onAddRestock={addRestockSuggestion} onQr={setQrItem} onAi={setAiItem} onAlerts={() => setModal("notifications")} />
             ) : view === "items" ? (
-              <ItemsView allItems={data!.items.filter((item) => item.quantity > 0)} locations={data!.locations} items={filteredItems} shopping={data!.shopping} search={search} setSearch={setSearch} filter={typeFilter} setFilter={changeTypeFilter} categoryFilter={categoryFilter} setCategoryFilter={changeCategoryFilter} onEdit={openEdit} onDuplicate={duplicateItem} onConsume={consume} onRemainingChange={updateRemaining} onDelete={removeItem} onQr={setQrItem} onAi={setAiItem} onPrint={setPrintItems} onToast={setToast} onCopy={(item) => copyText(item.itemCode || item.id, "物品编号已复制")} onToggleShopping={toggleShopping} onAddShopping={() => setModal("shopping")} onDeleteShopping={async (id) => { await request(`/api/shopping/${id}`, { method: "DELETE" }); await refresh(); }} />
+              <ItemsView allItems={data!.items.filter((item) => item.quantity > 0)} locations={data!.locations} items={filteredItems} shopping={data!.shopping} search={search} setSearch={setSearch} filter={typeFilter} setFilter={changeTypeFilter} categoryFilter={categoryFilter} setCategoryFilter={changeCategoryFilter} onEdit={openEdit} onOpenDetail={openDetail} onImageUpload={uploadItemImage} onDuplicate={duplicateItem} onConsume={consume} onRemainingChange={updateRemaining} onDelete={removeItem} onQr={setQrItem} onAi={setAiItem} onPrint={setPrintItems} onToast={setToast} onCopy={(item) => copyText(item.itemCode || item.id, "物品编号已复制")} onToggleShopping={toggleShopping} onAddShopping={() => setModal("shopping")} onDeleteShopping={async (id) => { await request(`/api/shopping/${id}`, { method: "DELETE" }); await refresh(); }} />
             ) : view === "locations" ? (
               <LocationsView locations={data!.locations} items={data!.items} onAdd={() => { setEditingLocation(null); setModal("location"); }} onOpen={(name) => { setSearch(name); openView("items"); }} onEdit={(location) => { setEditingLocation(location); setModal("location"); }} onToast={setToast} />
             ) : view === "audit" ? (
@@ -540,7 +555,7 @@ function PageTitle({ title, text, action }: { title: string; text: string; actio
   return <div className="mb-4 flex items-end justify-between gap-3 sm:mb-5"><div><h1 className="m-0 text-2xl font-black tracking-tight sm:text-3xl">{title}</h1><p className="mb-0 mt-1.5 text-sm muted">{text}</p></div>{action}</div>;
 }
 
-function DashboardView({ data, now, lowStock, expiring, expired, pending, totalValue, onNavigate, onEdit, onDuplicate, onConsume, onDelete, onAddRestock, onQr, onAi, onAlerts }: { data: DashboardData; now: number; lowStock: Item[]; expiring: Item[]; expired: Item[]; pending: ShoppingItem[]; totalValue: number; onNavigate: (v: View) => void; onEdit: (i: Item) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onDelete: (i: Item) => void; onAddRestock: (i: Item) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onAlerts: () => void }) {
+function DashboardView({ data, now, lowStock, expiring, expired, pending, totalValue, onNavigate, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onDelete, onAddRestock, onQr, onAi, onAlerts }: { data: DashboardData; now: number; lowStock: Item[]; expiring: Item[]; expired: Item[]; pending: ShoppingItem[]; totalValue: number; onNavigate: (v: View) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onDelete: (i: Item) => void; onAddRestock: (i: Item) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onAlerts: () => void }) {
   const [recentView, setRecentView] = useState<"cards" | "list">("list");
   useEffect(() => {
     const saved = localStorage.getItem("home-inventory-recent-view-v2");
@@ -678,10 +693,14 @@ function ItemsView({ allItems, locations, items, shopping, search, setSearch, fi
   const bulk = async (body: Record<string, unknown>, successMessage = "批量更新完成") => { try { await request("/api/items/bulk", { method: "PATCH", body: JSON.stringify({ ...body, ids: [...selected] }) }); setSelected(new Set()); setBulkLocationOpen(false); onToast(successMessage); } catch (error) { onToast(error instanceof Error ? error.message : "批量更新失败"); } };
   const bulkDelete = async () => { try { await request("/api/items/bulk", { method: "DELETE", body: JSON.stringify({ ids: [...selected] }) }); setSelected(new Set()); onToast("已移入回收站"); } catch (error) { onToast(error instanceof Error ? error.message : "批量删除失败"); } };
   const pendingShopping = shopping.filter((item) => item.status === "PENDING");
-  const categoryOptions = filter === "MEDICINE" ? ["医药"] : ["ALL", ...Array.from(new Set([...categories.filter((category) => category !== "医药"), ...allItems.map((item) => item.category).filter((category) => category && category !== "医药")]))];
+  const presentCategories = Array.from(new Set(allItems.map((item) => item.category).filter(Boolean)));
+  const medicineCategories = presentCategories.filter(isMedicineCategory);
+  const categoryOptions = filter === "MEDICINE"
+    ? ["MEDICINE", ...medicineCategories]
+    : ["ALL", ...presentCategories.filter((category) => !isMedicineCategory(category))];
   return <><PageTitle title="物品与采购" text="知道家里有什么，也记得还要买什么。" action={<button onClick={onAddShopping} className="btn-ghost flex items-center gap-1.5 text-xs" aria-label="添加采购项"><ShoppingBasket size={15} /><span className="desktop-only">添加采购项</span></button>} />
     <div className="mb-4 space-y-3"><div className="md:hidden"><SearchBox items={allItems} value={search} onChange={setSearch} onSelect={(item) => setSearch(item.name)} placeholder="搜索名称或物品编号…" /></div>{selected.size === 0 ? <div className="flex min-w-0 items-center gap-3 overflow-x-auto pb-1"><div className="flex shrink-0 rounded-xl p-1" style={{ background: "var(--surface-soft)" }}>{([ ["ALL", "全部"], ["DURABLE", "耐用品"], ["CONSUMABLE", "消耗品"], ["MEDICINE", "医药"] ] as const).map(([id, label]) => <button key={id} onClick={() => setFilter(id)} className="rounded-lg px-3 py-1.5 text-sm font-bold transition" style={filter === id ? { background: "var(--surface-solid)", color: "var(--primary)", boxShadow: "var(--shadow-sm)" } : { color: "var(--muted)" }}>{label}</button>)}</div><span className="shrink-0 text-xs muted">{items.length} 件</span><span className="h-5 w-px shrink-0" style={{ background: "var(--border)" }} /><button onClick={selectVisible} disabled={items.length === 0} className="flex shrink-0 items-center gap-1.5 text-xs font-bold muted transition hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"><CheckSquare size={15} />选择当前结果</button></div> : <div className="flex min-w-0 items-center gap-2 overflow-x-auto pb-1"><span className="shrink-0 text-xs font-black" style={{ color: "var(--primary)" }}>已选 {selected.size} 件</span><span className="h-5 w-px shrink-0" style={{ background: "var(--border)" }} /><button onClick={() => bulk({ category: items.find((item) => selected.has(item.id))?.category || "日用" })} className="btn-ghost shrink-0 px-3 py-1.5 text-xs">沿用分类</button><button onClick={() => { setBulkLocationId(selectedItems[0]?.locationId ?? ""); setBulkLocationOpen(true); }} className="btn-ghost shrink-0 px-3 py-1.5 text-xs">批量移动位置</button><button onClick={() => onPrint(selectedItems)} className="btn-primary flex shrink-0 items-center gap-1.5 px-3 py-1.5 text-xs"><Printer size={15} />打印二维码</button><button onClick={bulkDelete} className="btn-ghost shrink-0 px-3 py-1.5 text-xs text-red-500">移入回收站</button><button onClick={() => setSelected(new Set())} className="shrink-0 px-2 py-1.5 text-xs font-bold muted hover:text-[var(--foreground)]">取消</button></div>}</div>
-    <div className="browse-layout"><nav className="browse-rail" aria-label="物品分类">{categoryOptions.map((category) => { const count = category === "ALL" ? allItems.length : allItems.filter((item) => item.category === category).length; return <button key={category} type="button" className="browse-rail-item" data-active={categoryFilter === category} onClick={() => setCategoryFilter(category)}><span>{category === "ALL" ? "全部分类" : category}</span><span className="browse-rail-count">{count}</span></button>; })}</nav><div className="min-w-0">{items.length ? <><p className="mb-3 text-xs muted">需要批量操作时，点击卡片左上角的选择圆点即可。</p><div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">{items.map((item, index) => <motion.div className="h-full min-w-0" key={item.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index * .025, .2) }}><ItemCard item={item} selected={selected.has(item.id)} onSelect={() => toggle(item.id)} onEdit={() => onEdit(item)} onDuplicate={() => void onDuplicate(item)} onConsume={() => onConsume(item)} onRemainingChange={(remainingPercent) => onRemainingChange(item, remainingPercent)} onDelete={() => onDelete(item)} onQr={() => onQr(item)} onAi={() => onAi(item)} onCopy={() => onCopy(item)} /></motion.div>)}</div></> : <div className="surface rounded-3xl py-16"><EmptyState icon={Search} title="没有找到物品" text="换个关键词或筛选条件试试" /></div>}</div></div>
+    <div className="browse-layout"><nav className="browse-rail" aria-label="物品分类">{categoryOptions.map((category) => { const count = category === "ALL" ? allItems.length : category === "MEDICINE" ? allItems.filter((item) => isMedicineCategory(item.category)).length : allItems.filter((item) => item.category === category).length; return <button key={category} type="button" className="browse-rail-item" data-active={categoryFilter === category} onClick={() => setCategoryFilter(category)}><span>{category === "ALL" ? "全部分类" : category === "MEDICINE" ? "医药（按用途）" : isMedicineCategory(category) ? medicineCategoryLabel(category) : category}</span><span className="browse-rail-count">{count}</span></button>; })}</nav><div className="min-w-0">{items.length ? <><p className="mb-3 text-xs muted">需要批量操作时，点击卡片左上角的选择圆点即可。</p><div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">{items.map((item, index) => <motion.div className="h-full min-w-0" key={item.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index * .025, .2) }}><ItemCard item={item} selected={selected.has(item.id)} onSelect={() => toggle(item.id)} onEdit={() => onEdit(item)} onDuplicate={() => void onDuplicate(item)} onConsume={() => onConsume(item)} onRemainingChange={(remainingPercent) => onRemainingChange(item, remainingPercent)} onDelete={() => onDelete(item)} onQr={() => onQr(item)} onAi={() => onAi(item)} onCopy={() => onCopy(item)} /></motion.div>)}</div></> : <div className="surface rounded-3xl py-16"><EmptyState icon={Search} title="没有找到物品" text="换个关键词或筛选条件试试" /></div>}</div></div>
     <section className="mt-7 border-t pt-5" style={{ borderColor: "var(--border)" }}><div className="mb-3"><h2 className="m-0 text-base font-black">采购清单</h2><p className="mb-0 mt-1 text-xs muted">{pendingShopping.length ? `${pendingShopping.length} 项等你顺路带回家` : "暂时没有需要采购的东西"}</p></div>{pendingShopping.length ? <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{pendingShopping.map((item) => <ShoppingRow key={item.id} item={item} onToggle={() => onToggleShopping(item)} onDelete={() => onDeleteShopping(item.id)} />)}</div> : <p className="mb-0 text-xs muted">需要添置时，使用页面右上角的采购按钮记下来。</p>}</section>
     {bulkLocationOpen && <Modal title="批量移动位置" subtitle={`已选 ${selected.size} 件物品，统一移动到新的存放位置。`} onClose={() => setBulkLocationOpen(false)}><div className="space-y-4"><Field label="新的存放位置"><select autoFocus className="input" value={bulkLocationId} onChange={(e) => setBulkLocationId(e.target.value)}>{[{ id: "", name: "未设置 / 清空位置" }, ...locations].map((location) => <option key={location.id || "empty"} value={location.id}>{location.name}</option>)}</select></Field><p className="m-0 text-xs muted">确认后会更新全部已选物品的存放位置。</p><div className="flex gap-3 pt-2"><button type="button" onClick={() => setBulkLocationOpen(false)} className="btn-ghost flex-1">取消</button><button type="button" onClick={() => void bulk({ locationId: bulkLocationId || null }, "批量移动位置已完成")} className="btn-primary flex-1">确认移动</button></div></div></Modal>}
   </>;
@@ -689,10 +708,10 @@ function ItemsView({ allItems, locations, items, shopping, search, setSearch, fi
 
 function ItemCard({ item, onEdit, onDuplicate, onConsume, onRemainingChange, onDelete, onQr, onAi, onCopy, onSelect, selected = false, compact = false }: { item: Item; onEdit: () => void; onDuplicate?: () => void; onConsume: () => void; onRemainingChange?: (remainingPercent: number) => void; onDelete?: () => void; onQr: () => void; onAi: () => void; onCopy?: () => void; onSelect?: () => void; selected?: boolean; compact?: boolean }) {
   const low = item.type === "CONSUMABLE" && ((item.minQuantity > 0 && item.quantity <= item.minQuantity) || (isLiquidConsumable(item) && item.remainingPercent <= 20));
-  const emoji = ({ 食品: "🍚", 饮品: "🥛", 清洁: "🧴", 家电: "📺", 数码: "💻", 衣物: "👕", 医药: "💊", 户外: "⛺" } as Record<string, string>)[item.category] || "📦";
+  const emoji = isMedicineCategory(item.category) ? "💊" : ({ 食品: "🍚", 饮品: "🥛", 清洁: "🧴", 家电: "📺", 数码: "💻", 衣物: "👕", 户外: "⛺" } as Record<string, string>)[item.category] || "📦";
   const dailyCost = dailyUsageCost(item);
   const ai = itemAiHighlights(item);
-  const isMedicine = item.category === "医药";
+  const isMedicine = isMedicineCategory(item.category);
   const showRemaining = !compact && isLiquidConsumable(item) && onRemainingChange;
   const context = useContextMenu();
   const contextItems: ContextMenuItem[] = [{ label: "编辑物品", icon: Pencil, onClick: onEdit }, ...(onDuplicate ? [{ label: "复制为新物品", icon: Copy, onClick: onDuplicate }] : []), ...(onCopy ? [{ label: "复制物品编号", icon: Copy, onClick: onCopy }] : []), { label: "显示二维码", icon: QrCode, onClick: onQr }, { label: isMedicine ? "AI 补全药品说明" : "AI 识别与建议", icon: Sparkles, onClick: onAi }];
@@ -870,7 +889,7 @@ function ItemModal({ locations, allItems, item, onClose, onSaved }: { locations:
     if (!commonTemplate) return;
     setDraft((current) => ({
       ...current,
-      category: current.category === "日用" ? commonTemplate.category : current.category,
+      category: current.category === "日用" ? (commonTemplate.category === "医药" ? suggestMedicineCategory(current.name) : commonTemplate.category) : current.category,
       type: current.type === "DURABLE" ? commonTemplate.type : current.type,
       locationId: !current.locationId && suggestedLocation ? suggestedLocation.id : current.locationId,
     }));
@@ -906,7 +925,7 @@ function ItemModal({ locations, allItems, item, onClose, onSaved }: { locations:
   const set = (key: keyof ItemDraft, value: string | number) => setDraft((old) => ({ ...old, [key]: value }));
   const uploadImage = async (file?: File) => { if (!file) return; setUploading(true); setError(""); try { const compressed = await compressImage(file); const form = new FormData(); form.append("file", compressed); const response = await fetch("/api/upload", { method: "POST", body: form }); const result = await response.json(); if (!response.ok) throw new Error(result.error || "上传失败"); set("imageUrl", result.url); } catch (e) { setError(e instanceof Error ? e.message : "上传失败"); } finally { setUploading(false); } };
   const applyImageUrl = () => { const value = imageUrlDraft.trim(); if (!value) { set("imageUrl", ""); setError(""); return; } try { const url = new URL(value); if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error(); set("imageUrl", value); setError(""); } catch { setError("请粘贴以 http:// 或 https:// 开头的图片地址"); } };
-  const applyAi = (analysis: AiAnalysis) => setDraft((old) => { const type = analysis.type || old.type; return { ...old, name: analysis.name || old.name, category: analysis.category || old.category, type, unit: analysis.unit || old.unit, expiryDate: type === "DURABLE" ? "" : analysis.suggestedExpiryDate || old.expiryDate, notes: analysis.suggestedNotes || old.notes, aiSummary: analysis.summary || old.aiSummary, aiStorageAdvice: analysis.storageAdvice || old.aiStorageAdvice, aiUsageAdvice: analysis.usageAdvice || old.aiUsageAdvice, aiReplenishmentAdvice: analysis.replenishmentAdvice || old.aiReplenishmentAdvice }; });
+  const applyAi = (analysis: AiAnalysis) => setDraft((old) => { const type = analysis.type || old.type; const name = analysis.name || old.name; const rawCategory = analysis.category || old.category; const category = isMedicineCategory(rawCategory) ? (rawCategory === "医药" ? suggestMedicineCategory(name) : rawCategory) : rawCategory; return { ...old, name, category, type, unit: analysis.unit || old.unit, expiryDate: type === "DURABLE" ? "" : analysis.suggestedExpiryDate || old.expiryDate, notes: analysis.suggestedNotes || old.notes, aiSummary: analysis.summary || old.aiSummary, aiStorageAdvice: analysis.storageAdvice || old.aiStorageAdvice, aiUsageAdvice: analysis.usageAdvice || old.aiUsageAdvice, aiReplenishmentAdvice: analysis.replenishmentAdvice || old.aiReplenishmentAdvice }; });
   const runAi = async (action: "identify" | "shelf_life") => { setAiLoading(true); setError(""); try { const result = await analyzeItem({ action, imageUrl: draft.imageUrl || null, hint: draft.name, item: { name: draft.name, category: draft.category, type: draft.type, quantity: draft.quantity, minQuantity: draft.minQuantity, unit: draft.unit, purchaseDate: draft.purchaseDate || null, expiryDate: draft.expiryDate || null, notes: draft.notes || null } }); applyAi(result.analysis); if (action === "shelf_life") setMoreOpen(true); } catch (e) { setError(e instanceof Error ? e.message : "AI 分析失败"); } finally { setAiLoading(false); } };
   const submit = async (event: FormEvent) => { event.preventDefault(); const parsedPrice = draft.price === "" ? null : moneyValue(draft.price); if (draft.price !== "" && (parsedPrice === null || parsedPrice < 0)) { setError("请输入正确的购买单价，例如 19.90"); return; } setSaving(true); setError(""); try { const payload = { ...(draft.type === "DURABLE" ? { ...draft, expiryDate: "" } : draft), price: parsedPrice }; await request(item ? `/api/items/${item.id}` : "/api/items", { method: item ? "PATCH" : "POST", body: JSON.stringify({ ...payload, recordPurchase, purchaseStore }) }); onSaved(); } catch (e) { setError(e instanceof Error ? e.message : "保存失败"); } finally { setSaving(false); } };
   const dailyCostPreview = dailyUsageCost({ type: draft.type, price: draft.price === "" ? null : moneyValue(draft.price), purchaseDate: draft.purchaseDate || null });
