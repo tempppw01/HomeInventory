@@ -42,3 +42,14 @@ export function isCountUnit(unit: string) {
 export function normalizeItemQuantity(quantity: number, unit: string) {
   return isCountUnit(unit) ? Math.max(0, Math.round(quantity)) : quantity;
 }
+
+/** Whether a consumable should appear in the purchase suggestions. */
+export function needsRestock(item: Pick<ItemMetricsInput, "type" | "name" | "category" | "unit"> & { quantity: number; minQuantity: number; remainingPercent: number }) {
+  if (item.type !== "CONSUMABLE") return false;
+  return (item.minQuantity > 0 && item.quantity <= item.minQuantity)
+    || (isLiquidConsumable(item) && item.remainingPercent <= 20);
+}
+
+export function restockQuantity(item: { quantity: number; minQuantity: number }) {
+  return Math.max(item.minQuantity - item.quantity, 1);
+}

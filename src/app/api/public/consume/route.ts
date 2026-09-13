@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { isLiquidConsumable } from "@/lib/item-metrics";
+import { needsRestock, restockQuantity } from "@/lib/item-metrics";
 import { apiError } from "@/lib/api";
 
 const consumeSchema = z.object({ itemId: z.string().trim().min(1).max(80), requestId: z.string().uuid() });
@@ -27,12 +27,11 @@ export async function POST(request: NextRequest) {
         data: { action: "CONSUME", itemId: item.id, itemName: item.name, detail: `扫码消耗 1 ${item.unit}`, scanRequestId: requestId },
       });
 
-      const needsRestock = (item.minQuantity > 0 && item.quantity <= item.minQuantity) || (isLiquidConsumable(item) && item.remainingPercent <= 20);
-      if (needsRestock) {
+      if (needsRestock(item)) {
         const pending = await tx.shoppingItem.findFirst({ where: { name: item.name, status: "PENDING" } });
         if (!pending) {
           await tx.shoppingItem.create({
-            data: { name: item.name, quantity: Math.max(item.minQuantity - item.quantity, 1), unit: item.unit, category: item.category, priority: 2, source: "low-stock" },
+            data: { name: item.name, quantity: restockQuantity(item), unit: item.unit, category: item.category, priority: 2, source: "low-stock" },
           });
         }
       }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiError, requireWritableUser } from "@/lib/api";
-import { isLiquidConsumable } from "@/lib/item-metrics";
+import { isLiquidConsumable, needsRestock, restockQuantity } from "@/lib/item-metrics";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -18,9 +18,8 @@ export async function POST(_: Request, { params }: Context) {
       if (changed.count !== 1) return { error: "库存不足，无法消耗", status: 409 as const };
       const item = await tx.item.findUniqueOrThrow({ where: { id }, include: { location: true } });
       const activity = await tx.activityLog.create({ data: { action: "CONSUME", itemId: item.id, itemName: item.name, userId: user.id, detail: `手动消耗 1 ${item.unit}` } });
-      const needsRestock = (item.minQuantity > 0 && item.quantity <= item.minQuantity);
-      if (needsRestock && !(await tx.shoppingItem.findFirst({ where: { name: item.name, status: "PENDING" } }))) {
-        await tx.shoppingItem.create({ data: { name: item.name, quantity: Math.max(item.minQuantity - item.quantity, 1), unit: item.unit, category: item.category, priority: 2, source: "low-stock" } });
+      if (needsRestock(item) && !(await tx.shoppingItem.findFirst({ where: { name: item.name, status: "PENDING" } }))) {
+        await tx.shoppingItem.create({ data: { name: item.name, quantity: restockQuantity(item), unit: item.unit, category: item.category, priority: 2, source: "low-stock" } });
       }
       return { item, activityId: activity.id };
     });
