@@ -4,7 +4,7 @@ import { itemSchema } from "@/lib/validation";
 import { apiError, requireWritableUser } from "@/lib/api";
 import { requireUser } from "@/lib/account-auth";
 import { createItemCode } from "@/lib/item-code";
-import { isLiquidConsumable, normalizeItemQuantity } from "@/lib/item-metrics";
+import { needsRestock, normalizeItemQuantity, restockQuantity } from "@/lib/item-metrics";
 
 export async function GET(request: NextRequest) {
   try {
@@ -40,11 +40,10 @@ export async function POST(request: NextRequest) {
       return created;
     });
 
-    const needsRestock = item.type === "CONSUMABLE" && ((item.minQuantity > 0 && item.quantity <= item.minQuantity) || (isLiquidConsumable(item) && item.remainingPercent <= 20));
-    if (needsRestock) {
+    if (needsRestock(item)) {
       const existing = await prisma.shoppingItem.findFirst({ where: { name: item.name, status: "PENDING" } });
       if (!existing) await prisma.shoppingItem.create({
-        data: { name: item.name, quantity: Math.max(item.minQuantity - item.quantity, 1), unit: item.unit, category: item.category, priority: 2, source: "low-stock" },
+        data: { name: item.name, quantity: restockQuantity(item), unit: item.unit, category: item.category, priority: 2, source: "low-stock" },
       });
     }
     return NextResponse.json(item, { status: 201 });
