@@ -186,6 +186,16 @@ export function InventoryApp() {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
+  useEffect(() => {
+    const onShortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        document.getElementById("global-search")?.focus();
+      }
+    };
+    window.addEventListener("keydown", onShortcut);
+    return () => window.removeEventListener("keydown", onShortcut);
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -769,13 +779,14 @@ function SettingRow({ icon: Icon, title, text, action }: { icon: typeof Settings
 
 function SearchBox({ items, value, onChange, onSelect, onFocus, placeholder }: { items: Item[]; value: string; onChange: (value: string) => void; onSelect: (item: Item) => void; onFocus?: () => void; placeholder: string }) {
   const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
   const suggestions = useMemo(() => {
     const term = value.trim().toLowerCase();
     const matches = term ? items.filter((item) => [item.name, item.itemCode, item.category, item.location?.name].some((field) => field?.toLowerCase().includes(term))) : items;
     return matches.slice(0, 6);
   }, [items, value]);
-  return <div className="relative z-20"><Search className="pointer-events-none absolute left-3.5 top-[22px] -translate-y-1/2 muted" size={18} /><input value={value} onChange={(event) => { onChange(event.target.value); setOpen(true); }} onFocus={() => { setOpen(true); onFocus?.(); }} onBlur={() => setTimeout(() => setOpen(false), 120)} className="input search-input" placeholder={placeholder} autoComplete="off" />
-    <AnimatePresence>{open && suggestions.length > 0 && <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 4 }} exit={{ opacity: 0, y: -4 }} className="absolute left-0 right-0 top-full overflow-hidden rounded-2xl border p-1 shadow-2xl" style={{ background: "var(--surface-solid)", borderColor: "var(--border)" }}>{suggestions.map((item) => <button type="button" key={item.id} onMouseDown={(event) => event.preventDefault()} onClick={() => { onSelect(item); setOpen(false); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-[var(--surface-soft)]"><div className="grid size-9 shrink-0 place-items-center rounded-xl bg-cover bg-center text-lg" style={item.imageUrl ? { backgroundImage: `url(${item.imageUrl})` } : { background: "var(--surface-soft)" }}>{!item.imageUrl && "📦"}</div><div className="min-w-0 flex-1"><div className="truncate text-sm font-bold">{item.name}</div><div className="mt-0.5 truncate text-[11px] muted">{item.itemCode || item.id} · {item.location?.name || "未设置位置"}</div></div><ChevronRight size={14} className="muted" /></button>)}</motion.div>}</AnimatePresence>
+  return <div className="relative z-20"><Search className="pointer-events-none absolute left-3.5 top-[22px] -translate-y-1/2 muted" size={18} /><input id="global-search" value={value} onChange={(event) => { onChange(event.target.value); setActiveIndex(0); setOpen(true); }} onFocus={() => { setOpen(true); onFocus?.(); }} onKeyDown={(event) => { if (event.key === "ArrowDown") { event.preventDefault(); setOpen(true); setActiveIndex((index) => Math.min(index + 1, suggestions.length - 1)); } else if (event.key === "ArrowUp") { event.preventDefault(); setActiveIndex((index) => Math.max(index - 1, 0)); } else if (event.key === "Enter" && suggestions[activeIndex]) { event.preventDefault(); onSelect(suggestions[activeIndex]); setOpen(false); } else if (event.key === "Escape") setOpen(false); }} onBlur={() => setTimeout(() => setOpen(false), 120)} className="input search-input" placeholder={placeholder} autoComplete="off" />
+    <AnimatePresence>{open && suggestions.length > 0 && <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 4 }} exit={{ opacity: 0, y: -4 }} className="absolute left-0 right-0 top-full overflow-hidden rounded-2xl border p-1 shadow-2xl" style={{ background: "var(--surface-solid)", borderColor: "var(--border)" }}>{suggestions.map((item, index) => <button type="button" key={item.id} onMouseDown={(event) => event.preventDefault()} onClick={() => { onSelect(item); setOpen(false); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-[var(--surface-soft)]" style={index === activeIndex ? { background: "var(--surface-soft)" } : undefined}><div className="grid size-9 shrink-0 place-items-center rounded-xl bg-cover bg-center text-lg" style={item.imageUrl ? { backgroundImage: `url(${item.imageUrl})` } : { background: "var(--surface-soft)" }}>{!item.imageUrl && "📦"}</div><div className="min-w-0 flex-1"><div className="truncate text-sm font-bold">{item.name}</div><div className="mt-0.5 truncate text-[11px] muted">{item.itemCode || item.id} · {item.location?.name || "未设置位置"}</div></div><ChevronRight size={14} className="muted" /></button>)}</motion.div>}</AnimatePresence>
   </div>;
 }
 
