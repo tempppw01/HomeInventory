@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { needsRestock, restockQuantity } from "@/lib/item-metrics";
+import { isLiquidConsumable, needsRestock, restockQuantity } from "@/lib/item-metrics";
 import { apiError } from "@/lib/api";
 
 const consumeSchema = z.object({ itemId: z.string().trim().min(1).max(80), requestId: z.string().uuid() });
@@ -15,6 +15,10 @@ export async function POST(request: NextRequest) {
       const current = await tx.item.findFirst({ where: { id: itemId, deletedAt: null } });
       if (!current) return { error: "物品不存在", status: 404 as const };
       if (current.type !== "CONSUMABLE") return { error: "耐用品不能通过扫码消耗", status: 409 as const };
+      // Keep the public QR flow consistent with the authenticated consume API:
+      // liquids are tracked by their remaining percentage, not by decrementing
+      // a whole bottle/container from the item count.
+      if (isLiquidConsumable(current)) return { error: "液体请通过余量刻度记录使用进度", status: 409 as const };
 
       const changed = await tx.item.updateMany({
         where: { id: itemId, deletedAt: null, type: "CONSUMABLE", quantity: { gte: 1 } },
