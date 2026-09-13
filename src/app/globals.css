@@ -142,6 +142,20 @@ button { cursor: pointer; }
   box-shadow: var(--shadow-sm);
   backdrop-filter: blur(18px);
 }
+
+/* User-selectable density and motion preferences. These tokens let every
+   screen become denser without duplicating responsive styles in components. */
+[data-density="compact"] .surface,
+[data-density="compact"] .ds-card { border-radius: var(--radius-md); }
+[data-density="compact"] .item-card { min-height: 0 !important; }
+[data-density="compact"] .item-card-grid { gap: .75rem !important; }
+[data-motion="reduced"] *,
+[data-motion="reduced"] *::before,
+[data-motion="reduced"] *::after {
+  animation-duration: 1ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 1ms !important;
+}
 .surface, .ds-card { background: var(--surface-solid); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
 .muted { color: var(--muted); }
 .input {

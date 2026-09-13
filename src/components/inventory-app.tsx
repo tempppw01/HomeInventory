@@ -178,6 +178,8 @@ export function InventoryApp() {
   const [showWelcome, setShowWelcome] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
+  const [motionMode, setMotionMode] = useState<"standard" | "reduced">("standard");
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -256,6 +258,16 @@ export function InventoryApp() {
     media.addEventListener("change", apply);
     return () => media.removeEventListener("change", apply);
   }, [theme]);
+  useEffect(() => {
+    const savedDensity = localStorage.getItem("home-inventory-density");
+    const savedMotion = localStorage.getItem("home-inventory-motion");
+    if (savedDensity === "compact") setDensity("compact");
+    if (savedMotion === "reduced") setMotionMode("reduced");
+  }, []);
+  useEffect(() => {
+    document.documentElement.dataset.density = density;
+    document.documentElement.dataset.motion = motionMode;
+  }, [density, motionMode]);
   useEffect(() => { request<{ id: string }[]>("/api/members").then((members) => setMemberId(members[0]?.id ?? null)).catch(() => undefined); }, []);
   useEffect(() => {
     if (!toast) return;
@@ -414,7 +426,7 @@ export function InventoryApp() {
               <LocationsView locations={data!.locations} items={data!.items} onAdd={() => { setEditingLocation(null); setModal("location"); }} onOpen={(name) => { setSearch(name); openView("items"); }} onEdit={(location) => { setEditingLocation(location); setModal("location"); }} onToast={setToast} />
             ) : view === "audit" ? (
               <AuditView items={data!.items.filter((item) => item.quantity > 0)} locations={data!.locations} onRefresh={refresh} onToast={setToast} />
-            ) : view === "settings" ? <SettingsView onToast={setToast} onAbout={() => openView("about")} onAudit={() => openView("audit")} onRecycle={() => setModal("recycle")} /> : <AboutView />}
+            ) : view === "settings" ? <SettingsView onToast={setToast} onAbout={() => openView("about")} onAudit={() => openView("audit")} onRecycle={() => setModal("recycle")} density={density} motionMode={motionMode} onDensityChange={(next) => { setDensity(next); localStorage.setItem("home-inventory-density", next); }} onMotionChange={(next) => { setMotionMode(next); localStorage.setItem("home-inventory-motion", next); }} /> : <AboutView />}
           </motion.div>
         </AnimatePresence>
       </main>
@@ -740,12 +752,13 @@ function LocationCard({ location, items, index, onOpen, onEdit, onToast }: { loc
   return <><motion.button onContextMenu={context.onContextMenu} key={location.id} initial={{ opacity: 0, scale: .97 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: index * .05 }} onClick={() => onOpen(location.name)} className="surface group relative overflow-hidden rounded-xl p-4 text-left transition hover:border-[color-mix(in_srgb,var(--primary)_38%,var(--border))]"><div className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-20" style={location.thumbnailUrl ? { backgroundImage: `url(${location.thumbnailUrl})` } : undefined} /><div className="relative"><div className="mb-4 flex items-start justify-between"><div className="grid size-12 place-items-center rounded-2xl" style={{ color: location.color, background: `color-mix(in srgb, ${location.color} 12%, var(--surface-solid))` }}><Icon size={23} /></div><ChevronRight className="muted transition group-hover:translate-x-1" size={18} /></div><h3 className="m-0 text-lg font-black">{location.name}</h3><p className="mb-0 mt-1.5 text-sm muted">{count} 件物品 · {consumables} 件消耗品</p></div></motion.button><ContextMenu menu={context.menu} items={contextItems} onClose={context.close} /></>;
 }
 
-function SettingsView({ onToast, onAbout, onAudit, onRecycle }: { onToast: (message: string) => void; onAbout: () => void; onAudit: () => void; onRecycle: () => void }) {
+function SettingsView({ onToast, onAbout, onAudit, onRecycle, density, motionMode, onDensityChange, onMotionChange }: { onToast: (message: string) => void; onAbout: () => void; onAudit: () => void; onRecycle: () => void; density: "comfortable" | "compact"; motionMode: "standard" | "reduced"; onDensityChange: (value: "comfortable" | "compact") => void; onMotionChange: (value: "standard" | "reduced") => void }) {
   const [database, setDatabase] = useState<{ databaseLabel: string; storageMode: string } | null>(null);
   useEffect(() => { let active = true; request<{ databaseLabel: string; storageMode: string }>("/api/system/info").then((result) => { if (active) setDatabase(result); }).catch(() => undefined); return () => { active = false; }; }, []);
   return <><PageTitle title="设置" text="按类别展开需要修改的设置，保持页面简洁。" action={<div className="flex items-center gap-2"><button onClick={onAudit} className="btn-ghost grid size-10 shrink-0 place-items-center p-0 sm:flex sm:h-auto sm:w-auto sm:gap-2 sm:px-3" aria-label="进入家庭盘点" title="家庭盘点"><ClipboardCheck size={16} /><span className="hidden sm:inline">盘点</span></button><button onClick={onRecycle} className="btn-ghost grid size-10 shrink-0 place-items-center p-0 sm:flex sm:h-auto sm:w-auto sm:gap-2 sm:px-3" aria-label="打开回收站" title="回收站"><Trash2 size={16} /><span className="hidden sm:inline">回收站</span></button></div>} /><div className="grid max-w-5xl items-start gap-4 lg:grid-cols-2">
     <AccountSettings onToast={onToast} />
     <AiSettings onToast={onToast} />
+    <section className="surface rounded-3xl p-5"><h3 className="m-0 text-sm font-black">显示偏好</h3><p className="mb-4 mt-1 text-xs muted">让界面更适合你的屏幕和注意力节奏。</p><div className="space-y-3"><label className="flex items-center justify-between gap-3 text-sm"><span>界面密度</span><select className="input w-auto min-w-28 py-2" value={density} onChange={(e) => onDensityChange(e.target.value as "comfortable" | "compact")}><option value="comfortable">舒适</option><option value="compact">紧凑</option></select></label><label className="flex items-center justify-between gap-3 text-sm"><span>动效</span><select className="input w-auto min-w-28 py-2" value={motionMode} onChange={(e) => onMotionChange(e.target.value as "standard" | "reduced")}><option value="standard">标准</option><option value="reduced">减少动效</option></select></label></div></section>
     <DataTools onToast={onToast} />
     <OssSettings onToast={onToast} />
     <details className="surface group rounded-3xl p-5"><summary className="flex cursor-pointer list-none items-center gap-3 [&::-webkit-details-marker]:hidden"><div className="grid size-11 shrink-0 place-items-center rounded-2xl" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><Grid2X2 size={20} /></div><div className="min-w-0 flex-1"><h3 className="m-0 text-sm font-black">数据与部署</h3><p className="mb-0 mt-1 truncate text-xs muted">{database ? `${database.databaseLabel} · ${database.storageMode}` : "正在读取运行环境"}</p></div><ChevronDown size={17} className="muted transition-transform group-open:rotate-180" /></summary><div className="mt-5 border-t pt-1" style={{ borderColor: "var(--border)" }}><SettingRow icon={Grid2X2} title={`当前数据库：${database?.databaseLabel || "检测中…"}`} text={database ? `${database.storageMode} · 可通过 DATABASE_PROVIDER 切换` : "正在读取运行环境"} action={<span className="rounded-xl px-3 py-1.5 text-xs font-bold" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>{database?.databaseLabel || "检测中"}</span>} /><SettingRow icon={Info} title="关于归物" text={`版本 ${APP_VERSION} · 更新说明与使用提示`} action={<button onClick={onAbout} className="btn-ghost text-xs">查看</button>} /></div></details>
