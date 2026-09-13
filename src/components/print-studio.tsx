@@ -124,14 +124,25 @@ export function PrintStudio({ items, onClose }: { items: Item[]; onClose: () => 
     const previewCss = `
       @page { size: ${paper.width}mm ${paper.height}mm; margin: 0; }
       * { box-sizing: border-box; }
-      html, body { width: ${paper.width}mm; min-height: ${paper.height}mm; margin: 0; background: white; color: black; }
+      html, body { width: 100%; min-height: 100%; margin: 0; background: #eef0f3; color: #17202a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .print-toolbar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 12px; padding: max(12px, env(safe-area-inset-top)) 16px 12px; background: rgba(255,255,255,.96); border-bottom: 1px solid #d9dde3; }
+      .print-toolbar button { border: 0; border-radius: 9px; padding: 9px 13px; background: #e8ebef; color: #17202a; font: 600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .print-toolbar strong { font-size: 15px; }
+      .print-page { overflow: auto; padding: 18px 12px 28px; }
       .print-sheet { width: ${paper.width}mm; min-height: ${paper.height}mm; padding: ${verticalMargin}mm ${horizontalMargin}mm; display: grid; grid-template-columns: repeat(${fittedColumns}, ${fittedLabelWidth}mm); column-gap: ${columnGap}mm; row-gap: ${rowGap}mm; align-content: start; background: white; color: black; }
       .print-label { display: flex; width: ${fittedLabelWidth}mm; height: ${labelHeight}mm; flex-direction: column; align-items: center; overflow: hidden; break-inside: avoid; page-break-inside: avoid; color: black; border: ${showLabelBorder ? "0.25mm solid #d7d7dc" : "0"}; border-radius: 3mm; text-align: center; }
       .print-placeholder { width: ${fittedLabelWidth}mm; height: ${labelHeight}mm; break-inside: avoid; page-break-inside: avoid; }
       .flex { display: flex; } .flex-col { flex-direction: column; } .items-center { align-items: center; } .justify-center { justify-content: center; } .min-w-0 { min-width: 0; } .w-full { width: 100%; } .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .font-bold { font-weight: 700; } .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; } .text-gray-500 { color: #6b7280; } .text-gray-700 { color: #374151; }
+      @media print { .print-toolbar { display: none !important; } .print-page { padding: 0; overflow: visible; } html, body { width: ${paper.width}mm; min-height: ${paper.height}mm; background: white; } }
+    `;
+    const closePreviewScript = `
+      function returnToApp() {
+        window.close();
+        window.setTimeout(function () { if (!window.closed) window.history.back(); }, 80);
+      }
     `;
     preview.document.open();
-    preview.document.write(`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>二维码打印预览</title><style>${previewCss}</style></head><body>${previewSheet.outerHTML}</body></html>`);
+    preview.document.write(`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>二维码打印预览</title><style>${previewCss}</style></head><body><div class="print-toolbar"><button type="button" onclick="returnToApp()">‹ 返回物品</button><strong>二维码打印预览</strong></div><main class="print-page">${previewSheet.outerHTML}</main><script>${closePreviewScript}</script></body></html>`);
     preview.document.close();
     let triggered = false;
     const triggerPrint = () => {
