@@ -16,7 +16,6 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     await requireWritableUser();
-    await requireWritableUser();
     const data = priceRecordSchema.parse(await request.json());
     const record = await prisma.$transaction(async (tx) => {
       if (data.itemId) await tx.item.update({ where: { id: data.itemId }, data: { price: data.unitPrice, purchaseDate: data.purchasedAt || new Date() } });
