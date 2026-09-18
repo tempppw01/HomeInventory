@@ -18,10 +18,12 @@ export async function POST(_: Request, { params }: Context) {
       if (changed.count !== 1) return { error: "库存不足，无法消耗", status: 409 as const };
       const item = await tx.item.findUniqueOrThrow({ where: { id }, include: { location: true } });
       const activity = await tx.activityLog.create({ data: { action: "CONSUME", itemId: item.id, itemName: item.name, userId: user.id, detail: `手动消耗 1 ${item.unit}` } });
+      const recentUses = await tx.activityLog.count({ where: { itemId: item.id, action: "CONSUME", undoneAt: null, createdAt: { gte: new Date(Date.now() - 30 * 86400000) } } });
+      const withRate = await tx.item.update({ where: { id: item.id }, data: { consumeRate: recentUses / 30 } , include: { location: true } });
       if (needsRestock(item) && !(await tx.shoppingItem.findFirst({ where: { name: item.name, status: "PENDING" } }))) {
         await tx.shoppingItem.create({ data: { name: item.name, quantity: restockQuantity(item), unit: item.unit, category: item.category, priority: 2, source: "low-stock" } });
       }
-      return { item, activityId: activity.id };
+      return { item: withRate, activityId: activity.id };
     });
     if ("error" in result) return NextResponse.json({ error: result.error }, { status: result.status });
     return NextResponse.json(result);

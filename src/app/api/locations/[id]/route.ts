@@ -10,6 +10,11 @@ export async function PATCH(request: NextRequest, { params }: Context) {
     const user = await requireWritableUser();
     const { id } = await params;
     const data = locationSchema.partial().parse(await request.json());
+    if (data.parentId === id) return NextResponse.json({ error: "空间不能设为自己的上级" }, { status: 400 });
+    if (data.parentId) {
+      const parent = await prisma.location.findUnique({ where: { id: data.parentId }, select: { parentId: true } });
+      if (!parent || parent.parentId === id) return NextResponse.json({ error: "不能形成循环的空间层级" }, { status: 400 });
+    }
     const location = await prisma.$transaction(async (tx) => {
       const updated = await tx.location.update({ where: { id }, data });
       await tx.activityLog.create({ data: { action: "LOCATION_UPDATE", userId: user.id, detail: `更新位置：${updated.name}` } });

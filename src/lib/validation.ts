@@ -68,6 +68,14 @@ export const locationSchema = z.object({
   icon: z.string().max(30).default("Package"),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default("#7c3aed"),
   thumbnailUrl: z.union([z.string().url().max(1000), z.literal(""), z.null()]).optional().transform((value) => value || null),
+  parentId: z.union([z.string().trim().min(1).max(80), z.literal(""), z.null()]).optional().transform((value) => value || null),
+});
+
+export const householdPreferenceSchema = z.object({
+  expiryReminderDays: z.coerce.number().int().min(1).max(90).default(7),
+  lowStockReminder: z.boolean().default(true),
+  weeklyReviewEnabled: z.boolean().default(true),
+  weeklyReviewDay: z.coerce.number().int().min(0).max(6).default(0),
 });
 
 export const ossSettingSchema = z.object({

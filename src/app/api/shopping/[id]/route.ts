@@ -11,7 +11,7 @@ export async function PATCH(request: NextRequest, { params }: Context) {
     const body = await request.json();
     const status = body.status === "PURCHASED" ? "PURCHASED" : "PENDING";
     const item = await prisma.$transaction(async (tx) => {
-      const updated = await tx.shoppingItem.update({ where: { id }, data: { status } });
+      const updated = await tx.shoppingItem.update({ where: { id }, data: { status, ...(typeof body.isFavorite === "boolean" ? { isFavorite: body.isFavorite } : {}) } });
       const replenishItemId = typeof body.replenishItemId === "string" ? body.replenishItemId : null;
       if (status === "PURCHASED" && replenishItemId && updated.source === "restock-suggestion") {
         const inventoryItem = await tx.item.findUnique({ where: { id: replenishItemId } });

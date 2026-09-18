@@ -91,6 +91,9 @@ model Location {
   icon      String   @default("Package")
   color     String   @default("#7c3aed")
   thumbnailUrl String?
+  parentId  String?
+  parent    Location? @relation("LocationHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Location[] @relation("LocationHierarchy")
   items     Item[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -218,8 +221,19 @@ model ShoppingItem {
   priority  Int            @default(1)
   status    ShoppingStatus @default(PENDING)
   source    String         @default("manual")
+  isFavorite Boolean       @default(false)
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
 
   @@index([status])
+}
+
+model HouseholdPreference {
+  id                   String   @id @default("default")
+  expiryReminderDays   Int      @default(7)
+  lowStockReminder     Boolean  @default(true)
+  weeklyReviewEnabled  Boolean  @default(true)
+  weeklyReviewDay      Int      @default(0)
+  lastAutoBackupAt     DateTime?
+  updatedAt            DateTime @updatedAt
 }

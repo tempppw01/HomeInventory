@@ -53,6 +53,7 @@ const statements = [
     "icon" TEXT NOT NULL DEFAULT 'Package',
     "color" TEXT NOT NULL DEFAULT '#7c3aed',
     "thumbnailUrl" TEXT,
+    "parentId" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
   )`,
@@ -113,7 +114,17 @@ const statements = [
     "priority" INTEGER NOT NULL DEFAULT 1,
     "status" TEXT NOT NULL DEFAULT 'PENDING',
     "source" TEXT NOT NULL DEFAULT 'manual',
+    "isFavorite" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS "HouseholdPreference" (
+    "id" TEXT NOT NULL PRIMARY KEY DEFAULT 'default',
+    "expiryReminderDays" INTEGER NOT NULL DEFAULT 7,
+    "lowStockReminder" BOOLEAN NOT NULL DEFAULT true,
+    "weeklyReviewEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "weeklyReviewDay" INTEGER NOT NULL DEFAULT 0,
+    "lastAutoBackupAt" DATETIME,
     "updatedAt" DATETIME NOT NULL
   )`,
   `CREATE TABLE IF NOT EXISTS "OssSetting" (
@@ -179,6 +190,13 @@ async function main() {
   const locationColumns = await prisma.$queryRawUnsafe<Array<{ name: string }>>(`PRAGMA table_info("Location")`);
   if (!locationColumns.some((column) => column.name === "thumbnailUrl")) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "Location" ADD COLUMN "thumbnailUrl" TEXT`);
+  }
+  if (!locationColumns.some((column) => column.name === "parentId")) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Location" ADD COLUMN "parentId" TEXT`);
+  }
+  const shoppingColumns = await prisma.$queryRawUnsafe<Array<{ name: string }>>(`PRAGMA table_info("ShoppingItem")`);
+  if (!shoppingColumns.some((column) => column.name === "isFavorite")) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "ShoppingItem" ADD COLUMN "isFavorite" BOOLEAN NOT NULL DEFAULT false`);
   }
   if (!columns.some((column) => column.name === "itemCode")) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "Item" ADD COLUMN "itemCode" TEXT`);

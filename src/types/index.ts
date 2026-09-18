@@ -7,6 +7,8 @@ export interface Location {
   icon: string;
   color: string;
   thumbnailUrl: string | null;
+  parentId?: string | null;
+  parent?: { id: string; name: string } | null;
   _count?: { items: number };
 }
 
@@ -35,6 +37,8 @@ export interface Item {
   updatedAt: string;
   deletedAt: string | null;
   restockPausedUntil: string | null;
+  consumeRate?: number;
+  lastRestockedAt?: string | null;
 }
 
 export interface ShoppingItem {
@@ -46,6 +50,7 @@ export interface ShoppingItem {
   priority: number;
   status: ShoppingStatus;
   source: string;
+  isFavorite?: boolean;
   createdAt: string;
 }
 
@@ -65,5 +70,7 @@ export interface DashboardData {
   items: Item[];
   locations: Location[];
   shopping: ShoppingItem[];
-  finance: { currentMonthTotal: number; averageMonthly: number; recordCount: number; recent: PriceRecord[] };
+  finance: { currentMonthTotal: number; averageMonthly: number; recordCount: number; recent: PriceRecord[]; byCategory: { category: string; total: number }[] };
+  consumption: { itemName: string; count: number; lastUsedAt: string }[];
+  preferences?: { expiryReminderDays: number; lowStockReminder: boolean; weeklyReviewEnabled: boolean; weeklyReviewDay: number };
 }
