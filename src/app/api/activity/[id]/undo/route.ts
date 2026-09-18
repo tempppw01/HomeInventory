@@ -23,6 +23,12 @@ export async function POST(_: Request, { params }: Context) {
       const item = await tx.item.findFirst({ where: { id: activity.itemId, deletedAt: null } });
       if (!item) return { error: "物品不存在或已在回收站", status: 409 as const };
       await tx.item.update({ where: { id: item.id }, data: { quantity: { increment: 1 } } });
+      const recentUses = await tx.activityLog.count({ where: { itemId: item.id, action: "CONSUME", undoneAt: null, createdAt: { gte: new Date(Date.now() - 30 * 86400000) } } });
+      await tx.item.update({ where: { id: item.id }, data: { consumeRate: recentUses / 30 } });
+      const lowStockSuggestions = await tx.shoppingItem.findMany({ where: { status: "PENDING", source: "low-stock", name: item.name } });
+      if (item.quantity + 1 > item.minQuantity && (!item.minQuantity || item.remainingPercent > 20)) {
+        await tx.shoppingItem.deleteMany({ where: { id: { in: lowStockSuggestions.map((suggestion) => suggestion.id) } } });
+      }
       await tx.activityLog.update({ where: { id: activity.id }, data: { undoneAt: new Date() } });
       const undo = await tx.activityLog.create({
         data: { action: "CONSUME_UNDO", itemId: item.id, itemName: item.name, userId: actor.id, undoOfId: activity.id, detail: `撤销消耗 1 ${item.unit}` },

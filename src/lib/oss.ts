@@ -31,12 +31,21 @@ export async function deleteStoredImage(imageUrl: string | null | undefined) {
     if (target.startsWith(`${root}${path.sep}`)) await unlink(target).catch(() => undefined);
   }
   if (config.storageMode === "oss" || config.storageMode === "both") {
-    const prefix = config.publicBaseUrl ? `${config.publicBaseUrl}/` : "";
-    const objectName = prefix && imageUrl.startsWith(prefix) ? imageUrl.slice(prefix.length) : localObjectName;
+    let objectName = localObjectName;
+    if (!objectName && imageUrl.startsWith("http")) {
+      try {
+        const pathname = decodeURIComponent(new URL(imageUrl).pathname).replace(/^\/+/, "");
+        const directoryPrefix = `${config.directory}/`;
+        if (pathname.startsWith(directoryPrefix)) objectName = pathname;
+        else if (config.publicBaseUrl && imageUrl.startsWith(`${config.publicBaseUrl}/`)) objectName = imageUrl.slice(`${config.publicBaseUrl}/`.length);
+      } catch {
+        objectName = null;
+      }
+    }
     if (objectName) {
       const directoryPrefix = `${config.directory}/`;
       const key = objectName.startsWith(directoryPrefix) ? objectName : `${config.directory}/${objectName}`;
-      if (key !== config.directory) {
+      if (key !== config.directory && key.startsWith(directoryPrefix)) {
         const client = new OSS({ region: config.region, endpoint: config.endpoint || undefined, bucket: config.bucket, accessKeyId: config.accessKeyId, accessKeySecret: config.accessKeySecret, secure: true });
         await client.delete(key).catch(() => undefined);
       }
