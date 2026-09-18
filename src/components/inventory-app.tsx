@@ -6,7 +6,7 @@ import {
   AlertTriangle, Archive, Bath, Bell, Bot, Boxes, CalendarDays, Check, CheckSquare, ChevronDown, ChevronRight, CircleAlert, Cloud, CookingPot,
   Grid2X2, ImagePlus, Info, LayoutDashboard, LayoutGrid, List, MapPin, Minus, Monitor, Moon,
   Package, Plus, Printer, QrCode, Search, Settings, ShoppingBasket, Sofa, Sparkles, Copy, Pencil, ExternalLink,
-  History, RotateCcw, Sun, Trash2, WalletCards, Warehouse, X, Zap, PanelLeftClose, PanelLeftOpen, Link2, Upload, ClipboardCheck,
+  History, RotateCcw, Sun, Trash2, WalletCards, Warehouse, X, Zap, PanelLeftClose, Link2, Upload, ClipboardCheck,
 } from "lucide-react";
 import { FormEvent, PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DashboardData, Item, ItemType, Location, ShoppingItem } from "@/types";
@@ -200,8 +200,8 @@ export function InventoryApp() {
   const [showWelcome, setShowWelcome] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
-  const [motionMode, setMotionMode] = useState<"standard" | "reduced">("standard");
+  const [density, setDensity] = useState<"comfortable" | "compact">(() => typeof window !== "undefined" && localStorage.getItem("home-inventory-density") === "compact" ? "compact" : "comfortable");
+  const [motionMode, setMotionMode] = useState<"standard" | "reduced">(() => typeof window !== "undefined" && localStorage.getItem("home-inventory-motion") === "reduced" ? "reduced" : "standard");
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -296,12 +296,6 @@ export function InventoryApp() {
     media.addEventListener("change", apply);
     return () => media.removeEventListener("change", apply);
   }, [theme]);
-  useEffect(() => {
-    const savedDensity = localStorage.getItem("home-inventory-density");
-    const savedMotion = localStorage.getItem("home-inventory-motion");
-    if (savedDensity === "compact") setDensity("compact");
-    if (savedMotion === "reduced") setMotionMode("reduced");
-  }, []);
   useEffect(() => {
     document.documentElement.dataset.density = density;
     document.documentElement.dataset.motion = motionMode;
@@ -641,29 +635,27 @@ function HomeInsightsCompact({ data }: { data: DashboardData }) {
 function AuditView({ items, locations, onRefresh, onToast }: { items: Item[]; locations: Location[]; onRefresh: () => Promise<void>; onToast: (message: string) => void }) {
   const storageKey = "home-inventory-audit-confirmed-v1";
   const historyKey = "home-inventory-audit-history-v1";
-  const [confirmed, setConfirmed] = useState<Set<string>>(new Set());
+  const [confirmed, setConfirmed] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try { return new Set(JSON.parse(localStorage.getItem(storageKey) || "[]")); } catch { return new Set(); }
+  });
   const [scanValue, setScanValue] = useState("");
   const [finished, setFinished] = useState(false);
   const [working, setWorking] = useState(false);
   const [locationId, setLocationId] = useState("ALL");
-  const [history, setHistory] = useState<{ at: string; total: number; confirmed: number; locationName: string }[]>([]);
+  const [history, setHistory] = useState<{ at: string; total: number; confirmed: number; locationName: string }[]>(() => {
+    if (typeof window === "undefined") return [];
+    try { return JSON.parse(localStorage.getItem(historyKey) || "[]"); } catch { return []; }
+  });
   const scopedItems = locationId === "ALL" ? items : items.filter((item) => item.locationId === locationId);
 
-  useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(storageKey) || "[]") as string[];
-      setConfirmed(new Set(saved.filter((id) => items.some((item) => item.id === id))));
-    } catch { setConfirmed(new Set()); }
-  }, [items]);
-  useEffect(() => {
-    try { setHistory(JSON.parse(localStorage.getItem(historyKey) || "[]")); } catch { setHistory([]); }
-  }, []);
+  const validConfirmed = new Set([...confirmed].filter((id) => items.some((item) => item.id === id)));
   const updateConfirmed = (next: Set<string>) => {
     setConfirmed(next);
     localStorage.setItem(storageKey, JSON.stringify([...next]));
   };
   const toggle = (id: string) => {
-    const next = new Set(confirmed);
+    const next = new Set(validConfirmed);
     next.has(id) ? next.delete(id) : next.add(id);
     updateConfirmed(next);
   };
@@ -890,7 +882,13 @@ function QrModal({ item, onClose, onPrint }: { item: Item; onClose: () => void; 
 
 function ItemModal({ locations, allItems, item, onClose, onSaved }: { locations: Location[]; allItems: Item[]; item: Item | null; onClose: () => void; onSaved: () => void }) {
   const [draft, setDraft] = useState<ItemDraft>(() => item ? { name: item.name, category: item.category, type: item.type, quantity: item.quantity, minQuantity: item.minQuantity, remainingPercent: item.remainingPercent, unit: item.unit, price: item.price?.toString() ?? "", purchaseDate: item.purchaseDate?.slice(0, 10) ?? "", expiryDate: item.type === "CONSUMABLE" ? item.expiryDate?.slice(0, 10) ?? "" : "", locationId: item.locationId ?? "", notes: item.notes ?? "", imageUrl: item.imageUrl ?? "", aiSummary: item.aiSummary ?? "", aiStorageAdvice: item.aiStorageAdvice ?? "", aiUsageAdvice: item.aiUsageAdvice ?? "", aiReplenishmentAdvice: item.aiReplenishmentAdvice ?? "" } : emptyDraft);
-  const [savedTemplates, setSavedTemplates] = useState<SavedItemTemplate[]>([]);
+  const [savedTemplates, setSavedTemplates] = useState<SavedItemTemplate[]>(() => {
+    if (typeof window === "undefined" || item) return [];
+    try {
+      const parsed = JSON.parse(localStorage.getItem(itemTemplateStorageKey) || "[]");
+      return Array.isArray(parsed) ? parsed.filter((entry): entry is SavedItemTemplate => Boolean(entry && typeof entry.id === "string" && typeof entry.name === "string")).slice(0, 8) : [];
+    } catch { return []; }
+  });
   const [saving, setSaving] = useState(false); const [uploading, setUploading] = useState(false); const [aiLoading, setAiLoading] = useState(false); const [moreOpen, setMoreOpen] = useState(false); const [imagePreviewOpen, setImagePreviewOpen] = useState(false); const [error, setError] = useState("");
   const [imageMode, setImageMode] = useState<"upload" | "link">(item?.imageUrl ? "link" : "upload");
   const [imageUrlDraft, setImageUrlDraft] = useState(item?.imageUrl ?? "");
@@ -898,13 +896,6 @@ function ItemModal({ locations, allItems, item, onClose, onSaved }: { locations:
   const [purchaseStore, setPurchaseStore] = useState("");
   const [availableLocations, setAvailableLocations] = useState(locations);
   const [quickLocationOpen, setQuickLocationOpen] = useState(false);
-  useEffect(() => {
-    if (item) return;
-    try {
-      const parsed = JSON.parse(localStorage.getItem(itemTemplateStorageKey) || "[]");
-      if (Array.isArray(parsed)) setSavedTemplates(parsed.filter((entry): entry is SavedItemTemplate => Boolean(entry && typeof entry.id === "string" && typeof entry.name === "string")).slice(0, 8));
-    } catch { /* ignore malformed local preferences */ }
-  }, [item]);
   const normalizedName = normalizedItemName(draft.name);
   const commonTemplate = !item && normalizedName ? findCommonItemTemplate(draft.name) : null;
   const duplicates = !item && normalizedName ? allItems.filter((entry) => normalizedItemName(entry.name) === normalizedName) : [];
@@ -912,13 +903,13 @@ function ItemModal({ locations, allItems, item, onClose, onSaved }: { locations:
     const entryName = normalizedItemName(entry.name);
     return entryName !== normalizedName && (entryName.includes(normalizedName) || normalizedName.includes(entryName));
   }).slice(0, 2) : [];
-  const suggestedLocation = useMemo(() => {
+  const suggestedLocation = (() => {
     if (item || draft.locationId) return null;
     const sameName = allItems.filter((entry) => normalizedName && entry.name.trim().replace(/\s+/g, "").toLocaleLowerCase() === normalizedName && entry.location);
     const sameCategory = allItems.filter((entry) => entry.category === draft.category && entry.location);
     const locationByKeyword = commonTemplate ? availableLocations.find((location) => commonTemplate.locationKeywords.some((keyword) => location.name.toLocaleLowerCase().includes(keyword))) : null;
     return locationByKeyword ?? [...sameName, ...sameCategory].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0]?.location ?? null;
-  }, [allItems, availableLocations, commonTemplate, draft.category, draft.locationId, item, normalizedName]);
+  })();
   const applyTemplate = () => {
     if (!commonTemplate) return;
     setDraft((current) => ({
