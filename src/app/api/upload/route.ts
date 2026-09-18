@@ -3,8 +3,10 @@ import OSS from "ali-oss";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import sharp from "sharp";
 import { apiError, requireWritableUser } from "@/lib/api";
 import { getOssConfig } from "@/lib/oss";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -26,7 +28,9 @@ function safeLocalPath(root: string, objectName: string) {
 export async function POST(request: NextRequest) {
   let localObject: string | null = null;
   try {
-    await requireWritableUser();
+    const user = await requireWritableUser();
+    const guard = rateLimit(`upload:${user.id}`, 40, 60 * 60_000);
+    if (!guard.ok) return NextResponse.json({ error: `图片上传较频繁，请 ${guard.retryAfter} 秒后再试` }, { status: 429, headers: { "Retry-After": String(guard.retryAfter) } });
     const config = await getOssConfig();
     if (!config) return NextResponse.json({ error: "请先在设置中配置图片存储方式" }, { status: 400 });
 
@@ -38,8 +42,13 @@ export async function POST(request: NextRequest) {
     if (file.size > MAX_IMAGE_BYTES) return NextResponse.json({ error: "图片不能超过 5MB，请先压缩后再上传" }, { status: 400 });
 
     const date = new Date();
-    const objectName = `items/${date.getUTCFullYear()}/${String(date.getUTCMonth() + 1).padStart(2, "0")}/${randomUUID()}.${extension}`;
-    const bytes = Buffer.from(await file.arrayBuffer());
+    const objectName = `items/${date.getUTCFullYear()}/${String(date.getUTCMonth() + 1).padStart(2, "0")}/${randomUUID()}.jpg`;
+    const source = Buffer.from(await file.arrayBuffer());
+    const bytes = await sharp(source, { failOn: "none", limitInputPixels: 40_000_000 })
+      .rotate()
+      .resize({ width: 1800, height: 1800, fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 82, progressive: true, mozjpeg: true })
+      .toBuffer();
     let url = "";
 
     if (config.storageMode === "local" || config.storageMode === "both") {
@@ -52,7 +61,7 @@ export async function POST(request: NextRequest) {
     if (config.storageMode === "oss" || config.storageMode === "both") {
       const client = new OSS({ region: config.region, endpoint: config.endpoint || undefined, bucket: config.bucket, accessKeyId: config.accessKeyId, accessKeySecret: config.accessKeySecret, secure: true });
       const ossObject = `${config.directory}/${objectName}`;
-      const result = await client.put(ossObject, bytes, { headers: { "Content-Type": file.type, "Cache-Control": "public, max-age=31536000, immutable" } });
+      const result = await client.put(ossObject, bytes, { headers: { "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=31536000, immutable" } });
       if (config.storageMode === "oss") url = config.publicBaseUrl ? `${config.publicBaseUrl}/${ossObject}` : result.url;
     }
 

@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ACCOUNT_COOKIE, createSession, verifyPassword } from "@/lib/account-auth";
 import { recordLoginAttempt } from "@/lib/login-record";
+import { clientAddress, rateLimit } from "@/lib/rate-limit";
 
 function requestIp(request: NextRequest) {
   return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || null;
 }
 
 export async function POST(request: NextRequest) {
+  const ip = clientAddress(request);
+  const guard = rateLimit(`login:${ip}`, 12, 60_000);
+  if (!guard.ok) return NextResponse.json({ error: `尝试次数过多，请 ${guard.retryAfter} 秒后再试` }, { status: 429, headers: { "Retry-After": String(guard.retryAfter) } });
   const body = await request.json().catch(() => ({}));
   const username = typeof body.username === "string" ? body.username.trim().toLowerCase() : "";
   const password = typeof body.password === "string" ? body.password : "";

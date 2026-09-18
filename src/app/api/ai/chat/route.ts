@@ -5,6 +5,7 @@ import { anthropicMessagesUrl, chatCompletionsUrl, getAiConfig } from "@/lib/ai"
 import { AiImageError, compressAiImageDataUrl } from "@/lib/ai-image";
 import { localUploadDataUrl } from "@/lib/oss";
 import { prisma } from "@/lib/prisma";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -50,7 +51,9 @@ function extractItemDraft(answer: string): { answer: string; itemDraft?: ItemDra
 
 export async function POST(request: NextRequest) {
   try {
-    await requireUser();
+    const user = await requireUser();
+    const guard = rateLimit(`ai-chat:${user.id}`, 20, 60_000);
+    if (!guard.ok) return NextResponse.json({ error: `AI 请求较频繁，请 ${guard.retryAfter} 秒后再试` }, { status: 429, headers: { "Retry-After": String(guard.retryAfter) } });
     const body = await request.json().catch(() => ({}));
     const messages: Message[] = Array.isArray(body.messages) ? body.messages.filter((entry: unknown): entry is Message => Boolean(entry && typeof entry === "object" && ["user", "assistant"].includes((entry as Message).role) && typeof (entry as Message).content === "string")).slice(-12).map((message: Message) => ({ ...message, attachments: Array.isArray(message.attachments) ? message.attachments.filter((attachment: Attachment) => attachment && typeof attachment === "object" && ["image", "text", "file"].includes(attachment.kind)).slice(0, 4) : [] })) : [];
     const question = messages.at(-1)?.content?.trim();

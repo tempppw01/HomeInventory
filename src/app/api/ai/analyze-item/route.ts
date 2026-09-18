@@ -5,6 +5,7 @@ import { anthropicMessagesUrl, chatCompletionsUrl, getAiConfig } from "@/lib/ai"
 import { aiAnalyzeSchema } from "@/lib/validation";
 import { localUploadDataUrl } from "@/lib/oss";
 import { AiImageError, compressAiImageDataUrl } from "@/lib/ai-image";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -99,7 +100,9 @@ function connectionError(error: unknown, baseUrl: string) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireUser();
+    const user = await requireUser();
+    const guard = rateLimit(`ai-analyze:${user.id}`, 20, 60_000);
+    if (!guard.ok) return NextResponse.json({ error: `AI 请求较频繁，请 ${guard.retryAfter} 秒后再试` }, { status: 429, headers: { "Retry-After": String(guard.retryAfter) } });
     const input = aiAnalyzeSchema.parse(await request.json());
     const config = await getAiConfig();
     if (!config) return NextResponse.json({ error: "请先在设置中配置 OpenAI 兼容接口" }, { status: 400 });

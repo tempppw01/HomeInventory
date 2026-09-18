@@ -3,6 +3,7 @@ import { anthropicMessagesUrl, chatCompletionsUrl, getAiConfig } from "@/lib/ai"
 import { apiError } from "@/lib/api";
 import { requireUser } from "@/lib/account-auth";
 import { compressAiImageDataUrl } from "@/lib/ai-image";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 const maxImages = 8;
@@ -17,7 +18,9 @@ function parseJson(text: string): unknown[] {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireUser();
+    const user = await requireUser();
+    const guard = rateLimit(`ai-batch:${user.id}`, 8, 60_000);
+    if (!guard.ok) return NextResponse.json({ error: `AI 请求较频繁，请 ${guard.retryAfter} 秒后再试` }, { status: 429, headers: { "Retry-After": String(guard.retryAfter) } });
     const body = await request.json().catch(() => ({}));
     const mode = body.mode === "receipt" ? "receipt" : "items";
     const images = Array.isArray(body.images) ? body.images.filter((image: unknown) => typeof image === "object" && image !== null && typeof (image as Record<string, unknown>).dataUrl === "string").slice(0, mode === "receipt" ? 1 : maxImages) as { dataUrl: string; fileName?: string }[] : [];
