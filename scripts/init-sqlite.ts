@@ -127,6 +127,18 @@ const statements = [
     "lastAutoBackupAt" DATETIME,
     "updatedAt" DATETIME NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS "HouseholdTask" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "title" TEXT NOT NULL,
+    "description" TEXT,
+    "dueAt" DATETIME NOT NULL,
+    "recurrence" TEXT NOT NULL DEFAULT 'NONE',
+    "status" TEXT NOT NULL DEFAULT 'OPEN',
+    "completedAt" DATETIME,
+    "nextDueAt" DATETIME,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS "OssSetting" (
     "id" TEXT NOT NULL PRIMARY KEY DEFAULT 'default',
     "storageMode" TEXT NOT NULL DEFAULT 'oss',
@@ -178,6 +190,9 @@ const statements = [
   `CREATE INDEX IF NOT EXISTS "Item_expiryDate_idx" ON "Item"("expiryDate")`,
   `CREATE INDEX IF NOT EXISTS "Item_lastRestockedAt_idx" ON "Item"("lastRestockedAt")`,
   `CREATE INDEX IF NOT EXISTS "ShoppingItem_status_idx" ON "ShoppingItem"("status")`,
+  `CREATE INDEX IF NOT EXISTS "HouseholdTask_status_idx" ON "HouseholdTask"("status")`,
+  `CREATE INDEX IF NOT EXISTS "HouseholdTask_dueAt_idx" ON "HouseholdTask"("dueAt")`,
+  `CREATE INDEX IF NOT EXISTS "HouseholdTask_nextDueAt_idx" ON "HouseholdTask"("nextDueAt")`,
   `CREATE INDEX IF NOT EXISTS "PriceRecord_itemId_idx" ON "PriceRecord"("itemId")`,
   `CREATE INDEX IF NOT EXISTS "PriceRecord_purchasedAt_idx" ON "PriceRecord"("purchasedAt")`,
   `CREATE INDEX IF NOT EXISTS "PriceRecord_category_idx" ON "PriceRecord"("category")`,
