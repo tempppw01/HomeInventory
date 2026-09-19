@@ -53,6 +53,11 @@ export async function PATCH(request: NextRequest) {
       }
       return NextResponse.json(await prisma.householdTask.update({ where: { id }, data: { status: "OPEN", completedAt: null } }));
     }
+    if (body.action === "undo") {
+      const previousDueAt = new Date(body.previousDueAt);
+      if (!Number.isFinite(previousDueAt.getTime())) return NextResponse.json({ error: "撤销信息已失效" }, { status: 400 });
+      return NextResponse.json(await prisma.householdTask.update({ where: { id }, data: { status: "OPEN", dueAt: previousDueAt, nextDueAt: null, completedAt: null } }));
+    }
     return NextResponse.json({ error: "不支持的操作" }, { status: 400 });
   } catch (error) { return apiError(error); }
 }
