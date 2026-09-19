@@ -16,7 +16,6 @@ import { DataTools } from "@/components/data-tools";
 import { HouseholdPreferences } from "@/components/household-preferences";
 import { AccountSettings } from "@/components/account-settings";
 import { AiChat } from "@/components/ai-chat";
-import { BatchAiImport } from "@/components/batch-ai-import";
 import { AiAssistantModal, analyzeItem, type AiAnalysis } from "@/components/ai-assistant-modal";
 import { PrintStudio } from "@/components/print-studio";
 import { dailyUsageCost, isCountUnit, isLiquidConsumable, normalizeItemQuantity } from "@/lib/item-metrics";
@@ -187,7 +186,7 @@ export function InventoryApp() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<ItemQuickFilter>("ALL");
   const [categoryFilter, setCategoryFilter] = useState("ALL");
-  const [modal, setModal] = useState<"item" | "shopping" | "location" | "task" | "notifications" | "recycle" | "batch-ai" | null>(null);
+  const [modal, setModal] = useState<"item" | "shopping" | "location" | "task" | "notifications" | "recycle" | null>(null);
   const [editing, setEditing] = useState<Item | null>(null);
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
   const [qrItem, setQrItem] = useState<Item | null>(null);
@@ -460,15 +459,15 @@ export function InventoryApp() {
         </div>
       </aside>
 
-      <main className="min-w-0 px-4 pb-8 pt-4 sm:px-6 md:px-8 md:py-7 xl:px-12">
-        <header className="mobile-topbar mb-7 flex items-center gap-3">
+      <main className="min-w-0 px-4 pb-8 pt-3 sm:px-6 md:px-8 md:py-5 xl:px-12">
+        <header className="mobile-topbar mb-5 flex items-center gap-2.5 border-b pb-4 md:gap-2 md:pb-3">
           <div className="mobile-only"><Brand compact /></div>
           <div className="desktop-only max-w-md flex-1">
             <SearchBox items={data?.items ?? []} value={search} onChange={setSearch} onSelect={(item) => { setSearch(item.name); openView("items"); }} onFocus={() => openView("items")} placeholder="搜索名称、编号、分类或位置…" />
           </div>
-          <button onClick={cycleTheme} className="btn-ghost grid size-11 place-items-center p-0" aria-label={`当前主题：${theme === "system" ? "跟随系统" : theme === "light" ? "浅色" : "深色"}`} title="切换主题">{theme === "system" ? <Monitor size={19} /> : theme === "light" ? <Moon size={19} /> : <Sun size={19} />}</button>
-          <button onClick={() => setModal("notifications")} className="btn-ghost relative grid size-11 place-items-center p-0" aria-label="查看提醒"><Bell size={19} />{lowStock.length + expiring.length + expired.length > 0 && <span className="absolute right-2 top-2 size-2 rounded-full" style={{ background: "var(--danger)" }} />}</button>
-          <button onClick={() => setModal("batch-ai")} className="btn-ghost flex items-center gap-2 whitespace-nowrap"><ImagePlus size={18} /><span className="hidden min-[1100px]:inline">图片识别</span></button><button onClick={() => setModal("item")} className="btn-primary flex items-center gap-2 whitespace-nowrap"><Plus size={19} /><span className="hidden min-[1100px]:inline">录入物品</span></button>
+          <button onClick={cycleTheme} className="btn-ghost grid size-10 place-items-center p-0 md:size-9" aria-label={`当前主题：${theme === "system" ? "跟随系统" : theme === "light" ? "浅色" : "深色"}`} title="切换主题">{theme === "system" ? <Monitor size={18} /> : theme === "light" ? <Moon size={18} /> : <Sun size={18} />}</button>
+          <button onClick={() => setModal("notifications")} className="btn-ghost relative grid size-10 place-items-center p-0 md:size-9" aria-label="查看提醒"><Bell size={18} />{lowStock.length + expiring.length + expired.length > 0 && <span className="absolute right-1.5 top-1.5 size-2 rounded-full" style={{ background: "var(--danger)" }} />}</button>
+          <button onClick={() => setChatOpen(true)} className="btn-ghost flex size-10 items-center justify-center gap-2 whitespace-nowrap p-0 md:h-9 md:w-auto md:px-3" aria-label="打开归物助手" title="归物助手"><Bot size={18} /><span className="hidden min-[1100px]:inline">AI 助手</span></button><button onClick={() => setModal("item")} className="btn-primary flex h-10 items-center gap-1.5 whitespace-nowrap px-3 md:h-9 md:px-3"><Plus size={18} /><span className="hidden min-[1100px]:inline">录入物品</span></button>
         </header>
 
         <AnimatePresence mode="wait">
@@ -503,7 +502,6 @@ export function InventoryApp() {
         {modal === "location" && <LocationModal location={editingLocation} locations={data?.locations ?? []} onClose={closeModal} onSaved={async () => { const wasEditing = Boolean(editingLocation); closeModal(); setToast(wasEditing ? "空间已更新" : "新空间已创建"); await refresh(); }} />}
         {modal === "notifications" && <NotificationsModal lowStock={lowStock} expiring={expiring} expired={expired} onClose={closeModal} onOpenItem={(item) => { closeModal(); openEdit(item); }} onDispose={removeItem} onShopping={() => { closeModal(); openView("items"); }} />}
         {modal === "recycle" && <RecycleBinModal onClose={closeModal} onRestored={async () => { setToast("物品已恢复"); await refresh(); }} onToast={setToast} />}
-        {modal === "batch-ai" && <BatchAiImport locations={data?.locations ?? []} onClose={closeModal} onSaved={refresh} onToast={setToast} />}
         {qrItem && <QrModal item={qrItem} onClose={() => setQrItem(null)} onPrint={() => { setQrItem(null); setPrintItems([qrItem]); }} />}
         {aiItem && <AiAssistantModal item={aiItem} onClose={() => setAiItem(null)} onApplied={async (message) => { setToast(message); await refresh(); }} />}
       </AnimatePresence>
