@@ -1,5 +1,19 @@
 export type ItemType = "DURABLE" | "CONSUMABLE";
 export type ShoppingStatus = "PENDING" | "PURCHASED";
+export type TaskStatus = "OPEN" | "DONE";
+export type TaskRecurrence = "NONE" | "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY";
+
+export interface HouseholdTask {
+  id: string;
+  title: string;
+  description: string | null;
+  dueAt: string;
+  recurrence: TaskRecurrence;
+  status: TaskStatus;
+  completedAt: string | null;
+  nextDueAt: string | null;
+  createdAt: string;
+}
 
 export interface Location {
   id: string;
@@ -73,4 +87,5 @@ export interface DashboardData {
   finance: { currentMonthTotal: number; averageMonthly: number; recordCount: number; recent: PriceRecord[]; byCategory: { category: string; total: number }[] };
   consumption: { itemName: string; count: number; lastUsedAt: string }[];
   preferences?: { expiryReminderDays: number; lowStockReminder: boolean; weeklyReviewEnabled: boolean; weeklyReviewDay: number };
+  tasks: HouseholdTask[];
 }

@@ -6,10 +6,10 @@ import {
   AlertTriangle, Archive, Bath, Bell, Bot, Boxes, CalendarDays, Check, CheckSquare, ChevronDown, ChevronRight, CircleAlert, Cloud, CookingPot,
   Grid2X2, ImagePlus, Info, LayoutDashboard, LayoutGrid, List, MapPin, Minus, Monitor, Moon,
   Package, Plus, Printer, QrCode, Search, Settings, ShoppingBasket, Sofa, Sparkles, Copy, Pencil, ExternalLink,
-  History, RotateCcw, Sun, Trash2, WalletCards, Warehouse, X, Zap, PanelLeftClose, Link2, Upload, ClipboardCheck,
+  History, RotateCcw, Sun, Trash2, WalletCards, Warehouse, X, Zap, PanelLeftClose, Link2, Upload, ClipboardCheck, ListTodo, Repeat2,
 } from "lucide-react";
 import { FormEvent, PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { DashboardData, Item, ItemType, Location, ShoppingItem } from "@/types";
+import type { DashboardData, HouseholdTask, Item, ItemType, Location, ShoppingItem, TaskRecurrence } from "@/types";
 import { AiSettings } from "@/components/ai-settings";
 import { RecycleBinModal } from "@/components/recycle-bin-modal";
 import { DataTools } from "@/components/data-tools";
@@ -25,7 +25,7 @@ import { APP_VERSION } from "@/lib/version";
 import { ContextMenu, useContextMenu, type ContextMenuItem } from "@/components/context-menu";
 import { isMedicineCategory, MEDICINE_CATEGORIES, medicineCategoryLabel, suggestMedicineCategory } from "@/lib/categories";
 
-type View = "dashboard" | "items" | "locations" | "audit" | "settings" | "about";
+type View = "dashboard" | "items" | "locations" | "tasks" | "audit" | "settings" | "about";
 type ThemeMode = "light" | "dark" | "system";
 type ItemQuickFilter = "ALL" | ItemType | "MEDICINE";
 type AssistantPosition = { x: number; y: number };
@@ -60,10 +60,11 @@ async function compressImage(file: File): Promise<File> {
 const navItems = [
   { id: "dashboard" as View, label: "概览", icon: LayoutDashboard },
   { id: "items" as View, label: "物品", icon: Boxes },
+  { id: "tasks" as View, label: "任务", icon: ListTodo },
   { id: "locations" as View, label: "空间", icon: MapPin },
   { id: "audit" as View, label: "盘点", icon: ClipboardCheck },
 ];
-const mobileNavItems = [...navItems.filter((item) => item.id !== "audit"), { id: "settings" as View, label: "设置", icon: Settings }];
+const mobileNavItems = [...navItems.filter((item) => item.id !== "audit" && item.id !== "locations"), { id: "settings" as View, label: "设置", icon: Settings }];
 
 const iconMap = { Package, CookingPot, Sofa, Bath, Warehouse };
 const categories = ["日用", "食品", "饮品", "清洁", "家电", "数码", "衣物", "医药", ...MEDICINE_CATEGORIES, "户外", "其他"];
@@ -186,7 +187,7 @@ export function InventoryApp() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<ItemQuickFilter>("ALL");
   const [categoryFilter, setCategoryFilter] = useState("ALL");
-  const [modal, setModal] = useState<"item" | "shopping" | "location" | "notifications" | "recycle" | "batch-ai" | null>(null);
+  const [modal, setModal] = useState<"item" | "shopping" | "location" | "task" | "notifications" | "recycle" | "batch-ai" | null>(null);
   const [editing, setEditing] = useState<Item | null>(null);
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
   const [qrItem, setQrItem] = useState<Item | null>(null);
@@ -332,10 +333,13 @@ export function InventoryApp() {
 
   const lowStock = data?.preferences?.lowStockReminder === false ? [] : (data?.items ?? []).filter((item) => item.quantity > 0 && item.type === "CONSUMABLE" && (!item.restockPausedUntil || new Date(item.restockPausedUntil).getTime() <= now) && ((item.minQuantity > 0 && item.quantity <= item.minQuantity) || (isLiquidConsumable(item) && item.remainingPercent <= 20)));
   const pendingShopping = (data?.shopping ?? []).filter((item) => item.status === "PENDING");
+  const tasks = data?.tasks ?? [];
   const expiryReminderDays = data?.preferences?.expiryReminderDays ?? 14;
   const expiring = (data?.items ?? []).filter((item) => item.quantity > 0 && item.type === "CONSUMABLE" && item.expiryDate && expiryDays(item, now) > 0 && expiryDays(item, now) <= expiryReminderDays);
   const expired = (data?.items ?? []).filter((item) => item.quantity > 0 && item.type === "CONSUMABLE" && item.expiryDate && expiryDays(item, now) <= 0);
   const totalValue = (data?.items ?? []).reduce((sum, item) => sum + (item.price ?? 0) * item.quantity, 0);
+  const toggleTask = async (task: HouseholdTask) => { try { await request("/api/tasks", { method: "PATCH", body: JSON.stringify({ id: task.id, action: "toggle" }) }); setToast(task.recurrence === "NONE" ? "任务已完成" : "已完成，本次任务已顺延"); await refresh(); } catch (error) { setToast(error instanceof Error ? error.message : "更新任务失败"); } };
+  const deleteTask = async (task: HouseholdTask) => { try { await request("/api/tasks", { method: "PATCH", body: JSON.stringify({ id: task.id, action: "delete" }) }); setToast("任务已删除"); await refresh(); } catch (error) { setToast(error instanceof Error ? error.message : "删除任务失败"); } };
 
   const openEdit = (item: Item) => { setEditing(item); setModal("item"); };
   const openDetail = (item: Item) => { window.location.assign(`/items/${encodeURIComponent(item.id)}`); };
@@ -477,6 +481,8 @@ export function InventoryApp() {
               <LocationsView locations={data!.locations} items={data!.items} onAdd={() => { setEditingLocation(null); setModal("location"); }} onOpen={(name) => { setSearch(name); openView("items"); }} onEdit={(location) => { setEditingLocation(location); setModal("location"); }} onToast={setToast} />
             ) : view === "audit" ? (
               <AuditView items={data!.items.filter((item) => item.quantity > 0)} locations={data!.locations} onRefresh={refresh} onToast={setToast} />
+            ) : view === "tasks" ? (
+              <TasksView tasks={tasks} onAdd={() => setModal("task")} onToggle={toggleTask} onDelete={deleteTask} />
             ) : view === "settings" ? <SettingsView onToast={setToast} onAbout={() => openView("about")} onAudit={() => openView("audit")} onRecycle={() => setModal("recycle")} density={density} motionMode={motionMode} onDensityChange={(next) => { setDensity(next); localStorage.setItem("home-inventory-density", next); }} onMotionChange={(next) => { setMotionMode(next); localStorage.setItem("home-inventory-motion", next); }} /> : <AboutView />}
           </motion.div>
         </AnimatePresence>
@@ -493,6 +499,7 @@ export function InventoryApp() {
       <AnimatePresence>
         {modal === "item" && <ItemModal locations={data?.locations ?? []} allItems={data?.items ?? []} item={editing} onClose={closeModal} onSaved={async () => { closeModal(); setToast(editing ? "物品已更新" : "物品已录入"); await refresh(); }} />}
         {modal === "shopping" && <ShoppingModal onClose={closeModal} onSaved={async () => { closeModal(); setToast("已加入采购清单"); await refresh(); }} />}
+        {modal === "task" && <TaskModal onClose={closeModal} onSaved={async () => { closeModal(); setToast("任务已安排"); await refresh(); }} />}
         {modal === "location" && <LocationModal location={editingLocation} locations={data?.locations ?? []} onClose={closeModal} onSaved={async () => { const wasEditing = Boolean(editingLocation); closeModal(); setToast(wasEditing ? "空间已更新" : "新空间已创建"); await refresh(); }} />}
         {modal === "notifications" && <NotificationsModal lowStock={lowStock} expiring={expiring} expired={expired} onClose={closeModal} onOpenItem={(item) => { closeModal(); openEdit(item); }} onDispose={removeItem} onShopping={() => { closeModal(); openView("items"); }} />}
         {modal === "recycle" && <RecycleBinModal onClose={closeModal} onRestored={async () => { setToast("物品已恢复"); await refresh(); }} onToast={setToast} />}
@@ -793,6 +800,22 @@ function LocationsView({ locations, items, onAdd, onOpen, onEdit, onToast }: { l
   const [selectedLocationId, setSelectedLocationId] = useState("ALL");
   const visibleLocations = selectedLocationId === "ALL" ? locations : locations.filter((location) => location.id === selectedLocationId);
   return <><PageTitle title="家庭空间" text="按房间和收纳位置快速找到物品。" action={<button onClick={onAdd} className="btn-primary flex items-center gap-2"><Plus size={18} /><span className="desktop-only">添加空间</span></button>} /><div className="browse-layout"><nav className="browse-rail" aria-label="空间索引"><button type="button" className="browse-rail-item" data-active={selectedLocationId === "ALL"} onClick={() => setSelectedLocationId("ALL")}><span>全部空间</span><span className="browse-rail-count">{locations.length}</span></button>{locations.map((location) => <button key={location.id} type="button" className="browse-rail-item" data-active={selectedLocationId === location.id} onClick={() => setSelectedLocationId(location.id)}><span className="truncate">{locationPath(location, locations)}</span><span className="browse-rail-count">{items.filter((item) => item.locationId === location.id).length}</span></button>)}</nav><div className="min-w-0"><div className="mb-3 text-xs muted">{selectedLocationId === "ALL" ? "选择一个空间，快速浏览其中的物品。" : "点击空间卡片可直接查看其中的物品。"}</div>{visibleLocations.length ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{visibleLocations.map((location, index) => <LocationCard key={location.id} location={location} locations={locations} items={items} index={index} onOpen={onOpen} onEdit={onEdit} onToast={onToast} />)}</div> : <div className="surface rounded-3xl py-16"><EmptyState icon={MapPin} title="还没有空间" text="先添加一个房间或收纳位置吧" /></div>}</div></div></>;
+}
+
+const recurrenceLabels: Record<TaskRecurrence, string> = { NONE: "一次性", DAILY: "每天", WEEKLY: "每周", MONTHLY: "每月", YEARLY: "每年" };
+function TasksView({ tasks, onAdd, onToggle, onDelete }: { tasks: HouseholdTask[]; onAdd: () => void; onToggle: (task: HouseholdTask) => void; onDelete: (task: HouseholdTask) => void }) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const dueSoon = tasks.filter((task) => new Date(task.dueAt).getTime() <= today.getTime() + 7 * 86400000);
+  return <><PageTitle title="家庭任务" text="把清洁、保养和日常小事，安排成不会忘记的节奏。" action={<button onClick={onAdd} className="btn-primary flex items-center gap-2"><Plus size={18} /><span className="desktop-only">安排任务</span></button>} />
+    <div className="mb-4 flex items-center gap-2 text-xs muted"><Repeat2 size={15} />{tasks.length ? `接下来 7 天有 ${dueSoon.length} 项任务` : "例如：每 3 个月清洁一次洗衣机"}</div>
+    <section className="surface p-4 sm:p-5"><div className="space-y-1">{tasks.map((task) => { const due = new Date(task.dueAt); const overdue = due.getTime() < today.getTime(); return <div key={task.id} className="group flex items-center gap-3 border-b py-3 last:border-b-0" style={{ borderColor: "var(--border)" }}><button onClick={() => onToggle(task)} className="grid size-7 shrink-0 place-items-center rounded-full border" aria-label={`完成任务：${task.title}`} style={{ borderColor: "var(--border)" }}><span className="size-2 rounded-full" style={{ background: overdue ? "var(--danger)" : "var(--primary)" }} /></button><div className="min-w-0 flex-1"><div className="truncate text-sm font-bold">{task.title}</div><div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs muted"><span>{overdue ? "已到期" : `到期 ${due.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })}`}</span><span>·</span><span>{recurrenceLabels[task.recurrence]}</span>{task.description && <><span>·</span><span className="truncate">{task.description}</span></>}</div></div><button onClick={() => onDelete(task)} className="icon-action opacity-0 transition group-hover:opacity-100" aria-label="删除任务"><Trash2 size={15} /></button></div>; })}{tasks.length === 0 && <EmptyState icon={ListTodo} title="还没有安排任务" text="从一次清洁或保养开始，让家务变得有节奏。" />}</div></section>
+  </>;
+}
+
+function TaskModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [title, setTitle] = useState(""); const [description, setDescription] = useState(""); const [dueAt, setDueAt] = useState(dateInputValue()); const [recurrence, setRecurrence] = useState<TaskRecurrence>("NONE"); const [saving, setSaving] = useState(false);
+  const submit = async (event: FormEvent) => { event.preventDefault(); setSaving(true); try { await request("/api/tasks", { method: "POST", body: JSON.stringify({ title, description, dueAt, recurrence }) }); onSaved(); } catch (error) { alert(error instanceof Error ? error.message : "保存失败"); } finally { setSaving(false); } };
+  return <Modal title="安排一个任务" subtitle="把容易忘记的小事，交给日历记着。" onClose={onClose}><form onSubmit={submit} className="space-y-4"><Field label="任务名称"><input autoFocus required className="input" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：清洁洗衣机" /></Field><Field label="备注（可选）"><input className="input" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="例如：清洁滤网和胶圈" /></Field><div className="grid grid-cols-2 gap-3"><Field label="下次日期"><input required type="date" className="input" value={dueAt} onChange={(event) => setDueAt(event.target.value)} /></Field><Field label="重复周期"><select className="input" value={recurrence} onChange={(event) => setRecurrence(event.target.value as TaskRecurrence)}>{Object.entries(recurrenceLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></Field></div><div className="flex gap-3 pt-2"><button type="button" onClick={onClose} className="btn-ghost flex-1">取消</button><button disabled={saving} className="btn-primary flex-1">{saving ? "保存中…" : "安排任务"}</button></div></form></Modal>;
 }
 
 function LocationCard({ location, locations, items, index, onOpen, onEdit, onToast }: { location: Location; locations: Location[]; items: Item[]; index: number; onOpen: (name: string) => void; onEdit: (location: Location) => void; onToast: (message: string) => void }) {
