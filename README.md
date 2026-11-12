@@ -22,6 +22,7 @@
 - 服务不可用时展示专门的“连接不上服务器”提示与重试按钮，不再只有空白页。
 - 管理员创建成员账号后可直接复制用户名和初始密码交给家人，密码仅显示一次。
 - 管理员重置成员密码改用应用内弹窗，支持强度校验、生成强密码和错误提示。
+- 首次启动不再写入示范数据。数据库里只有你自己录入的内容。
 
 ## v0.0.7 更新
 
@@ -65,9 +66,6 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
-    environment:
-      # 设为 false 可关闭首次启动时的示范数据
-      SEED_DEMO_DATA: auto
     volumes:
       # Docker / Container Station 管理的数据卷，重建容器不会丢失
       - home_inventory_data:/app/data
@@ -101,8 +99,6 @@ services:
     ports:
       # 威联通常见服务会占用 3000，外部端口改用 3100
       - "3100:3000"
-    environment:
-      SEED_DEMO_DATA: auto
     volumes:
       # 威联通 Container Station 默认绑定卷
       - /share/Container/homeinventory:/app/data
@@ -157,7 +153,7 @@ docker compose up -d --build
 
 浏览器打开：<http://localhost:3000>
 
-首次启动时会自动准备少量示范数据，方便了解库存、提醒、采购和消费功能。已有数据时不会重复添加。
+首次启动后先创建管理员账号。数据库里只有你自己录入的内容。
 
 ## 常用命令
 
@@ -189,18 +185,6 @@ docker compose down
 浅色、深色或跟随系统主题可直接在页面右上角切换。
 
 如果 AI 接口运行在宿主机，而应用运行在 Docker 中，请使用 `host.docker.internal`，不要填写 `localhost`。本地图片会保存在 Docker 卷中的 `/app/data/uploads`。
-
-<details>
-<summary><strong>不需要示范数据</strong></summary>
-
-首次启动前执行：
-
-```powershell
-$env:SEED_DEMO_DATA="false"
-docker compose up -d --build
-```
-
-</details>
 
 <details>
 <summary><strong>使用 MySQL</strong></summary>

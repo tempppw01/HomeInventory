@@ -1,65 +1,39 @@
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
-const day = 86400000;
 
-function daysFromNow(days: number) {
-  return new Date(Date.now() + days * day);
-}
-
+/**
+ * 数据库种子脚本。
+ *
+ * 历史:这个脚本以前会在首次启动时写入一批示范数据(5 件物品、4 个空间、
+ * 3 条采购、3 条消费记录),方便快速了解界面。产品要求库里只保留用户自己
+ * 录入的内容,所以现在不会再写入任何物品 / 空间 / 采购 / 消费记录。
+ *
+ * 脚本必须继续存在且可运行:`npm run db:seed`、`npm run db:setup` 以及容器
+ * 首次启动都会调用它,因此它保持幂等(不写任何数据,可重复执行),并以
+ * 退出码 0 结束。
+ *
+ * `SEED_DEMO_DATA` 仍然会被读取,只是为了兼容旧的 docker-compose 写法:
+ * 无论取值如何都不再产生示范数据,旧配置既不会报错,也不会有副作用。
+ */
 async function main() {
   const seedMode = (process.env.SEED_DEMO_DATA ?? "auto").toLowerCase();
-  if (["false", "0", "no", "off"].includes(seedMode)) {
-    console.log("Demo data disabled.");
-    return;
+  const legacyDisabled = ["false", "0", "no", "off"].includes(seedMode);
+
+  if (legacyDisabled) {
+    console.log("SEED_DEMO_DATA 已无需设置:本版本不再写入示范数据。");
+  } else {
+    console.log("已不再写入示范数据,数据库只会保留你自己录入的内容。");
   }
 
-  const counts = await Promise.all([
+  // 只读自检:打印当前数据量,确认脚本确实没有写入任何内容。
+  const [locations, items, shoppingItems, priceRecords] = await Promise.all([
     prisma.location.count(),
     prisma.item.count(),
     prisma.shoppingItem.count(),
     prisma.priceRecord.count(),
   ]);
-  if (counts.some((count) => count > 0)) {
-    console.log("Existing household data detected, skipping demo data.");
-    return;
-  }
-
-  await prisma.$transaction(async (tx) => {
-    const [kitchen, livingRoom, bathroom, storage] = await Promise.all([
-      tx.location.create({ data: { name: "厨房", icon: "CookingPot", color: "#f97316" } }),
-      tx.location.create({ data: { name: "客厅", icon: "Sofa", color: "#7c3aed" } }),
-      tx.location.create({ data: { name: "卫生间", icon: "Bath", color: "#06b6d4" } }),
-      tx.location.create({ data: { name: "储物间", icon: "Warehouse", color: "#10b981" } }),
-    ]);
-
-    const [rice, milk, detergent] = await Promise.all([
-      tx.item.create({ data: { itemCode: "INV-DEMO-001", name: "大米", category: "食品", type: "CONSUMABLE", quantity: 3.5, minQuantity: 2, unit: "kg", price: 32.8, purchaseDate: daysFromNow(-6), expiryDate: daysFromNow(120), locationId: kitchen.id, notes: "示范数据，可直接编辑或删除" } }),
-      tx.item.create({ data: { itemCode: "INV-DEMO-002", name: "牛奶", category: "饮品", type: "CONSUMABLE", quantity: 2, minQuantity: 3, remainingPercent: 70, unit: "盒", price: 14.9, purchaseDate: daysFromNow(-2), expiryDate: daysFromNow(5), locationId: kitchen.id, notes: "用于体验临期、低库存和剩余量调节" } }),
-      tx.item.create({ data: { itemCode: "INV-DEMO-003", name: "洗衣液", category: "清洁", type: "CONSUMABLE", quantity: 1, minQuantity: 1, remainingPercent: 60, unit: "瓶", price: 39, purchaseDate: daysFromNow(-18), locationId: bathroom.id, notes: "整瓶计数，拖动卡片上的瓶身可以调整剩余量" } }),
-      tx.item.create({ data: { itemCode: "INV-DEMO-004", name: "投影仪", category: "家电", type: "DURABLE", quantity: 1, unit: "台", price: 3299, purchaseDate: daysFromNow(-120), locationId: livingRoom.id } }),
-      tx.item.create({ data: { itemCode: "INV-DEMO-005", name: "露营帐篷", category: "户外", type: "DURABLE", quantity: 1, unit: "顶", price: 699, purchaseDate: daysFromNow(-45), locationId: storage.id } }),
-    ]);
-
-    await tx.shoppingItem.createMany({
-      data: [
-        { name: "牛奶", quantity: 2, unit: "盒", category: "饮品", priority: 2, source: "low-stock" },
-        { name: "洗衣液", quantity: 1, unit: "瓶", category: "清洁", priority: 2, source: "low-stock" },
-        { name: "厨房纸", quantity: 2, unit: "卷", category: "日用", priority: 1, source: "manual" },
-      ],
-    });
-
-    await tx.priceRecord.createMany({
-      data: [
-        { itemId: milk.id, itemName: milk.name, category: milk.category, unitPrice: 14.9, quantity: 2, totalPrice: 29.8, purchasedAt: daysFromNow(-2), store: "社区超市", notes: "示范消费记录" },
-        { itemId: rice.id, itemName: rice.name, category: rice.category, unitPrice: 32.8, quantity: 1, totalPrice: 32.8, purchasedAt: daysFromNow(-6), store: "粮油店", notes: "示范消费记录" },
-        { itemId: detergent.id, itemName: detergent.name, category: detergent.category, unitPrice: 39, quantity: 1, totalPrice: 39, purchasedAt: daysFromNow(-18), store: "生活超市", notes: "示范消费记录" },
-      ],
-    });
-
-  });
-
-  console.log("Demo household data seeded for the first visit.");
+  console.log(`当前数据:空间 ${locations} · 物品 ${items} · 采购 ${shoppingItems} · 消费记录 ${priceRecords}`);
 }
 
 main()
