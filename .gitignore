@@ -5,6 +5,9 @@
 /data/*.db-journal
 /data/*.db-shm
 /data/*.db-wal
+/data/backups/
+.devserver*.log
+.prodserver*.log
 .env
 .env.local
 !.env.example
