@@ -11,7 +11,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
+  // Deliberately no zoom lock here: pinching to zoom must stay available
+  // (WCAG 1.4.4). Inputs already use >=16px text, so focus zoom is not an issue.
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f5f6f8" },
     { media: "(prefers-color-scheme: dark)", color: "#111722" },

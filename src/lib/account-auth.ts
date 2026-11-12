@@ -21,14 +21,15 @@ export function verifyPassword(password: string, stored: string) {
 
 export function sessionHash(token: string) { return createHash("sha256").update(token).digest("hex"); }
 
-export async function createSession(userId: string, metadata?: { userAgent?: string | null; ipAddress?: string | null }) {
+export async function createSession(userId: string, metadata?: { userAgent?: string | null; ipAddress?: string | null }, options?: { days?: number }) {
+  const days = options?.days ?? SESSION_DAYS;
   const token = randomBytes(32).toString("base64url");
   await prisma.authSession.create({ data: {
     tokenHash: sessionHash(token),
     userId,
     device: summarizeDevice(metadata?.userAgent || ""),
     ipAddress: metadata?.ipAddress || null,
-    expiresAt: new Date(Date.now() + SESSION_DAYS * 86400000),
+    expiresAt: new Date(Date.now() + days * 86400000),
   } });
   return token;
 }

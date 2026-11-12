@@ -15,6 +15,8 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const username = typeof body.username === "string" ? body.username.trim().toLowerCase() : "";
   const password = typeof body.password === "string" ? body.password : "";
+  // "记住我" 关闭时使用浏览器会话 Cookie，关闭浏览器即失效；开启时保持 30 天。
+  const remember = body.remember !== false;
   const user = await prisma.user.findUnique({ where: { username } });
   if (!user) {
     await recordLoginAttempt(request, { username, success: false, failureReason: "用户名不存在" });
@@ -28,9 +30,9 @@ export async function POST(request: NextRequest) {
     await recordLoginAttempt(request, { userId: user.id, username, success: false, failureReason: "密码错误" });
     return NextResponse.json({ error: "用户名或密码不正确" }, { status: 401 });
   }
-  const token = await createSession(user.id, { userAgent: request.headers.get("user-agent"), ipAddress: requestIp(request) });
+  const token = await createSession(user.id, { userAgent: request.headers.get("user-agent"), ipAddress: requestIp(request) }, { days: remember ? undefined : 1 });
   await recordLoginAttempt(request, { userId: user.id, username, success: true });
   const response = NextResponse.json({ user: { id: user.id, username: user.username, displayName: user.displayName, role: user.role } });
-  response.cookies.set(ACCOUNT_COOKIE, token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 30, path: "/" });
+  response.cookies.set(ACCOUNT_COOKIE, token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", ...(remember ? { maxAge: 60 * 60 * 24 * 30 } : {}), path: "/" });
   return response;
 }

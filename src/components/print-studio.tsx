@@ -4,6 +4,7 @@ import { Printer, Settings2, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Item } from "@/types";
+import { useEscapeClose } from "@/lib/use-escape-close";
 
 type PaperPreset = "a4-portrait" | "a4-landscape" | "custom";
 type PrintCountMode = "single" | "inventory" | "custom";
@@ -161,10 +162,11 @@ export function PrintStudio({ items, onClose }: { items: Item[]; onClose: () => 
     window.print();
   };
 
-  return <div className="print-studio-root fixed inset-0 z-[80] flex flex-col bg-black/45 backdrop-blur-sm lg:flex-row">
+  useEscapeClose(onClose);
+  return <div role="dialog" aria-modal="true" aria-label="二维码打印" className="print-studio-root fixed inset-0 z-[80] flex flex-col bg-black/45 backdrop-blur-sm lg:flex-row">
     <style>{printCss}</style>
     <aside className="print-controls z-10 w-full overflow-y-auto p-4 lg:h-screen lg:w-[360px]" style={{ background: "var(--surface-solid)" }}>
-      <div className="flex items-start gap-3"><div className="flex-1"><h2 className="m-0 flex items-center gap-2 text-xl font-black"><Printer size={20} />二维码打印</h2><p className="mb-0 mt-1 text-xs muted">已选择 {items.length} 件物品，共 {printableItems.length} 个标签。</p></div><button onClick={onClose} className="btn-ghost grid size-9 place-items-center p-0"><X size={17} /></button></div>
+      <div className="flex items-start gap-3"><div className="flex-1"><h2 className="m-0 flex items-center gap-2 text-xl font-black"><Printer size={20} />二维码打印</h2><p className="mb-0 mt-1 text-xs muted">已选择 {items.length} 件物品，共 {printableItems.length} 个标签。</p></div><button onClick={onClose} className="btn-ghost grid size-9 min-h-9 place-items-center p-0"><X size={17} /></button></div>
       <div className="mt-6 space-y-5">
         <Control label="纸张规格"><select className="input" value={preset} onChange={(e) => setPreset(e.target.value as PaperPreset)}><option value="a4-portrait">A4 纵向</option><option value="a4-landscape">A4 横向</option><option value="custom">自定义尺寸</option></select></Control>
         {preset === "custom" && <div className="grid grid-cols-2 gap-3"><Control label="宽度 mm"><NumberInput value={customWidth} min={40} max={500} onChange={setCustomWidth} /></Control><Control label="高度 mm"><NumberInput value={customHeight} min={40} max={500} onChange={setCustomHeight} /></Control></div>}

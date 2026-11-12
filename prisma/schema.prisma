@@ -33,6 +33,9 @@ model User {
   username     String            @unique
   displayName  String
   passwordHash String
+  // 一次性恢复码(忘记密码时用)。只保存不可逆哈希,重置成功后立即轮换。
+  recoveryCodeHash    String?
+  recoveryGeneratedAt DateTime?
   role         UserRole          @default(MEMBER)
   active       Boolean           @default(true)
   member       HouseholdMember?
@@ -258,4 +261,15 @@ model HouseholdTask {
   @@index([status])
   @@index([dueAt])
   @@index([nextDueAt])
+}
+
+
+model SearchHistory {
+  id        String   @id @default(cuid())
+  query     String
+  userId    String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
 }

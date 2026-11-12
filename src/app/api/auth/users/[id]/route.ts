@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { canAdmin, hashPassword, requireUser } from "@/lib/account-auth";
+import { generateRecoveryCode } from "@/lib/recovery-code";
+import { hashRecoveryCode } from "@/lib/recovery-hash";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -12,10 +14,16 @@ export async function PATCH(request: NextRequest, { params }: Context) {
     const body = await request.json().catch(() => ({}));
     const target = await prisma.user.findUnique({ where: { id } });
     if (!target) return NextResponse.json({ error: "账号不存在" }, { status: 404 });
-    const data: { active?: boolean; role?: "ADMIN" | "MEMBER" | "VIEWER"; passwordHash?: string } = {};
+    const data: { active?: boolean; role?: "ADMIN" | "MEMBER" | "VIEWER"; passwordHash?: string; recoveryCodeHash?: string; recoveryGeneratedAt?: Date } = {};
     if (typeof body.active === "boolean") data.active = body.active;
     if (body.role === "ADMIN" || body.role === "MEMBER" || body.role === "VIEWER") data.role = body.role;
-    if (typeof body.password === "string" && body.password.length >= 8) data.passwordHash = hashPassword(body.password);
+    // 重置密码的同时轮换恢复码:一次管理员操作后,旧密码和旧恢复码都失效。
+    const rotatedRecoveryCode = typeof body.password === "string" && body.password.length >= 8 ? generateRecoveryCode() : null;
+    if (rotatedRecoveryCode) {
+      data.passwordHash = hashPassword(body.password);
+      data.recoveryCodeHash = hashRecoveryCode(rotatedRecoveryCode);
+      data.recoveryGeneratedAt = new Date();
+    }
     if (!Object.keys(data).length) return NextResponse.json({ error: "没有可更新的内容" }, { status: 400 });
     if (target.role === "ADMIN" && (data.role === "MEMBER" || data.role === "VIEWER" || data.active === false)) {
       const admins = await prisma.user.count({ where: { role: "ADMIN", active: true } });
@@ -27,7 +35,7 @@ export async function PATCH(request: NextRequest, { params }: Context) {
       if (data.active === false) await tx.authSession.deleteMany({ where: { userId: id } });
       return user;
     });
-    return NextResponse.json(updated);
+    return NextResponse.json(rotatedRecoveryCode ? { ...updated, recoveryCode: rotatedRecoveryCode } : updated);
   } catch (error) { return NextResponse.json({ error: error instanceof Error && error.message === "UNAUTHORIZED" ? "请先登录" : "更新账号失败" }, { status: error instanceof Error && error.message === "UNAUTHORIZED" ? 401 : 500 }); }
 }
 

@@ -2,14 +2,13 @@ import { NextResponse } from "next/server";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { prisma } from "@/lib/prisma";
-import { apiError } from "@/lib/api";
-import { requireUser } from "@/lib/account-auth";
+import { apiError, requireAdminUser } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
 export async function POST() {
   try {
-    const user = await requireUser();
+    const user = await requireAdminUser();
     const preference = await prisma.householdPreference.upsert({ where: { id: "default" }, create: {}, update: {} });
     const today = new Date().toISOString().slice(0, 10);
     if (preference.lastAutoBackupAt?.toISOString().slice(0, 10) === today) return NextResponse.json({ skipped: true });

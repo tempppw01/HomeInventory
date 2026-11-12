@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { ACCOUNT_COOKIE, canAdmin, hashPassword, requireUser, sessionHash } from "@/lib/account-auth";
+import { generateRecoveryCode } from "@/lib/recovery-code";
+import { hashRecoveryCode } from "@/lib/recovery-hash";
 
 export async function GET() {
   try {
@@ -36,12 +38,14 @@ export async function POST(request: NextRequest) {
     const password = typeof body.password === "string" ? body.password : "";
     const role = body.role === "VIEWER" ? "VIEWER" : "MEMBER";
     if (!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(username) || !displayName || password.length < 8) return NextResponse.json({ error: "请填写有效用户名、显示名称和至少 8 位密码" }, { status: 400 });
-    const created = await prisma.$transaction(async (tx) => {
-      const next = await tx.user.create({ data: { username, displayName, passwordHash: hashPassword(password), role } });
+    // 初始密码与恢复码在同一次事务里生成并入库,明文只在这一次响应里出现。
+    const { user: created, recoveryCode } = await prisma.$transaction(async (tx) => {
+      const code = generateRecoveryCode();
+      const next = await tx.user.create({ data: { username, displayName, passwordHash: hashPassword(password), role, recoveryCodeHash: hashRecoveryCode(code), recoveryGeneratedAt: new Date() } });
       await tx.householdMember.create({ data: { name: displayName, userId: next.id } });
       await tx.activityLog.create({ data: { action: "ACCOUNT_CREATE", userId: user.id, detail: `创建账号：${username}` } });
-      return next;
+      return { user: next, recoveryCode: code };
     });
-    return NextResponse.json({ id: created.id, username, displayName, role, active: true }, { status: 201 });
+    return NextResponse.json({ id: created.id, username, displayName, role, active: true, recoveryCode }, { status: 201 });
   } catch { return NextResponse.json({ error: "用户名可能已存在，或服务器暂时开小差了" }, { status: 400 }); }
 }

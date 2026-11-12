@@ -3,11 +3,19 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { isLiquidConsumable, needsRestock, restockQuantity } from "@/lib/item-metrics";
 import { apiError } from "@/lib/api";
+import { clientAddress, rateLimit } from "@/lib/rate-limit";
 
 const consumeSchema = z.object({ itemId: z.string().trim().min(1).max(80), requestId: z.string().uuid() });
 
 export async function POST(request: NextRequest) {
   try {
+    // The QR consume endpoint is intentionally usable without a login, so it
+    // needs its own guard: without it anyone reachable on the network could
+    // drain stock by replaying the request with fresh ids.
+    const guard = rateLimit(`public-consume:${clientAddress(request)}`, 30, 60_000);
+    if (!guard.ok) {
+      return NextResponse.json({ error: `扫码消耗操作过于频繁,请 ${guard.retryAfter} 秒后再试` }, { status: 429, headers: { "Retry-After": String(guard.retryAfter) } });
+    }
     const { itemId, requestId } = consumeSchema.parse(await request.json());
     const result = await prisma.$transaction(async (tx) => {
       const previous = await tx.activityLog.findUnique({ where: { scanRequestId: requestId }, include: { item: { include: { location: true } } } });

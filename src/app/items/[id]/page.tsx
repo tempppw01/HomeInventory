@@ -1,7 +1,9 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import { Archive, CalendarDays, Droplets, Lightbulb, MapPin, Package, Sparkles, WalletCards, Warehouse } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { currentUser } from "@/lib/account-auth";
 import { dailyUsageCost, isLiquidConsumable } from "@/lib/item-metrics";
 import { itemAiHighlights } from "@/lib/item-ai";
 
@@ -9,6 +11,11 @@ export const dynamic = "force-dynamic";
 
 export default async function ItemDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // This page shows price, notes and AI notes, so it needs a session just like
+  // the API does. Redirecting keeps QR links working for signed-in family
+  // members without publishing the household inventory to anyone with the link.
+  const user = await currentUser();
+  if (!user) redirect("/");
   const item = await prisma.item.findFirst({
     where: { deletedAt: null, OR: [{ id }, { itemCode: id }] },
     include: { location: true },
@@ -19,8 +26,12 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
   const ai = itemAiHighlights(item);
 
   return (
-    <main className="mx-auto min-h-screen max-w-2xl px-4 py-8 sm:py-14">
-      <Link href="/" className="mb-8 flex items-center gap-2 text-sm font-bold" style={{ color: "var(--primary)" }}>
+    <main
+      className="mx-auto min-h-screen max-w-2xl px-4 py-8 sm:py-14"
+      data-bottom-nav-space="none"
+      style={{ "--bottom-nav-space": "0px" } as CSSProperties}
+    >
+      <Link href="/" className="mb-8 flex min-h-11 items-center gap-2 text-sm font-bold" style={{ color: "var(--primary)" }}>
         <Archive size={18} /> 返回归物
       </Link>
       <article className="surface overflow-hidden rounded-[32px]">

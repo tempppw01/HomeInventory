@@ -8,6 +8,8 @@ const statements = [
     "username" TEXT NOT NULL,
     "displayName" TEXT NOT NULL,
     "passwordHash" TEXT NOT NULL,
+    "recoveryCodeHash" TEXT,
+    "recoveryGeneratedAt" DATETIME,
     "role" TEXT NOT NULL DEFAULT 'MEMBER',
     "active" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -236,6 +238,14 @@ async function main() {
   }
   if (!sessionColumns.some((column) => column.name === "ipAddress")) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "AuthSession" ADD COLUMN "ipAddress" TEXT`);
+  }
+  // 「忘记密码」用的一次性恢复码:老库升级时补列,新库由上面的 CREATE TABLE 建好。
+  const userColumns = await prisma.$queryRawUnsafe<Array<{ name: string }>>(`PRAGMA table_info("User")`);
+  if (!userColumns.some((column) => column.name === "recoveryCodeHash")) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN "recoveryCodeHash" TEXT`);
+  }
+  if (!userColumns.some((column) => column.name === "recoveryGeneratedAt")) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN "recoveryGeneratedAt" DATETIME`);
   }
   // Count units (including bottles) represent whole packages. Their partial
   // in-use state lives in remainingPercent, so old fractional data is repaired

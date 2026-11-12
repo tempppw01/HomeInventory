@@ -124,6 +124,14 @@
   --shadow: 0 12px 32px rgba(31, 43, 64, 0.055);
   --shadow-sm: 0 3px 12px rgba(31, 43, 64, 0.045);
   --shadow-lg: 0 16px 34px rgba(31, 43, 64, 0.12);
+  /* Warm brand accents used on the sign-in screen. Kept separate from the
+     action color so the home-feeling panel never competes with the form. */
+  --brand-accent: #b5793a;
+  --brand-sage: #4a7c6a;
+  --brand-panel: #f3efe7;
+  --brand-panel-ink: #2b2419;
+  --brand-muted: #6d6353;
+  --brand-line: rgba(43, 36, 25, 0.22);
 }
 
 [data-theme="dark"] {
@@ -146,6 +154,46 @@
   --shadow: 0 4px 18px rgba(0, 0, 0, 0.2);
   --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.2);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3);
+  --brand-accent: #d6a066;
+  --brand-sage: #7fb3a0;
+  --brand-panel: #1b2029;
+  --brand-panel-ink: #f2ece2;
+  --brand-muted: #a9a294;
+  --brand-line: rgba(242, 236, 226, 0.22);
+}
+
+/* System-preference fallback. Independent routes (/items/[id], /consume/[id])
+   never mount the app shell, so nothing ever writes html[data-theme] there and a
+   dark-OS visitor got a light page. `:not([data-theme])` means "the app has not
+   chosen yet", so an explicit in-app light/dark choice still wins. Keep this
+   palette identical to [data-theme="dark"] above. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+  --background: #111722;
+  --surface: rgba(27, 36, 51, 0.96);
+  --surface-solid: #1b2433;
+  --surface-soft: #252f40;
+  --foreground: #edf1f7;
+  --muted: #a0aabd;
+  --border: rgba(218, 228, 245, 0.11);
+  --primary: #9ab2e8;
+  --primary-strong: #b8c9f1;
+  --primary-soft: #293852;
+  --success: #70c19b;
+  --success-soft: #203b33;
+  --warning: #e2b66f;
+  --warning-soft: #403521;
+  --danger: #e7828a;
+  --shadow: 0 4px 18px rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3);
+  --brand-accent: #d6a066;
+  --brand-sage: #7fb3a0;
+  --brand-panel: #1b2029;
+  --brand-panel-ink: #f2ece2;
+  --brand-muted: #a9a294;
+  --brand-line: rgba(242, 236, 226, 0.22);
+  }
 }
 
 * { box-sizing: border-box; }
@@ -158,17 +206,18 @@ body {
   min-height: 100vh;
   transition: background-color 220ms ease, color 220ms ease;
 }
-button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 ::selection { background: color-mix(in srgb, var(--primary) 24%, transparent); }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--muted) 35%, transparent); border-radius: 999px; }
 
-.glass, .ds-glass {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
-  backdrop-filter: blur(18px);
+@layer components {
+  .glass, .ds-glass {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    backdrop-filter: blur(18px);
+  }
 }
 
 /* User-selectable density and motion preferences. These tokens let every
@@ -184,9 +233,12 @@ button { cursor: pointer; }
   animation-iteration-count: 1 !important;
   transition-duration: 1ms !important;
 }
-.surface, .ds-card { background: var(--surface-solid); border: var(--card-border-width) solid var(--border); border-radius: var(--radius-card); box-shadow: var(--card-shadow); }
+@layer components {
+  .surface, .ds-card { background: var(--surface-solid); border: var(--card-border-width) solid var(--border); box-shadow: var(--card-shadow); }
 .dashboard-overview { background: linear-gradient(135deg, var(--surface-solid), color-mix(in srgb, var(--primary-soft) 62%, var(--surface-solid))); border-color: color-mix(in srgb, var(--primary) 14%, var(--border)); box-shadow: var(--shadow); }
-.ds-card-padding-none { padding: 0; }
+}
+@layer components {
+  .ds-card-padding-none { padding: 0; }
 .ds-card-padding-compact { padding: var(--space-3); }
 .ds-card-padding-default { padding: var(--card-padding); }
 .ds-card-padding-comfortable { padding: var(--space-6); }
@@ -199,17 +251,18 @@ code, pre, kbd, .font-mono, .font-code { font-family: var(--font-mono); font-var
 .input:focus, .ds-field:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 13%, transparent); }
 .input.search-input, .ds-field.search-input { padding-left: 44px; }
 .input.input-icon, .ds-field.input-icon { padding-left: 44px; }
+/* Unlayered rules beat Tailwind utilities, so icon padding needs its own classes. */
+.input.input-icon-end, .ds-field.input-icon-end { padding-right: 44px; }
 .input.input-model, .ds-field.input-model { border-radius: 14px 0 0 14px; border-right: 0; }
 .btn-primary, .ds-button-primary {
   min-height: var(--control-height); border: 0; border-radius: var(--button-radius); color: white; background: var(--primary);
   padding: var(--button-padding-y) var(--button-padding-x); font-weight: 700; box-shadow: 0 9px 24px color-mix(in srgb, var(--primary) 25%, transparent); transition: transform var(--motion-base) var(--ease-standard), filter var(--motion-base) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard);
 }
 .btn-primary:hover, .ds-button-primary:hover { transform: translateY(-1px); filter: brightness(1.06); box-shadow: var(--shadow-lg); }
-.btn-ghost, .ds-button-secondary { min-height: var(--control-height); border: 1px solid var(--border); border-radius: var(--button-radius); color: var(--foreground); background: var(--surface-solid); padding: calc(var(--button-padding-y) - 0.125rem) calc(var(--button-padding-x) - 0.25rem); transition: border-color var(--motion-base) var(--ease-standard), background-color var(--motion-base) var(--ease-standard), transform var(--motion-base) var(--ease-standard); }
+.btn-ghost, .ds-button-secondary { min-height: var(--control-height); border: 1px solid var(--border); border-radius: var(--button-radius); background: var(--surface-solid); padding: calc(var(--button-padding-y) - 0.125rem) calc(var(--button-padding-x) - 0.25rem); transition: border-color var(--motion-base) var(--ease-standard), background-color var(--motion-base) var(--ease-standard), transform var(--motion-base) var(--ease-standard); }
 .btn-ghost:hover, .ds-button-secondary:hover { border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); background: var(--primary-soft); }
 .ds-button-quiet { min-height: var(--control-height); border: 0; border-radius: var(--button-radius); color: var(--foreground); background: transparent; padding: 0 var(--space-2); transition: color var(--motion-base) var(--ease-standard), background-color var(--motion-base) var(--ease-standard); }
 .ds-button-quiet:hover { color: var(--primary); background: var(--primary-soft); }
-.ds-button-danger { color: var(--danger); }
 .ds-button-sm { min-height: var(--control-height-compact); padding-block: 0.375rem; font-size: var(--text-xs); }
 .ds-button-icon { width: var(--icon-button-size); height: var(--icon-button-size); min-height: var(--icon-button-size); padding: 0; }
 .ds-form-field { display: block; }
@@ -229,7 +282,7 @@ code, pre, kbd, .font-mono, .font-code { font-family: var(--font-mono); font-var
 
 /* Reusable primitives for new screens and gradual migration of old ones. */
 .ds-icon-button { display: inline-grid; width: var(--icon-button-size); height: var(--icon-button-size); min-height: var(--icon-button-size); place-items: center; padding: 0; }
-.icon-action { display: inline-grid; width: 2rem; height: 2rem; min-height: 2rem; place-items: center; padding: 0; border: 0; border-radius: var(--radius-md); color: var(--muted); background: transparent; transition: color var(--motion-base) var(--ease-standard), background-color var(--motion-base) var(--ease-standard); }
+.icon-action { display: inline-grid; width: 2.5rem; height: 2.5rem; min-width: 2.5rem; min-height: 2.5rem; place-items: center; padding: 0; border: 0; border-radius: var(--radius-md); color: var(--muted); background: transparent; transition: color var(--motion-base) var(--ease-standard), background-color var(--motion-base) var(--ease-standard); }
 .icon-action:hover { color: var(--primary); background: var(--surface-soft); }
 .ds-row { display: flex; align-items: center; gap: var(--space-3); }
 .ds-stack { display: flex; flex-direction: column; gap: var(--space-4); }
@@ -274,28 +327,50 @@ code, pre, kbd, .font-mono, .font-code { font-family: var(--font-mono); font-var
 .browse-rail-item[data-active="true"] { color: var(--primary); background: var(--primary-soft); }
 .browse-rail-count { flex: 0 0 auto; color: var(--muted); font-family: var(--font-mono); font-size: .6875rem; font-weight: 600; }
 .browse-rail-item[data-active="true"] .browse-rail-count { color: var(--primary); }
+}
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* Sign-in screen: a calm home panel beside the account form. */
+@layer components {
+  .auth-shell { display: grid; min-height: 100dvh; background: var(--background); }
+.auth-brand { position: relative; display: none; overflow: hidden; background: var(--brand-panel); color: var(--brand-panel-ink); }
+.auth-brand-inner { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; padding: 3rem clamp(2rem, 4vw, 3.5rem); }
+.auth-brand .muted { color: var(--brand-muted); }
+.auth-panel { display: flex; align-items: center; justify-content: center; padding: 2rem 1.25rem; }
+.auth-artwork { position: absolute; right: 1.5rem; bottom: 1.25rem; width: 16rem; height: auto; opacity: .45; pointer-events: none; }
+@media (min-width: 1024px) {
+  .auth-shell { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); }
+  .auth-brand { display: block; }
+  .auth-panel { padding: 3rem 2rem; }
+  }
+}
 
 /* Keep global search and primary actions available while desktop pages scroll. */
 @media (min-width: 768px) {
   :root { --page-padding-x: 2rem; --page-padding-y: 1.25rem; --page-section-gap: 1.5rem; }
-  .ds-page-title { font-size: var(--page-title-size-wide); }
+}
+@layer components {
+  @media (min-width: 768px) {
+    .ds-page-title { font-size: var(--page-title-size-wide); }
+  }
 }
 
 @media (min-width: 1280px) {
   :root { --page-padding-x: 3rem; }
 }
 
-@media (min-width: 768px) {
-  .mobile-topbar {
-    position: sticky;
-    top: 0;
-    z-index: var(--z-header);
-    margin-bottom: 1.25rem;
-    padding: 1rem 0 .75rem;
-    border-bottom: 1px solid var(--border);
-    background: color-mix(in srgb, var(--background) 92%, transparent);
-    backdrop-filter: blur(18px);
+@layer components {
+  @media (min-width: 768px) {
+    .mobile-topbar {
+      position: sticky;
+      top: 0;
+      z-index: var(--z-header);
+      margin-bottom: 1.25rem;
+      padding: 1rem 0 .75rem;
+      border-bottom: 1px solid var(--border);
+      background: color-mix(in srgb, var(--background) 92%, transparent);
+      backdrop-filter: blur(18px);
+    }
   }
 }
 
@@ -304,13 +379,34 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 @keyframes shimmer { 100% { transform: translateX(100%); } }
-.skeleton { position: relative; overflow: hidden; background: var(--surface-soft); }
-.skeleton::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent); animation: shimmer 1.5s infinite; }
+@layer components {
+  .skeleton { position: relative; overflow: hidden; background: var(--surface-soft); }
+  .skeleton::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent); animation: shimmer 1.5s infinite; }
+}
 
 @media (max-width: 767px) {
-  :root { --page-padding-x: 1rem; --page-padding-y: 0.75rem; --page-section-gap: 1rem; --page-title-size: 1.625rem; --control-height: 2.75rem; }
-  body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+  :root { --page-padding-x: 1rem; --page-padding-y: 0.75rem; --page-section-gap: 1rem; --page-title-size: 1.625rem; --control-height: 2.75rem; --bottom-nav-space: 112px; }
+  /* Clears the bottom navigation plus the floating assistant launcher, which
+     otherwise sits on top of the last row's controls. The reserved space grows
+     with the home-indicator inset instead of being a fixed pixel count. */
+  body { padding-bottom: calc(var(--bottom-nav-space) + env(safe-area-inset-bottom)); }
+  /* Routes without a bottom navigation (/items/[id], /consume/[id]) opt out by
+     zeroing --bottom-nav-space on their root element and marking it with
+     data-bottom-nav-space="none". The marker is required because a custom
+     property set on a descendant cannot change body's own padding. */
+  body:has(> [data-bottom-nav-space="none"]) { --bottom-nav-space: 0px; }
   .desktop-only { display: none !important; }
+  /* A card action row with six 2.5rem buttons (consumable cards carry an extra
+     "用掉" button) no longer fits one 390px line: the quantity cell collapsed to
+     ~28px and "2.5kg" painted under the first icon (measured 27px overflow,
+     210px2 text/icon overlap). Those rows wrap, keep the numbers at content width
+     and keep the icons right-aligned; rows with five buttons are untouched. */
+  div.mt-auto:has(> div > .icon-action:nth-child(6)) { flex-wrap: wrap; height: auto; row-gap: .375rem; }
+  div.mt-auto:has(> div > .icon-action:nth-child(6)) > div:first-child { min-width: max-content; }
+  div.mt-auto:has(> div > .icon-action:nth-child(6)) > div:last-child { margin-left: auto; }
+}
+@layer components {
+  @media (max-width: 767px) {
   .mobile-topbar {
     position: sticky;
     top: 0;
@@ -348,15 +444,33 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     height: min(720px, calc(100dvh - 1rem - env(safe-area-inset-bottom)));
     border-radius: 1.5rem;
   }
+  /* Long questions used to be clipped: nowrap + overflow:hidden hid everything
+     past the first line (42 Chinese chars measured scrollWidth 685 vs
+     clientWidth 174). Wrap instead, let the field grow with the content up to a
+     cap, then scroll vertically. `field-sizing: content` is a progressive
+     enhancement; browsers without it keep the fixed 44px field and scroll. */
   .ai-chat-input {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    field-sizing: content;
+    max-height: 8rem;
+    overflow-y: auto;
+    resize: none;
   }
   .browse-layout { display: block; }
   .browse-rail { position: static; flex-direction: row; gap: .4rem; margin: 0 -1rem 1rem; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); padding: 0 1rem .7rem; scrollbar-width: none; }
   .browse-rail::-webkit-scrollbar { display: none; }
   .browse-rail-item { flex: 0 0 auto; min-height: 2.25rem; padding: .45rem .7rem; border: 1px solid transparent; font-size: .8125rem; white-space: nowrap; }
   .browse-rail-item[data-active="true"] { border-color: color-mix(in srgb, var(--primary) 22%, var(--border)); }
+  }
 }
-@media (min-width: 768px) { .mobile-only { display: none !important; } }
+@layer components {
+  @media (min-width: 768px) { .mobile-only { display: none !important; } }
+}
+
+/* Intent locks.
+   These declarations stay outside @layer components on purpose: they define the
+   component contract and must not be overridden by utility classes. */
+.surface, .ds-card { border-radius: var(--radius-card); }
+.btn-ghost, .ds-button-secondary { color: var(--foreground); }
+.ds-button-danger { color: var(--danger); }

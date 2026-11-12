@@ -17,13 +17,13 @@ const imageUrlSchema = z.union([
 ]);
 
 export const itemSchema = z.object({
-  name: z.string().trim().min(1, "请输入物品名称").max(80),
-  category: z.string().trim().min(1, "请选择或输入分类").max(40),
+  name: z.string().trim().min(1, "请输入物品名称").max(80, "物品名称最多 80 个字"),
+  category: z.string().trim().min(1, "请选择或输入分类").max(40, "分类最多 40 个字"),
   type: z.enum(["DURABLE", "CONSUMABLE"]),
   quantity: z.coerce.number().min(0).max(999999),
   minQuantity: z.coerce.number().min(0).max(999999).default(0),
   remainingPercent: z.coerce.number().min(0).max(100).default(100),
-  unit: z.string().trim().min(1).max(12),
+  unit: z.string().trim().min(1).max(12, "单位最多 12 个字"),
   price: z.union([z.coerce.number().min(0), z.literal(""), z.null()]).optional().transform((value) => value === "" || value == null ? null : value),
   purchaseDate: optionalDate,
   expiryDate: optionalDate,
@@ -49,6 +49,9 @@ export const batchItemSchema = itemSchema.omit({ recordPurchase: true, purchaseS
 
 export const bulkItemPatchSchema = z.object({
   ids: z.array(z.string().trim().min(1).max(80)).min(1, "请选择物品").max(100, "单次最多更新 100 件物品"),
+  type: z.enum(["DURABLE", "CONSUMABLE"]).optional(),
+  unit: z.string().trim().min(1).max(12).optional(),
+  minQuantity: z.coerce.number().min(0).max(999999).optional(),
   category: z.string().trim().min(1).max(40).optional(),
   locationId: z.union([z.string().trim().min(1).max(80), z.null()]).optional(),
   restockPausedUntil: z.union([z.string().datetime(), z.null()]).optional().transform((value) => value ? new Date(value) : value),
@@ -131,4 +134,16 @@ export const priceRecordSchema = z.object({
   purchasedAt: optionalDate,
   store: z.union([z.string().trim().max(80), z.literal(""), z.null()]).optional().transform((value) => value || null),
   notes: z.union([z.string().max(300), z.null()]).optional().transform((value) => value || null),
+});
+
+// 「忘记密码」用恢复码自助重置。用户名统一小写,恢复码允许带分隔符与大小写差异。
+export const recoveryResetSchema = z.object({
+  username: z.string({ required_error: "请输入用户名" }).trim().toLowerCase().regex(/^[a-z0-9][a-z0-9._-]{2,31}$/, "请输入有效的用户名"),
+  code: z.string({ required_error: "请输入恢复码" }).trim().min(8, "请输入完整的恢复码"),
+  password: z.string({ required_error: "请输入新密码" }).min(8, "新密码至少 8 位").max(72, "新密码最多 72 位"),
+});
+
+// 在设置里生成/重置自己的恢复码时,需要先用当前密码确认身份。
+export const recoveryMintSchema = z.object({
+  password: z.string({ required_error: "请输入当前密码" }).min(1, "请输入当前密码"),
 });
