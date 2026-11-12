@@ -56,10 +56,13 @@ const login = async (page, reducedMotion = "no-preference") => {
     await page.waitForSelector('[aria-label="概览"]', { timeout: 30000 }).catch(() => {});
   }
   const skip = page.locator('[aria-label="暂时跳过欢迎引导"]');
+  // 欢迎引导在数据加载完成后才挂载,可能比导航栏晚一步出现;先等它一下再关。
+  await skip.first().waitFor({ state: "visible", timeout: 3000 }).catch(() => {});
   if (await skip.count()) {
-    await skip.first().click();
+    await skip.first().click().catch(() => {});
     await page.waitForTimeout(700);
   }
+  await page.waitForFunction(() => document.querySelectorAll("[role=dialog][aria-modal=true]").length === 0, null, { timeout: 4000 }).catch(() => {});
 };
 const openDialog = () => document.querySelectorAll('[role="dialog"][aria-modal="true"]').length;
 
@@ -68,6 +71,29 @@ const openDialog = () => document.querySelectorAll('[role="dialog"][aria-modal="
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   await login(page);
+
+  // 库里不再有示范数据,干净安装下物品与采购清单都是空的。依赖真实数据的断言
+  // (删除采购项、卡片上的图标按钮尺寸)需要至少一条记录才有意义,所以这里按需
+  // 建临时数据,脚本跑完统一永久删除。
+  const seeded = await page.evaluate(async () => {
+    const listOf = async (url) => { const body = await (await fetch(url)).json(); return Array.isArray(body) ? body : (body?.items ?? []); };
+    const created = { item: false, shopping: false };
+    if ((await listOf("/api/items")).length === 0) {
+      const response = await fetch("/api/items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "验收探针物品", category: "日用", type: "DURABLE", quantity: 2, minQuantity: 0, remainingPercent: 100, unit: "件", price: null, purchaseDate: null, expiryDate: null, locationId: null, notes: null, imageUrl: null, recordPurchase: false, purchaseStore: null }) });
+      created.item = response.ok;
+    }
+    const dashboard = await (await fetch("/api/dashboard")).json();
+    if ((dashboard?.shopping ?? []).length === 0) {
+      const response = await fetch("/api/shopping", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "验收探针采购项", quantity: 1, unit: "件", priority: 1, source: "manual" }) });
+      created.shopping = response.ok;
+    }
+    return created;
+  });
+  if (seeded.item || seeded.shopping) {
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForSelector('[aria-label="概览"]', { timeout: 20000 });
+    await page.waitForTimeout(1200);
+  }
 
   // 1. task creation must be reachable again (desktop P0)
   await page.locator('[aria-label="任务"]:visible').first().click();
@@ -323,12 +349,19 @@ const openDialog = () => document.querySelectorAll('[role="dialog"][aria-modal="
   const authed = await browser.newContext();
   const api = await authed.newPage();
   await login(api);
-  const itemId = await api.evaluate(async () => {
+  // 全新安装不再写入示范数据,库里可能一件物品都没有 —— 那就自己建一条临时
+  // 物品给 /items/[id] 与 /consume/[id] 用,检查完再彻底删掉,避免假失败。
+  const fixture = await api.evaluate(async () => {
     const response = await fetch("/api/dashboard");
     const body = await response.json();
-    return body?.items?.[0]?.id ?? null;
+    const existing = body?.items?.[0]?.id ?? null;
+    if (existing) return { id: existing, created: false };
+    const created = await fetch("/api/items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "验收探针临时物品", category: "日用", type: "DURABLE", quantity: 1, minQuantity: 0, remainingPercent: 100, unit: "件", price: null, purchaseDate: null, expiryDate: null, locationId: null, notes: null, imageUrl: null, recordPurchase: false, purchaseStore: null }) });
+    const item = await created.json().catch(() => null);
+    return { id: item?.id ?? null, created: created.ok };
   });
-  await authed.close();
+  const itemId = fixture.id;
+  check("取到/建到一件物品 id", Boolean(itemId), `id=${itemId ? "yes" : "no"} created=${fixture.created}`);
 
   if (itemId) {
     const response = await page.goto(`${BASE}/items/${itemId}`, { waitUntil: "domcontentloaded" });
@@ -354,9 +387,11 @@ const openDialog = () => document.querySelectorAll('[role="dialog"][aria-modal="
     check("独立路由跟随系统深色模式", dark, `theme=${darkInfo.theme} bodyBg=${darkInfo.bg}`);
     check("独立路由无多余底部留白(≤40px)", parseFloat(darkInfo.paddingBottom) <= 40, `padding-bottom=${darkInfo.paddingBottom}`);
     check("/consume/[id] 有返回入口", darkInfo.backLinks >= 1, `links=${darkInfo.backLinks}`);
-  } else {
-    check("取到物品 id", false, "dashboard 未返回任何物品");
   }
+  if (fixture.created && itemId) {
+    await api.evaluate(async (id) => { await fetch(`/api/items/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ permanent: true }) }); }, itemId);
+  }
+  await authed.close();
   await anonymous.close();
 }
 
@@ -574,6 +609,29 @@ viewerChecks: {
   await page.waitForTimeout(3200);
   const text = await page.evaluate(() => document.body.innerText.trim().slice(0, 160));
   check("主接口 500 时不再出现英文错误页", text.length > 0 && !/couldn't load|Reload to try again/i.test(text), JSON.stringify(text.replace(/\n/g, " ").slice(0, 110)));
+  await context.close();
+}
+
+{
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await login(page);
+  const removed = await page.evaluate(async () => {
+    const listOf = async (url) => { const body = await (await fetch(url)).json(); return Array.isArray(body) ? body : (body?.items ?? []); };
+    let items = 0;
+    let shopping = 0;
+    for (const item of (await listOf("/api/items?includeDeleted=1")).filter((entry) => entry.name === "验收探针物品")) {
+      await fetch(`/api/items/${item.id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ permanent: true }) });
+      items += 1;
+    }
+    const dashboard = await (await fetch("/api/dashboard")).json();
+    for (const entry of (dashboard?.shopping ?? []).filter((row) => row.name === "验收探针采购项")) {
+      await fetch(`/api/shopping/${entry.id}`, { method: "DELETE" });
+      shopping += 1;
+    }
+    return { items, shopping };
+  });
+  console.log(`探针临时数据清理: 物品 ${removed.items} · 采购 ${removed.shopping}`);
   await context.close();
 }
 
