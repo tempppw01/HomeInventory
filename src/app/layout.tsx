@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { TopProgressBar } from "@/components/top-progress";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -22,7 +23,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="zh-CN" suppressHydrationWarning>
-      <body>{children}</body>
+      <body>
+        <TopProgressBar />
+        {children}
+      </body>
     </html>
   );
 }

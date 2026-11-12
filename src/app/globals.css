@@ -60,38 +60,56 @@
   --text-md: 1rem;
   --text-lg: 1.125rem;
   --text-xl: 1.25rem;
+  /* Typographic hierarchy. Three levels (display / body / auxiliary) share one
+     leading scale, one measure and one tracking rule, so the rhythm stays the
+     same on every screen instead of being re-decided per component. Display
+     sizes are fluid: the clamp interpolates between the mobile and the wide
+     token, which keeps both endpoint tokens authoritative. */
+  --leading-title: 1.25;
+  --leading-body: 1.65;
+  --leading-control: 1.5;
+  --tracking-title: -0.011em;
+  --tracking-label: 0.01em;
+  --measure: 66ch;
+  --text-body: 1rem;
+  --text-display: clamp(var(--page-title-size), 1.35rem + 1.4vw, var(--page-title-size-wide));
+  /* Spacing rhythm: every gap is a multiple of 4px (--space-1). */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
   --space-4: 1rem;
   --space-5: 1.25rem;
   --space-6: 1.5rem;
-  --radius-sm: 0.375rem;
-  --radius-md: 0.625rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 0.875rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+  /* Corner scale collapsed to three steps (8 / 12 / 16) plus the pill. */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1rem;
   --radius-card: 1rem;
   --radius-control: 0.75rem;
   --control-height: 2.75rem;
-  --control-height-compact: 2.25rem;
-  --icon-button-size: 2.25rem;
+  /* Compact controls stay on the 40px touch floor, never below it. */
+  --control-height-compact: 2.5rem;
+  --icon-button-size: 2.5rem;
   --button-padding-x: 1rem;
-  --button-padding-y: 0.6875rem;
+  --button-padding-y: var(--space-3);
   --button-radius: var(--radius-control);
-  --field-padding-x: 0.8125rem;
-  --field-padding-y: 0.6875rem;
+  --field-padding-x: var(--space-3);
+  --field-padding-y: var(--space-3);
   --field-radius: var(--radius-control);
   --card-border-width: 1px;
-  --card-shadow: var(--shadow-sm);
-  --card-padding: 1rem;
-  --page-padding-x: 1rem;
-  --page-padding-y: 0.75rem;
-  --page-section-gap: 1.25rem;
+  --card-shadow: var(--shadow-lift-1), var(--shadow-lift-2), var(--shadow-sm), var(--shadow-inset-top);
+  --card-padding: var(--space-4);
+  --page-padding-x: var(--space-4);
+  --page-padding-y: var(--space-3);
+  --page-section-gap: var(--space-5);
   --page-title-size: 1.875rem;
   --page-title-size-wide: 2.25rem;
-  --page-title-gap: 0.375rem;
+  --page-title-gap: var(--space-2);
   --field-label-size: var(--text-xs);
-  --field-label-gap: 0.375rem;
+  --field-label-gap: var(--space-2);
   --badge-height: 1.5rem;
   --badge-padding-x: 0.5rem;
   --badge-radius: 999px;
@@ -124,6 +142,19 @@
   --shadow: 0 12px 32px rgba(31, 43, 64, 0.055);
   --shadow-sm: 0 3px 12px rgba(31, 43, 64, 0.045);
   --shadow-lg: 0 16px 34px rgba(31, 43, 64, 0.12);
+  /* Layered elevation: a tight contact shadow, a wide ambient shadow and a 1px
+     inner highlight replace the old single heavy drop shadow. The theme-aware
+     --shadow-sm stays in the stack, so dark mode keeps its own depth values. */
+  --shadow-lift-1: 0 1px 1.5px rgba(23, 32, 49, 0.05);
+  --shadow-lift-2: 0 12px 26px -16px rgba(23, 32, 49, 0.3);
+  --shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  --shadow-primary: 0 1px 1.5px color-mix(in srgb, var(--primary) 22%, transparent), 0 10px 22px -12px color-mix(in srgb, var(--primary) 62%, transparent);
+  --shadow-primary-hover: 0 2px 4px color-mix(in srgb, var(--primary) 24%, transparent), 0 16px 28px -12px color-mix(in srgb, var(--primary) 72%, transparent);
+  /* One hairline for secondary separators, derived from the theme border, so it
+     stays correct in dark mode without touching the dark palette blocks. */
+  --hairline: color-mix(in srgb, var(--border) 72%, transparent);
+  --ring-color: color-mix(in srgb, var(--primary) 92%, transparent);
+  --selection-bg: color-mix(in srgb, var(--primary) 24%, transparent);
   /* Warm brand accents used on the sign-in screen. Kept separate from the
      action color so the home-feeling panel never competes with the form. */
   --brand-accent: #b5793a;
@@ -154,6 +185,9 @@
   --shadow: 0 4px 18px rgba(0, 0, 0, 0.2);
   --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.2);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3);
+  --shadow-lift-1: 0 1px 2px rgba(0, 0, 0, 0.32);
+  --shadow-lift-2: 0 16px 30px -18px rgba(0, 0, 0, 0.62);
+  --shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.07);
   --brand-accent: #d6a066;
   --brand-sage: #7fb3a0;
   --brand-panel: #1b2029;
@@ -187,6 +221,9 @@
   --shadow: 0 4px 18px rgba(0, 0, 0, 0.2);
   --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.2);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3);
+  --shadow-lift-1: 0 1px 2px rgba(0, 0, 0, 0.32);
+  --shadow-lift-2: 0 16px 30px -18px rgba(0, 0, 0, 0.62);
+  --shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.07);
   --brand-accent: #d6a066;
   --brand-sage: #7fb3a0;
   --brand-panel: #1b2029;
@@ -197,25 +234,44 @@
 }
 
 * { box-sizing: border-box; }
-html { background: var(--background); scroll-behavior: smooth; }
+html { background: var(--background); scroll-behavior: smooth; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--muted) 32%, transparent) transparent; }
 body {
   margin: 0;
   background: radial-gradient(ellipse at 90% 0%, color-mix(in srgb, var(--primary-soft) 52%, transparent), transparent 34rem), var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  font-variant-numeric: tabular-nums;
+  font-kerning: normal;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
   transition: background-color 220ms ease, color 220ms ease;
 }
 button { cursor: pointer; }
-::selection { background: color-mix(in srgb, var(--primary) 24%, transparent); }
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--muted) 35%, transparent); border-radius: 999px; }
+/* Unlayered on purpose: it must beat the plain `button` rule above. */
+button:disabled, input:disabled, select:disabled, textarea:disabled, [aria-disabled="true"] { cursor: not-allowed; }
+::selection { background: var(--selection-bg); color: var(--foreground); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--muted) 34%, transparent); background-clip: padding-box; border: 3px solid transparent; border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--muted) 55%, transparent); background-clip: padding-box; }
+
+@layer components {
+  /* Form affordances: one placeholder tone, one disabled tone, one easing for
+     every interactive element, so states feel like one system. Utilities still
+     win (this layer runs before Tailwind's utilities layer). */
+  ::placeholder { color: color-mix(in srgb, var(--muted) 78%, transparent); opacity: 1; }
+  :is(input, select, textarea, button):disabled { cursor: not-allowed; opacity: 0.6; }
+  :is(a, button, summary, input, select, textarea, [role="button"]) { transition-timing-function: var(--ease-standard); }
+}
 
 @layer components {
   .glass, .ds-glass {
     background: var(--surface);
     border: 1px solid var(--border);
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--card-shadow);
     backdrop-filter: blur(18px);
   }
 }
@@ -245,10 +301,10 @@ button { cursor: pointer; }
 .muted { color: var(--muted); }
 .input, .ds-field {
   width: 100%; border: 1px solid var(--border); background: var(--surface-soft); color: var(--foreground);
-  min-height: var(--control-height); border-radius: var(--field-radius); padding: var(--field-padding-y) var(--field-padding-x); outline: none; transition: border-color var(--motion-base) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard), background-color var(--motion-base) var(--ease-standard);
+  min-height: var(--control-height); border-radius: var(--field-radius); padding: var(--field-padding-y) var(--field-padding-x); outline: none; line-height: var(--leading-control); transition: border-color var(--motion-base) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard), background-color var(--motion-base) var(--ease-standard);
 }
 code, pre, kbd, .font-mono, .font-code { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-.input:focus, .ds-field:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 13%, transparent); }
+.input:focus, .ds-field:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring-color) 15%, transparent); }
 .input.search-input, .ds-field.search-input { padding-left: 44px; }
 .input.input-icon, .ds-field.input-icon { padding-left: 44px; }
 /* Unlayered rules beat Tailwind utilities, so icon padding needs its own classes. */
@@ -256,38 +312,41 @@ code, pre, kbd, .font-mono, .font-code { font-family: var(--font-mono); font-var
 .input.input-model, .ds-field.input-model { border-radius: 14px 0 0 14px; border-right: 0; }
 .btn-primary, .ds-button-primary {
   min-height: var(--control-height); border: 0; border-radius: var(--button-radius); color: white; background: var(--primary);
-  padding: var(--button-padding-y) var(--button-padding-x); font-weight: 700; box-shadow: 0 9px 24px color-mix(in srgb, var(--primary) 25%, transparent); transition: transform var(--motion-base) var(--ease-standard), filter var(--motion-base) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard);
+  padding: var(--button-padding-y) var(--button-padding-x); font-weight: 700; line-height: var(--leading-control); box-shadow: var(--shadow-primary); transition: transform var(--motion-base) var(--ease-standard), filter var(--motion-base) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard);
 }
-.btn-primary:hover, .ds-button-primary:hover { transform: translateY(-1px); filter: brightness(1.06); box-shadow: var(--shadow-lg); }
-.btn-ghost, .ds-button-secondary { min-height: var(--control-height); border: 1px solid var(--border); border-radius: var(--button-radius); background: var(--surface-solid); padding: calc(var(--button-padding-y) - 0.125rem) calc(var(--button-padding-x) - 0.25rem); transition: border-color var(--motion-base) var(--ease-standard), background-color var(--motion-base) var(--ease-standard), transform var(--motion-base) var(--ease-standard); }
+.btn-primary:hover, .ds-button-primary:hover { transform: translateY(-1px); filter: brightness(1.05); box-shadow: var(--shadow-primary-hover); }
+.btn-primary:active, .ds-button-primary:active { transform: translateY(0); filter: brightness(0.97); box-shadow: var(--shadow-primary); }
+.btn-ghost, .ds-button-secondary { min-height: var(--control-height); border: 1px solid var(--border); border-radius: var(--button-radius); background: var(--surface-solid); line-height: var(--leading-control); padding: calc(var(--button-padding-y) - 0.125rem) calc(var(--button-padding-x) - 0.25rem); transition: border-color var(--motion-base) var(--ease-standard), background-color var(--motion-base) var(--ease-standard), transform var(--motion-base) var(--ease-standard); }
 .btn-ghost:hover, .ds-button-secondary:hover { border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); background: var(--primary-soft); }
-.ds-button-quiet { min-height: var(--control-height); border: 0; border-radius: var(--button-radius); color: var(--foreground); background: transparent; padding: 0 var(--space-2); transition: color var(--motion-base) var(--ease-standard), background-color var(--motion-base) var(--ease-standard); }
+.btn-ghost:active, .ds-button-secondary:active { transform: translateY(0); background: var(--surface-soft); }
+.ds-button-quiet { min-height: var(--control-height); border: 0; border-radius: var(--button-radius); color: var(--foreground); background: transparent; padding: 0 var(--space-2); line-height: var(--leading-control); transition: color var(--motion-base) var(--ease-standard), background-color var(--motion-base) var(--ease-standard); }
 .ds-button-quiet:hover { color: var(--primary); background: var(--primary-soft); }
-.ds-button-sm { min-height: var(--control-height-compact); padding-block: 0.375rem; font-size: var(--text-xs); }
+.ds-button-sm { min-height: var(--control-height-compact); padding-block: 0.375rem; font-size: var(--text-xs); line-height: var(--leading-control); }
 .ds-button-icon { width: var(--icon-button-size); height: var(--icon-button-size); min-height: var(--icon-button-size); padding: 0; }
 .ds-form-field { display: block; }
-.ds-field-label { display: block; margin-bottom: var(--field-label-gap); color: var(--muted); font-size: var(--field-label-size); font-weight: 700; }
-.ds-field-hint { display: block; margin-top: .375rem; color: var(--muted); font-size: var(--text-xs); line-height: 1.5; }
+.ds-field-label { display: block; margin-bottom: var(--field-label-gap); color: var(--muted); font-size: var(--field-label-size); font-weight: 700; line-height: 1.4; letter-spacing: var(--tracking-label); }
+.ds-field-hint { display: block; margin-top: var(--space-2); color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-body); max-width: var(--measure); }
 .ds-badge, .ui-badge { display: inline-flex; min-height: var(--badge-height); align-items: center; padding-inline: var(--badge-padding-x); border-radius: var(--badge-radius); font-size: var(--badge-font-size); font-weight: 700; line-height: 1; }
 .ui-badge[data-tone="neutral"] { background: var(--surface-soft); color: var(--muted); }
 .ds-badge-primary, .ui-badge[data-tone="primary"] { background: var(--primary-soft); color: var(--primary); }
 .ui-badge[data-tone="success"] { background: var(--success-soft); color: var(--success); }
 .ui-badge[data-tone="warning"] { background: color-mix(in srgb, var(--warning) 14%, var(--surface-solid)); color: var(--warning); }
 .ui-badge[data-tone="danger"] { background: color-mix(in srgb, var(--danger) 12%, var(--surface-solid)); color: var(--danger); }
-.ds-page-shell { min-width: 0; padding: var(--page-padding-y) var(--page-padding-x) 2rem; }
+.ds-page-shell { min-width: 0; padding: var(--page-padding-y) var(--page-padding-x) var(--space-8); }
 .ds-page-header { display: flex; align-items: end; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--page-section-gap); }
-.ds-page-title { margin: 0; font-size: var(--page-title-size); font-weight: 900; line-height: 1.15; }
-.ds-page-description { margin: var(--page-title-gap) 0 0; color: var(--muted); font-size: var(--text-sm); }
+.ds-page-title { margin: 0; font-size: var(--text-display); font-weight: 900; line-height: var(--leading-title); letter-spacing: var(--tracking-title); text-wrap: balance; }
+.ds-page-description { margin: var(--page-title-gap) 0 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-body); max-width: var(--measure); text-wrap: pretty; }
 .ds-section + .ds-section { margin-top: var(--page-section-gap); }
 
 /* Reusable primitives for new screens and gradual migration of old ones. */
 .ds-icon-button { display: inline-grid; width: var(--icon-button-size); height: var(--icon-button-size); min-height: var(--icon-button-size); place-items: center; padding: 0; }
-.icon-action { display: inline-grid; width: 2.5rem; height: 2.5rem; min-width: 2.5rem; min-height: 2.5rem; place-items: center; padding: 0; border: 0; border-radius: var(--radius-md); color: var(--muted); background: transparent; transition: color var(--motion-base) var(--ease-standard), background-color var(--motion-base) var(--ease-standard); }
+.icon-action { display: inline-grid; width: 2.5rem; height: 2.5rem; min-width: 2.5rem; min-height: 2.5rem; place-items: center; padding: 0; border: 0; border-radius: var(--radius-md); color: var(--muted); background: transparent; transition: color var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard); }
 .icon-action:hover { color: var(--primary); background: var(--surface-soft); }
+.icon-action:active { color: var(--primary); background: color-mix(in srgb, var(--primary-soft) 78%, transparent); }
 .ds-row { display: flex; align-items: center; gap: var(--space-3); }
 .ds-stack { display: flex; flex-direction: column; gap: var(--space-4); }
-.ds-section { padding: var(--space-6); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-solid); box-shadow: var(--shadow-sm); }
-.ds-divider { height: 1px; background: var(--border); }
+.ds-section { padding: var(--space-6); border: var(--card-border-width) solid var(--hairline); border-radius: var(--radius-lg); background: var(--surface-solid); box-shadow: var(--card-shadow); }
+.ds-divider { height: 1px; background: var(--hairline); }
 .ds-nav-item {
   position: relative;
   color: var(--muted);
@@ -306,7 +365,7 @@ code, pre, kbd, .font-mono, .font-code { font-family: var(--font-mono); font-var
 }
 .ds-nav-item[data-compact="true"][data-active="true"]::before { left: 0.125rem; }
 .dashboard-overview + .surface { margin-top: 1rem; }
-.mobile-topbar { border-color: color-mix(in srgb, var(--border) 72%, transparent); }
+.mobile-topbar { border-color: var(--hairline); }
 .ds-mobile-nav-item { color: var(--muted); }
 .ds-mobile-nav-item[data-active="true"] { color: var(--primary); }
 .ds-mobile-nav-icon {
@@ -321,14 +380,14 @@ code, pre, kbd, .font-mono, .font-code { font-family: var(--font-mono); font-var
 .item-card-ai > div { min-width: 0; max-width: 100%; overflow: hidden; }
 .item-card-ai span, .item-card-ai div > div { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .browse-layout { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: var(--space-5); align-items: start; }
-.browse-rail { position: sticky; top: 1.5rem; display: flex; flex-direction: column; gap: .2rem; padding-right: var(--space-3); border-right: 1px solid var(--border); }
+.browse-rail { position: sticky; top: 1.5rem; display: flex; flex-direction: column; gap: .2rem; padding-right: var(--space-3); border-right: 1px solid var(--hairline); }
 .browse-rail-item { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: var(--space-2); border: 0; border-radius: var(--radius-md); padding: .55rem .65rem; color: var(--muted); background: transparent; font-size: var(--text-sm); font-weight: 650; text-align: left; transition: color var(--motion-base) var(--ease-standard), background-color var(--motion-base) var(--ease-standard); }
 .browse-rail-item:hover { color: var(--foreground); background: var(--surface-soft); }
 .browse-rail-item[data-active="true"] { color: var(--primary); background: var(--primary-soft); }
-.browse-rail-count { flex: 0 0 auto; color: var(--muted); font-family: var(--font-mono); font-size: .6875rem; font-weight: 600; }
+.browse-rail-count { flex: 0 0 auto; color: var(--muted); font-family: var(--font-mono); font-size: .6875rem; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
 .browse-rail-item[data-active="true"] .browse-rail-count { color: var(--primary); }
 }
-button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--ring-color); outline-offset: 2px; }
 
 /* Sign-in screen: a calm home panel beside the account form. */
 @layer components {
@@ -345,18 +404,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   }
 }
 
-/* Keep global search and primary actions available while desktop pages scroll. */
+/* Keep global search and primary actions available while desktop pages scroll.
+   Both breakpoints stay on the shared 4px rhythm scale, so mobile and desktop
+   are the same system at two sizes instead of two nearly-equal hand-tuned sets. */
 @media (min-width: 768px) {
-  :root { --page-padding-x: 2rem; --page-padding-y: 1.25rem; --page-section-gap: 1.5rem; }
-}
-@layer components {
-  @media (min-width: 768px) {
-    .ds-page-title { font-size: var(--page-title-size-wide); }
-  }
+  :root { --page-padding-x: var(--space-8); --page-padding-y: var(--space-5); --page-section-gap: var(--space-6); }
 }
 
 @media (min-width: 1280px) {
-  :root { --page-padding-x: 3rem; }
+  :root { --page-padding-x: var(--space-12); }
 }
 
 @layer components {
@@ -367,7 +423,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
       z-index: var(--z-header);
       margin-bottom: 1.25rem;
       padding: 1rem 0 .75rem;
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid var(--hairline);
       background: color-mix(in srgb, var(--background) 92%, transparent);
       backdrop-filter: blur(18px);
     }
@@ -385,7 +441,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 @media (max-width: 767px) {
-  :root { --page-padding-x: 1rem; --page-padding-y: 0.75rem; --page-section-gap: 1rem; --page-title-size: 1.625rem; --control-height: 2.75rem; --bottom-nav-space: 112px; }
+  :root { --page-padding-x: var(--space-4); --page-padding-y: var(--space-3); --page-section-gap: var(--space-4); --page-title-size: 1.625rem; --control-height: 2.75rem; --bottom-nav-space: 112px; }
   /* Clears the bottom navigation plus the floating assistant launcher, which
      otherwise sits on top of the last row's controls. The reserved space grows
      with the home-indicator inset instead of being a fixed pixel count. */
@@ -414,7 +470,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     min-height: calc(4.25rem + env(safe-area-inset-top));
     margin: calc(-1rem - env(safe-area-inset-top)) -1rem 1.25rem;
     padding: calc(.75rem + env(safe-area-inset-top)) 1rem .75rem;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--hairline);
     background: color-mix(in srgb, var(--background) 92%, transparent);
     backdrop-filter: blur(18px);
   }
@@ -458,7 +514,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     resize: none;
   }
   .browse-layout { display: block; }
-  .browse-rail { position: static; flex-direction: row; gap: .4rem; margin: 0 -1rem 1rem; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); padding: 0 1rem .7rem; scrollbar-width: none; }
+  .browse-rail { position: static; flex-direction: row; gap: .4rem; margin: 0 -1rem 1rem; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--hairline); padding: 0 1rem .7rem; scrollbar-width: none; }
   .browse-rail::-webkit-scrollbar { display: none; }
   .browse-rail-item { flex: 0 0 auto; min-height: 2.25rem; padding: .45rem .7rem; border: 1px solid transparent; font-size: .8125rem; white-space: nowrap; }
   .browse-rail-item[data-active="true"] { border-color: color-mix(in srgb, var(--primary) 22%, var(--border)); }
