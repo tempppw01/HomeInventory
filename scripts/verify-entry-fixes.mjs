@@ -463,6 +463,60 @@ await page.waitForTimeout(2600);
 const secondOpen = await page.locator('[role="dialog"][aria-label="提醒中心"]').count();
 check("同一天不会重复弹出(日常不打扰)", secondOpen === 0, `dialogs=${secondOpen}`);
 
+// --------------------------------------------------------- 设置页元素一致性
+// 7 个面板原来由 5 个文件各写一套卡片/标题/行距/控件,统一到 settings-primitives 之后:
+// 全部默认折叠、行 56px + 发丝分隔、图标块 44/36、勾选框换成 role=switch、手机不再横向溢出。
+await page.locator('[aria-label="设置"]:visible').first().click();
+await page.waitForTimeout(1500);
+const settingsFolded = await page.evaluate(() => {
+  const main = document.querySelector("main");
+  const details = [...main.querySelectorAll("details")];
+  const fontSizeOf = (node) => { const style = getComputedStyle(node); return style.fontSize + "/" + style.fontWeight; };
+  return {
+    details: details.length,
+    open: details.filter((node) => node.open).length,
+    classes: [...new Set(details.map((node) => node.className))],
+    radii: [...new Set(details.map((node) => getComputedStyle(node).borderRadius))],
+    pads: [...new Set(details.map((node) => getComputedStyle(node).padding))],
+    titles: [...new Set(details.map((node) => { const title = node.querySelector("summary span span"); return title ? fontSizeOf(title) : "none"; }))],
+    icons: [...new Set(details.map((node) => { const icon = node.querySelector("summary > span:first-child"); if (!icon) return "none"; const rect = icon.getBoundingClientRect(); return Math.round(rect.width) + "x" + Math.round(rect.height); }))],
+  };
+});
+check("设置页 8 个面板默认全部折叠", settingsFolded.details === 8 && settingsFolded.open === 0, JSON.stringify({ details: settingsFolded.details, open: settingsFolded.open }));
+check("面板容器样式完全一致", settingsFolded.classes.length === 1 && settingsFolded.radii.length === 1 && settingsFolded.pads.length === 1, JSON.stringify({ classes: settingsFolded.classes.length, radii: settingsFolded.radii, pads: settingsFolded.pads }));
+check("面板标题与图标块尺寸一致", settingsFolded.titles.length === 1 && settingsFolded.icons.length === 1, JSON.stringify({ titles: settingsFolded.titles, icons: settingsFolded.icons }));
+
+await page.evaluate(() => { document.querySelectorAll("main details").forEach((node) => { node.open = true; }); });
+await page.waitForTimeout(700);
+const settingsExpanded = await page.evaluate(() => {
+  const main = document.querySelector("main");
+  const rows = [...main.querySelectorAll("details > div > div")].filter((node) => node.getBoundingClientRect().height > 0);
+  const controls = [...main.querySelectorAll("button, select, input, textarea, [role=switch]")].filter((node) => node.offsetParent !== null && !node.closest("header"));
+  return {
+    rowHeights: [...new Set(rows.map((node) => Math.round(node.getBoundingClientRect().height)))].sort((a, b) => a - b),
+    rowBorders: [...new Set(rows.map((node) => getComputedStyle(node).borderTopWidth))],
+    smallControls: controls.filter((node) => Math.min(node.getBoundingClientRect().width, node.getBoundingClientRect().height) < 40).length,
+    switches: main.querySelectorAll("[role=switch]").length,
+    switchHeights: [...new Set([...main.querySelectorAll("[role=switch]")].map((node) => Math.round(node.getBoundingClientRect().height)))],
+    nativeCheckboxes: main.querySelectorAll('input[type="checkbox"]').length,
+    selectClasses: [...new Set([...main.querySelectorAll("select")].map((node) => node.className.includes("min-w-32") ? "settings" : "hand-written"))],
+  };
+});
+check("设置行最小高度 56px 且分隔为发丝线", settingsExpanded.rowHeights[0] === 56 && settingsExpanded.rowBorders.sort().join(",") === "0px,1px", JSON.stringify({ heights: settingsExpanded.rowHeights.slice(0, 4), border: settingsExpanded.rowBorders }));
+check("设置页没有 <40px 的可点控件", settingsExpanded.smallControls === 0, "small=" + settingsExpanded.smallControls);
+check("勾选框已换成 role=switch(44px)", settingsExpanded.nativeCheckboxes === 0 && settingsExpanded.switches >= 2 && settingsExpanded.switchHeights.every((height) => height >= 44), JSON.stringify({ checkboxes: settingsExpanded.nativeCheckboxes, switches: settingsExpanded.switches, heights: settingsExpanded.switchHeights }));
+check("设置页下拉全部来自 SettingsSelect", settingsExpanded.selectClasses.length === 1 && settingsExpanded.selectClasses[0] === "settings", JSON.stringify(settingsExpanded.selectClasses));
+check("设置页布局能展开", (await page.locator("main details[open]").count()) === 8, "open=" + (await page.locator("main details[open]").count()));
+
+// 390 手机上不能横向溢出(展开态最容易撑破) —— 响应式由 CSS 决定,直接切视口测。
+await page.setViewportSize({ width: 390, height: 844 });
+await page.waitForTimeout(800);
+const settingsMobile = await page.evaluate(() => ({ inner: window.innerWidth, scroll: document.documentElement.scrollWidth }));
+await page.setViewportSize({ width: 1440, height: 900 });
+await page.waitForTimeout(700);
+check("设置页 390 无横向溢出(全部展开)", settingsMobile.scroll <= 390, JSON.stringify(settingsMobile));
+await page.locator('[aria-label="概览"]:visible').first().click();
+await page.waitForTimeout(1200);
 // ---------------------------------------------------------------- 顶部进度效果
 const idle = await page.evaluate(() => {
   const bar = document.querySelector('[role="progressbar"]');
