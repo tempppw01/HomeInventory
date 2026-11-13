@@ -2,8 +2,15 @@
 
 import { BellRing, CalendarClock } from "lucide-react";
 import { useEffect, useState } from "react";
+import { SettingsBadge, SettingsRow, SettingsSection, SettingsSelect, SettingsSwitch } from "@/components/settings-primitives";
 
 type Preferences = { expiryReminderDays: number; lowStockReminder: boolean; weeklyReviewEnabled: boolean; weeklyReviewDay: number };
+
+// 下拉选项统一走 SettingsSelect 的 [值, 文案] 形式;值保持字符串,提交前再转回数字,
+// 这样接口 payload(expiryReminderDays / weeklyReviewDay 仍是 number)与改造前完全一致。
+const EXPIRY_OPTIONS = [["3", "3 天"], ["7", "7 天"], ["14", "14 天"], ["30", "30 天"]] as const;
+const WEEKDAY_OPTIONS = [["0", "周日"], ["1", "周一"], ["2", "周二"], ["3", "周三"], ["4", "周四"], ["5", "周五"], ["6", "周六"]] as const;
+const WEEKDAY_LABELS: Record<number, string> = { 0: "周日", 1: "周一", 2: "周二", 3: "周三", 4: "周四", 5: "周五", 6: "周六" };
 
 export function HouseholdPreferences({ onToast }: { onToast: (message: string) => void }) {
   const [value, setValue] = useState<Preferences>({ expiryReminderDays: 7, lowStockReminder: true, weeklyReviewEnabled: true, weeklyReviewDay: 0 });
@@ -13,5 +20,53 @@ export function HouseholdPreferences({ onToast }: { onToast: (message: string) =
     const next = { ...value, ...patch }; setValue(next); setSaving(true);
     try { const response = await fetch("/api/settings/preferences", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next) }); if (!response.ok) throw new Error("保存失败"); onToast("提醒偏好已保存"); } catch (error) { onToast(error instanceof Error ? error.message : "保存失败"); } finally { setSaving(false); }
   };
-  return <section className="surface rounded-3xl p-5"><div className="flex items-start gap-3"><div className="grid size-11 shrink-0 place-items-center rounded-2xl" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><BellRing size={20} /></div><div className="min-w-0 flex-1"><h3 className="m-0 text-sm font-black">提醒与盘点</h3><p className="mb-0 mt-1 text-xs muted">只提醒真正需要处理的事情，{saving ? "正在保存…" : "设置会自动保存"}</p></div></div><div className="mt-4 space-y-3 border-t pt-4" style={{ borderColor: "var(--border)" }}><label className="flex min-h-11 items-center justify-between gap-3 text-sm"><span>临期提前提醒</span><select className="input w-auto min-w-24 py-2" value={value.expiryReminderDays} onChange={(event) => void update({ expiryReminderDays: Number(event.target.value) })}><option value={3}>3 天</option><option value={7}>7 天</option><option value={14}>14 天</option><option value={30}>30 天</option></select></label><label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm"><span>低库存提醒</span><input type="checkbox" className="size-5 shrink-0" checked={value.lowStockReminder} onChange={(event) => void update({ lowStockReminder: event.target.checked })} /></label><label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm"><span className="flex items-center gap-2"><CalendarClock size={15} className="muted" />每周盘点提醒</span><input type="checkbox" className="size-5 shrink-0" checked={value.weeklyReviewEnabled} onChange={(event) => void update({ weeklyReviewEnabled: event.target.checked })} /></label>{value.weeklyReviewEnabled && <label className="flex min-h-11 items-center justify-between gap-3 text-sm"><span>提醒日</span><select className="input w-auto min-w-24 py-2" value={value.weeklyReviewDay} onChange={(event) => void update({ weeklyReviewDay: Number(event.target.value) })}><option value={0}>周日</option><option value={1}>周一</option><option value={2}>周二</option><option value={3}>周三</option><option value={4}>周四</option><option value={5}>周五</option><option value={6}>周六</option></select></label>}</div></section>;
+
+  // 折叠状态下也能读懂:三件事的真实状态都进 summary,保存状态进 badge。
+  const weekly = value.weeklyReviewEnabled ? `每周盘点 ${WEEKDAY_LABELS[value.weeklyReviewDay] ?? "开"}` : "每周盘点 关";
+  const summary = `低库存提醒 ${value.lowStockReminder ? "开" : "关"} · 保质期提前 ${value.expiryReminderDays} 天 · ${weekly}`;
+
+  return <SettingsSection
+    icon={BellRing}
+    title="提醒与盘点"
+    summary={summary}
+    badge={<SettingsBadge tone={saving ? "warning" : "muted"}>{saving ? "保存中..." : "自动保存"}</SettingsBadge>}
+  >
+    <SettingsRow
+      title="临期提前提醒"
+      control={<SettingsSelect
+        ariaLabel="临期提前提醒"
+        value={String(value.expiryReminderDays)}
+        onChange={(next) => void update({ expiryReminderDays: Number(next) })}
+        options={EXPIRY_OPTIONS}
+      />}
+    />
+    <SettingsRow
+      title="低库存提醒"
+      onActivate={() => void update({ lowStockReminder: !value.lowStockReminder })}
+      control={<SettingsSwitch
+        label="低库存提醒"
+        checked={value.lowStockReminder}
+        onChange={(next) => void update({ lowStockReminder: next })}
+      />}
+    />
+    <SettingsRow
+      icon={CalendarClock}
+      title="每周盘点提醒"
+      onActivate={() => void update({ weeklyReviewEnabled: !value.weeklyReviewEnabled })}
+      control={<SettingsSwitch
+        label="每周盘点提醒"
+        checked={value.weeklyReviewEnabled}
+        onChange={(next) => void update({ weeklyReviewEnabled: next })}
+      />}
+    />
+    {value.weeklyReviewEnabled && <SettingsRow
+      title="提醒日"
+      control={<SettingsSelect
+        ariaLabel="每周盘点提醒日"
+        value={String(value.weeklyReviewDay)}
+        onChange={(next) => void update({ weeklyReviewDay: Number(next) })}
+        options={WEEKDAY_OPTIONS}
+      />}
+    />}
+  </SettingsSection>;
 }

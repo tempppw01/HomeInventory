@@ -3,6 +3,7 @@
 import { Bot, Check, ChevronDown, LoaderCircle, RefreshCw } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ProviderIcon } from "@/components/provider-icon";
+import { SettingsActions, SettingsBadge, SettingsRow, SettingsSection } from "@/components/settings-primitives";
 import { AI_PROVIDER_PRESETS, providerForBaseUrl, providerForModel } from "@/lib/ai-providers";
 
 type AiForm = {
@@ -106,60 +107,57 @@ export function AiSettings({ onToast }: { onToast: (message: string) => void }) 
     }
   };
 
-  return <details className="surface group rounded-3xl p-5">
-    <summary className="flex cursor-pointer list-none items-center gap-3 [&::-webkit-details-marker]:hidden">
-      <div className="grid size-11 shrink-0 place-items-center rounded-2xl" style={{ background: "var(--primary-soft)" }}>
-        {provider.id === "custom" ? <Bot size={20} style={{ color: "var(--primary)" }} /> : <ProviderIcon provider={provider.id} size={21} />}
-      </div>
-      <div className="min-w-0 flex-1">
-        <h3 className="m-0 text-sm font-black">AI 模型与识别</h3>
-        <p className="mb-0 mt-1 truncate text-xs muted">{loading ? "正在检测配置" : form.configured ? `${provider.name} · ${form.model}` : "选择供应商并配置模型"}</p>
-      </div>
-      <span className="rounded-full px-2.5 py-1 text-[10px] font-bold" style={{ background: form.configured ? "var(--success-soft)" : "var(--surface-soft)", color: form.configured ? "var(--success)" : "var(--muted)" }}>{form.configured ? "已配置" : "未配置"}</span>
-      <ChevronDown size={17} className="muted transition-transform group-open:rotate-180" />
-    </summary>
+  return <SettingsSection
+    icon={Bot}
+    title="AI 模型与识别"
+    summary={loading ? "正在检测配置" : form.configured ? `已配置 · ${form.model}` : "未配置,点开填写接口地址"}
+    badge={<SettingsBadge tone={form.configured ? "success" : "muted"}>{loading ? "检测中" : form.configured ? "已配置" : "未配置"}</SettingsBadge>}
+  >
+    {!loading && <form onSubmit={save}>
+      <SettingsRow
+        title="供应商快捷设置"
+        stacked
+        control={<div className="grid w-full grid-cols-3 gap-2 sm:grid-cols-6">
+          {AI_PROVIDER_PRESETS.map((preset) => <button key={preset.id} type="button" title={preset.name} aria-label={`选择 ${preset.name}`} disabled={form.managedByEnvironment} onClick={() => chooseProvider(preset.id)} className="grid h-11 min-h-11 min-w-0 place-items-center rounded-2xl border transition hover:-translate-y-0.5" style={{ borderColor: provider.id === preset.id ? preset.color : "var(--border)", background: provider.id === preset.id ? `color-mix(in srgb, ${preset.color} 10%, var(--surface-solid))` : "var(--surface-soft)", color: provider.id === preset.id ? preset.color : "var(--muted)" }}><ProviderIcon provider={preset.id} size={24} /></button>)}
+        </div>}
+      />
 
-    {!loading && <form onSubmit={save} className="mt-5 space-y-4 border-t pt-5" style={{ borderColor: "var(--border)" }}>
-      <div>
-        <div className="mb-2 text-xs font-bold muted">供应商快捷设置</div>
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-          {AI_PROVIDER_PRESETS.map((preset) => <button key={preset.id} type="button" title={preset.name} aria-label={`选择 ${preset.name}`} disabled={form.managedByEnvironment} onClick={() => chooseProvider(preset.id)} className="grid h-16 min-w-0 place-items-center rounded-2xl border transition hover:-translate-y-0.5" style={{ borderColor: provider.id === preset.id ? preset.color : "var(--border)", background: provider.id === preset.id ? `color-mix(in srgb, ${preset.color} 10%, var(--surface-solid))` : "var(--surface-soft)", color: provider.id === preset.id ? preset.color : "var(--muted)" }}><ProviderIcon provider={preset.id} size={24} /></button>)}
-        </div>
-      </div>
+      <SettingsRow
+        title="接口地址"
+        stacked
+        control={<div className="w-full space-y-1.5">
+          <div className="relative"><span className="pointer-events-none absolute left-3.5 top-1/2 flex -translate-y-1/2">{provider.id === "custom" ? <Bot size={17} className="muted" /> : <ProviderIcon provider={provider.id} size={17} />}</span><input required aria-label="接口地址" disabled={form.managedByEnvironment} className="input input-icon" value={form.baseUrl} onChange={(event) => setForm((old) => ({ ...old, baseUrl: event.target.value }))} placeholder="https://api.openai.com/v1" /></div>
+          <span className="block text-xs leading-5 muted">快捷项使用各供应商官方端点；自建或中转服务可直接修改。Claude 官方端点会自动使用 Messages 协议。</span>
+        </div>}
+      />
 
-      <label className="block">
-        <span className="mb-1.5 block text-xs font-bold muted">接口地址</span>
-        <div className="relative"><span className="pointer-events-none absolute left-3.5 top-1/2 flex -translate-y-1/2">{provider.id === "custom" ? <Bot size={17} className="muted" /> : <ProviderIcon provider={provider.id} size={17} />}</span><input required disabled={form.managedByEnvironment} className="input input-icon" value={form.baseUrl} onChange={(event) => setForm((old) => ({ ...old, baseUrl: event.target.value }))} placeholder="https://api.openai.com/v1" /></div>
-        <span className="mt-1.5 block text-[11px] leading-5 muted">快捷项使用各供应商官方端点；自建或中转服务可直接修改。Claude 官方端点会自动使用 Messages 协议。</span>
-      </label>
+      <SettingsRow
+        title="模型"
+        description="点击右侧按钮会用当前地址和 API Key 自动获取模型。"
+        stacked
+        control={<div className="relative flex w-full" ref={modelMenuRef}>
+          <span className="pointer-events-none absolute left-3.5 top-1/2 z-10 flex -translate-y-1/2"><ProviderIcon provider={providerForModel(form.model, form.baseUrl).id} size={17} /></span>
+          <input required aria-label="模型" disabled={form.managedByEnvironment} className="input input-icon input-model" value={form.model} onChange={(event) => setForm((old) => ({ ...old, model: event.target.value }))} />
+          <button type="button" disabled={form.managedByEnvironment} onClick={toggleModels} className="grid w-11 shrink-0 place-items-center rounded-r-2xl border disabled:opacity-60" style={{ borderColor: "var(--border)", background: "var(--surface-soft)" }} aria-label="拉取并选择模型" aria-haspopup="listbox" aria-expanded={modelsOpen}>{modelsLoading ? <LoaderCircle className="animate-spin" size={17} /> : <ChevronDown className={`transition-transform ${modelsOpen ? "rotate-180" : ""}`} size={17} />}</button>
+          {modelsOpen && <div className="surface absolute left-0 right-0 top-full z-30 mt-2 max-h-64 overflow-y-auto rounded-2xl p-1.5 shadow-2xl" role="listbox">
+            {modelsLoading ? <div className="flex items-center gap-2 px-3 py-3 text-xs muted"><LoaderCircle className="animate-spin" size={15} />正在拉取模型列表…</div>
+              : modelsError ? <div className="p-2"><p className="m-0 px-1 text-xs leading-5 text-red-500">{modelsError}</p><button type="button" onClick={() => void loadModels()} className="btn-ghost mt-2 flex w-full items-center justify-center gap-2 py-2 text-xs"><RefreshCw size={14} />重新拉取</button></div>
+                : models.map((model) => { const modelProvider = providerForModel(model, form.baseUrl); return <button key={model} type="button" role="option" aria-selected={form.model === model} onClick={() => { setForm((old) => ({ ...old, model })); setModelsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl border-0 bg-transparent px-3 py-2.5 text-left text-sm hover:bg-[var(--primary-soft)]"><ProviderIcon provider={modelProvider.id} size={16} /><span className="min-w-0 flex-1 truncate">{model}</span>{form.model === model && <Check size={15} style={{ color: "var(--primary)" }} />}</button>; })}
+          </div>}
+        </div>}
+      />
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="block" ref={modelMenuRef}>
-          <span className="mb-1.5 block text-xs font-bold muted">模型</span>
-          <div className="relative flex">
-            <span className="pointer-events-none absolute left-3.5 top-1/2 z-10 flex -translate-y-1/2"><ProviderIcon provider={providerForModel(form.model, form.baseUrl).id} size={17} /></span>
-            <input required disabled={form.managedByEnvironment} className="input input-icon input-model" value={form.model} onChange={(event) => setForm((old) => ({ ...old, model: event.target.value }))} />
-            <button type="button" disabled={form.managedByEnvironment} onClick={toggleModels} className="grid w-11 shrink-0 place-items-center rounded-r-2xl border disabled:opacity-60" style={{ borderColor: "var(--border)", background: "var(--surface-soft)" }} aria-label="拉取并选择模型" aria-haspopup="listbox" aria-expanded={modelsOpen}>{modelsLoading ? <LoaderCircle className="animate-spin" size={17} /> : <ChevronDown className={`transition-transform ${modelsOpen ? "rotate-180" : ""}`} size={17} />}</button>
-            {modelsOpen && <div className="surface absolute left-0 right-0 top-full z-30 mt-2 max-h-64 overflow-y-auto rounded-2xl p-1.5 shadow-2xl" role="listbox">
-              {modelsLoading ? <div className="flex items-center gap-2 px-3 py-3 text-xs muted"><LoaderCircle className="animate-spin" size={15} />正在拉取模型列表…</div>
-                : modelsError ? <div className="p-2"><p className="m-0 px-1 text-xs leading-5 text-red-500">{modelsError}</p><button type="button" onClick={() => void loadModels()} className="btn-ghost mt-2 flex w-full items-center justify-center gap-2 py-2 text-xs"><RefreshCw size={14} />重新拉取</button></div>
-                  : models.map((model) => { const modelProvider = providerForModel(model, form.baseUrl); return <button key={model} type="button" role="option" aria-selected={form.model === model} onClick={() => { setForm((old) => ({ ...old, model })); setModelsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl border-0 bg-transparent px-3 py-2.5 text-left text-sm hover:bg-[var(--primary-soft)]"><ProviderIcon provider={modelProvider.id} size={16} /><span className="min-w-0 flex-1 truncate">{model}</span>{form.model === model && <Check size={15} style={{ color: "var(--primary)" }} />}</button>; })}
-            </div>}
-          </div>
-          <span className="mt-1.5 block text-[11px] leading-5 muted">点击右侧按钮会用当前地址和 API Key 自动获取模型。</span>
-        </div>
+      <SettingsRow
+        title="API Key"
+        description="密钥只保存在服务端；切换供应商后请填写对应供应商的 Key。"
+        stacked
+        control={<input aria-label="API Key" disabled={form.managedByEnvironment} type="password" className="input" value={form.apiKey} onChange={(event) => setForm((old) => ({ ...old, apiKey: event.target.value }))} placeholder={form.apiKeyConfigured ? "已保存，留空则不修改" : "首次配置必填"} autoComplete="new-password" />}
+      />
 
-        <label className="block">
-          <span className="mb-1.5 block text-xs font-bold muted">API Key</span>
-          <input disabled={form.managedByEnvironment} type="password" className="input" value={form.apiKey} onChange={(event) => setForm((old) => ({ ...old, apiKey: event.target.value }))} placeholder={form.apiKeyConfigured ? "已保存，留空则不修改" : "首次配置必填"} autoComplete="new-password" />
-          <span className="mt-1.5 block text-[11px] leading-5 muted">密钥只保存在服务端；切换供应商后请填写对应供应商的 Key。</span>
-        </label>
-      </div>
-
-      <div className="flex items-center justify-between gap-3 pt-1">
-        <p className="m-0 text-[11px] leading-5 muted">建议选择支持图片输入的模型，以启用拍照识别和包装信息分析。</p>
-        {form.managedByEnvironment ? <span className="whitespace-nowrap text-xs font-bold muted">环境变量托管</span> : <button disabled={saving} className="btn-primary whitespace-nowrap px-4 py-2 text-sm">{saving ? "保存中…" : "保存 AI"}</button>}
-      </div>
+      <SettingsActions>
+        <p className="m-0 min-w-0 flex-1 text-xs leading-5 muted">建议选择支持图片输入的模型，以启用拍照识别和包装信息分析。</p>
+        {form.managedByEnvironment ? <span className="whitespace-nowrap text-xs font-bold muted">环境变量托管</span> : <button disabled={saving} className="btn-primary whitespace-nowrap px-4 text-sm">{saving ? "保存中…" : "保存 AI"}</button>}
+      </SettingsActions>
     </form>}
-  </details>;
+  </SettingsSection>;
 }

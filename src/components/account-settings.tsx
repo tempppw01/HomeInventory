@@ -2,8 +2,9 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Check, CheckCircle2, ChevronDown, ClipboardCopy, Eye, EyeOff, History, KeyRound, Loader2, LogOut, MonitorX, ShieldCheck, UserPlus, Users, X, XCircle } from "lucide-react";
+import { Check, ClipboardCopy, Eye, EyeOff, History, KeyRound, Loader2, LogOut, MonitorX, ShieldCheck, UserPlus, Users, X } from "lucide-react";
 import { generatePassword, PASSWORD_MIN_LENGTH } from "@/lib/password";
+import { SettingsActions, SettingsBadge, SettingsRow, SettingsSection, SettingsSelect } from "@/components/settings-primitives";
 
 type User = {
   id: string;
@@ -28,6 +29,8 @@ type LoginRecord = {
 
 const roleLabel = (role: User["role"]) => role === "ADMIN" ? "管理员" : role === "VIEWER" ? "只读" : "成员";
 
+const ROLE_OPTIONS = [["ADMIN", "管理员"], ["MEMBER", "成员"], ["VIEWER", "只读"]] as const;
+
 function formatLoginTime(value: string) {
   return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
@@ -36,31 +39,30 @@ function formatLoginTime(value: string) {
 type Credentials = { title: string; hint: string; username?: string; password?: string; passwordLabel?: string; recoveryCode?: string | null };
 
 function CredentialRow({ label, value, mono, onCopy }: { label: string; value: string; mono?: boolean; onCopy: (value: string, message: string) => void }) {
-  return <div className="flex items-center gap-2 rounded-xl p-2.5" style={{ background: "var(--surface-solid)" }}>
-    <span className="shrink-0 text-xs font-bold muted">{label}</span>
-    <code className={`min-w-0 flex-1 truncate text-sm ${mono ? "tracking-[0.12em]" : ""}`}>{value}</code>
-    <button type="button" onClick={() => onCopy(value, `${label}已复制`)} className="icon-action size-11 min-h-11 shrink-0" aria-label={`复制${label}`} title={`复制${label}`}><ClipboardCopy size={15} /></button>
-  </div>;
+  return <SettingsRow
+    title={label}
+    description={<code className={`block break-all text-sm ${mono ? "tracking-[0.12em]" : ""}`}>{value}</code>}
+    control={<button type="button" onClick={() => onCopy(value, `${label}已复制`)} className="icon-action size-11 min-h-11 shrink-0" aria-label={`复制${label}`} title={`复制${label}`}><ClipboardCopy size={15} /></button>}
+  />;
 }
 
 function CredentialsCard({ title, hint, username, password, passwordLabel = "初始密码", recoveryCode, onCopy, onClose }: Credentials & { onCopy: (value: string, message: string) => void; onClose: () => void }) {
   const all = [username ? `用户名:${username}` : "", password ? `密码:${password}` : "", recoveryCode ? `恢复码:${recoveryCode}` : ""].filter(Boolean).join("\n");
   const allMessage = username || password ? "登录信息已复制" : "恢复码已复制";
-  return <section className="rounded-2xl border p-4" style={{ borderColor: "var(--brand-accent)", background: "color-mix(in srgb, var(--brand-accent) 8%, transparent)" }}>
-    <div className="flex items-start gap-2.5">
-      <span className="grid size-8 shrink-0 place-items-center rounded-xl" style={{ background: "color-mix(in srgb, var(--brand-accent) 18%, transparent)", color: "var(--brand-accent)" }}><Check size={16} /></span>
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-black">{title}</div>
-        <p className="mb-0 mt-1 text-xs leading-5 muted">{hint}</p>
-      </div>
-      <button type="button" onClick={onClose} className="icon-action size-11 min-h-11 shrink-0" aria-label="关闭凭据提示" title="关闭"><X size={16} /></button>
-    </div>
-    <div className="mt-3 grid gap-2">
-      {username && <CredentialRow label="用户名" value={username} onCopy={onCopy} />}
-      {password && <CredentialRow label={passwordLabel} value={password} onCopy={onCopy} />}
-      {recoveryCode && <CredentialRow label="恢复码" value={recoveryCode} mono onCopy={onCopy} />}
-      {all && <button type="button" onClick={() => onCopy(all, allMessage)} className="btn-ghost flex min-h-11 items-center justify-center gap-1.5 text-xs"><ClipboardCopy size={14} />复制全部</button>}
-    </div>
+  // 一次性凭据是「看完就关」的强调块:保留品牌色描边,内部的行与按钮统一走设置原语。
+  return <section className="mt-3 rounded-2xl border p-4" style={{ borderColor: "var(--brand-accent)", background: "color-mix(in srgb, var(--brand-accent) 8%, transparent)" }}>
+    <SettingsRow
+      icon={Check}
+      title={title}
+      description={hint}
+      control={<button type="button" onClick={onClose} className="icon-action size-11 min-h-11 shrink-0" aria-label="关闭凭据提示" title="关闭"><X size={16} /></button>}
+    />
+    {username && <CredentialRow label="用户名" value={username} onCopy={onCopy} />}
+    {password && <CredentialRow label={passwordLabel} value={password} onCopy={onCopy} />}
+    {recoveryCode && <CredentialRow label="恢复码" value={recoveryCode} mono onCopy={onCopy} />}
+    {all && <SettingsActions>
+      <button type="button" onClick={() => onCopy(all, allMessage)} className="btn-ghost flex min-h-11 items-center justify-center gap-1.5 text-xs"><ClipboardCopy size={14} />复制全部</button>
+    </SettingsActions>}
   </section>;
 }
 
@@ -182,7 +184,7 @@ export function AccountSettings({ onToast }: { onToast: (message: string) => voi
       await navigator.clipboard.writeText(value);
       onToast(message);
     } catch {
-      onToast("复制失败，请手动选择文本复制");
+      onToast("复制失败,请手动选择文本复制");
     }
   };
 
@@ -195,7 +197,7 @@ export function AccountSettings({ onToast }: { onToast: (message: string) => voi
   };
 
   const removeUser = async (user: User) => {
-    if (!confirm(`确定删除账号“${user.displayName}”？`)) return;
+    if (!confirm(`确定删除账号“${user.displayName}”?`)) return;
     const response = await fetch(`/api/auth/users/${user.id}`, { method: "DELETE" });
     const result = await response.json();
     if (!response.ok) { onToast(result.error || "删除失败"); return; }
@@ -204,7 +206,7 @@ export function AccountSettings({ onToast }: { onToast: (message: string) => voi
   };
 
   const revokeSession = async (user: User, session: User["sessions"][number]) => {
-    if (!confirm(`确定踢出“${user.displayName}”在 ${session.device} 上的登录吗？该设备需要重新登录。`)) return;
+    if (!confirm(`确定踢出“${user.displayName}”在 ${session.device} 上的登录吗?该设备需要重新登录。`)) return;
     const response = await fetch(`/api/auth/sessions/${session.id}`, { method: "DELETE" });
     const result = await response.json();
     if (!response.ok) { onToast(result.error || "踢出设备失败"); return; }
@@ -214,54 +216,84 @@ export function AccountSettings({ onToast }: { onToast: (message: string) => voi
 
   const logout = async () => { await fetch("/api/auth/logout", { method: "POST" }); location.reload(); };
 
+  // 折叠状态摘要 / 徽标:只用真实数据,不展开也能读懂。
+  const currentUser = users.find((user) => user.sessions.some((session) => session.isCurrent));
+  const inactiveUsers = users.filter((user) => !user.active).length;
+  const accountSummary = users.length === 0
+    ? "正在读取账号..."
+    : currentUser
+      ? `当前账号 ${currentUser.displayName} · ${roleLabel(currentUser.role)} · ${users.length} 位家庭成员`
+      : `${users.length} 位家庭成员`;
+  const accountBadge = users.length === 0
+    ? <SettingsBadge tone="muted">读取中</SettingsBadge>
+    : <SettingsBadge tone={inactiveUsers > 0 ? "warning" : "success"}>{inactiveUsers > 0 ? `${inactiveUsers} 个已停用` : "全部启用"}</SettingsBadge>;
+  const recoverySummary = recovery.loading
+    ? "正在读取恢复码状态..."
+    : recovery.hasCode
+      ? `已设置恢复码${recovery.generatedAt ? ` · 生成于 ${formatLoginTime(recovery.generatedAt)}` : ""}`
+      : "尚未设置恢复码";
+
   return <>
-  <details className="surface group rounded-3xl p-5">
-    <summary className="flex cursor-pointer list-none items-center gap-3 [&::-webkit-details-marker]:hidden">
-      <div className="grid size-11 place-items-center rounded-2xl" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><Users size={20} /></div>
-      <div className="min-w-0 flex-1"><h3 className="m-0 text-sm font-black">账号与家庭成员</h3><p className="mb-0 mt-1 truncate text-xs muted">管理登录账号、权限和登录记录</p></div>
-      <ChevronDown size={17} className="muted transition-transform group-open:rotate-180" />
-    </summary>
-    <div className="mt-5 space-y-4 border-t pt-4" style={{ borderColor: "var(--border)" }}>
-      <div className="space-y-2">
-        {users.map((user) => <div key={user.id} className="flex flex-wrap items-center gap-2 rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-bold">{user.displayName}</div>
-            <div className="text-xs muted">@{user.username} · 权限：{roleLabel(user.role)}</div>
-            {user.lastLogin && <div className="mt-1 text-[11px] leading-4 muted">最近登录：{user.lastLogin.ipAddress || "未知 IP"} · {user.lastLogin.device} · {formatLoginTime(user.lastLogin.createdAt)}</div>}
-          </div>
-          <select aria-label={`${user.displayName}的账号权限`} title="账号权限" className="input h-11 min-h-11 min-w-28 px-3 py-2 text-sm font-semibold leading-5" value={user.role} onChange={(event) => void updateUser(user, { role: event.target.value })}>
-            <option value="ADMIN">管理员</option><option value="MEMBER">成员</option><option value="VIEWER">只读</option>
-          </select>
+  <SettingsSection icon={Users} title="账号与家庭成员" summary={accountSummary} badge={accountBadge}>
+    {users.map((user) => <div key={user.id}>
+      <SettingsRow
+        stacked
+        title={<span className="block truncate">{user.displayName}</span>}
+        description={<>
+          @{user.username} · 权限:{roleLabel(user.role)} · {user.active ? "正常" : "已停用"}{user.sessions.length > 0 ? ` · 已登录设备 ${user.sessions.length}` : ""}
+          {user.lastLogin && <span className="block">最近登录:{user.lastLogin.ipAddress || "未知 IP"} · {user.lastLogin.device} · {formatLoginTime(user.lastLogin.createdAt)}</span>}
+        </>}
+        control={<div className="flex w-full flex-wrap items-center gap-2">
+          <SettingsSelect
+            ariaLabel={`${user.displayName}的账号权限`}
+            value={user.role}
+            onChange={(next) => void updateUser(user, { role: next })}
+            options={ROLE_OPTIONS}
+          />
           <button onClick={() => void updateUser(user, { active: !user.active })} className="btn-ghost px-2.5 py-1.5 text-xs">{user.active ? "停用" : "启用"}</button>
           <button onClick={() => { setResetTarget(user); setResetPassword(""); setResetError(""); }} className="btn-ghost px-2.5 py-1.5 text-xs">重置密码</button>
           <button onClick={() => void removeUser(user)} className="btn-ghost px-2.5 py-1.5 text-xs text-red-500">删除</button>
-          <span className="text-xs muted">{user.active ? "正常" : "已停用"}</span>
-          {user.sessions.length > 0 && <div className="basis-full border-t pt-2" style={{ borderColor: "var(--border)" }}>
-            <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold muted"><ShieldCheck size={13} />已登录设备 · {user.sessions.length}</div>
-            <div className="space-y-1.5">{user.sessions.map((session) => <div key={session.id} className="flex min-w-0 items-center gap-2 text-[11px] muted">
-              <span className="min-w-0 flex-1 truncate">{session.device}{session.ipAddress ? ` · ${session.ipAddress}` : ""} · {formatLoginTime(session.createdAt)}</span>
-              {session.isCurrent ? <span className="shrink-0" style={{ color: "var(--primary)" }}>当前设备</span> : <button type="button" onClick={() => void revokeSession(user, session)} className="btn-ghost flex h-11 min-h-11 shrink-0 items-center gap-1 px-2 py-0 text-[11px] text-red-500" title="踢出此设备"><MonitorX size={13} />踢出</button>}
-            </div>)}</div>
-          </div>}
-        </div>)}
-      </div>
+        </div>}
+      />
+      {user.sessions.map((session) => <SettingsRow
+        key={session.id}
+        icon={MonitorX}
+        title={<span className="block truncate">{session.device}</span>}
+        description={`${session.ipAddress ? `${session.ipAddress} · ` : ""}${formatLoginTime(session.createdAt)}`}
+        control={session.isCurrent
+          ? <span className="shrink-0 text-xs font-bold" style={{ color: "var(--primary)" }}>当前设备</span>
+          : <button type="button" onClick={() => void revokeSession(user, session)} className="btn-ghost flex h-11 min-h-11 shrink-0 items-center gap-1 px-2 py-0 text-xs text-red-500" title="踢出此设备"><MonitorX size={13} />踢出</button>}
+      />)}
+    </div>)}
 
-      <section className="rounded-2xl border p-3" style={{ borderColor: "var(--border)" }}>
-        <div className="flex items-center gap-2"><History size={16} style={{ color: "var(--primary)" }} /><div className="text-sm font-bold">登录记录</div><span className="ml-auto text-[11px] muted">最近 100 条</span></div>
-        {loginRecords.length === 0 ? <p className="mb-0 mt-3 text-xs muted">暂时没有登录记录。</p> : <div className="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">{loginRecords.map((record) => <div key={record.id} className="rounded-xl p-2.5" style={{ background: "var(--surface-soft)" }}>
-          <div className="flex items-center gap-2"><div className="min-w-0 flex-1"><div className="truncate text-xs font-bold">{record.displayName} <span className="font-normal muted">@{record.username}</span></div><div className="mt-0.5 text-[11px] muted">{formatLoginTime(record.createdAt)}</div></div>{record.success ? <span className="flex items-center gap-1 text-[11px]" style={{ color: "var(--success)" }}><CheckCircle2 size={13} />成功</span> : <span className="flex items-center gap-1 text-[11px] text-red-500"><XCircle size={13} />失败</span>}</div>
-          <div className="mt-2 grid gap-1 text-[11px] muted sm:grid-cols-2"><span>IP：{record.ipAddress || "未知"}</span><span>设备：{record.device}</span></div>
-          {record.failureReason && <div className="mt-1 text-[11px] text-red-500">原因：{record.failureReason}</div>}
-        </div>)}</div>}
-      </section>
+    <SettingsRow
+      icon={History}
+      title="登录记录"
+      description="最近 100 条"
+      control={<SettingsBadge tone="muted">{loginRecords.length} 条</SettingsBadge>}
+    />
+    {loginRecords.length === 0
+      ? <p className="mb-0 mt-1 text-xs muted">暂时没有登录记录。</p>
+      : <div className="max-h-80 space-y-2 overflow-y-auto pr-1">{loginRecords.map((record) => <SettingsRow
+        key={record.id}
+        title={<span className="block truncate">{record.displayName} <span className="font-normal muted">@{record.username}</span></span>}
+        description={<>
+          {formatLoginTime(record.createdAt)} · IP:{record.ipAddress || "未知"} · 设备:{record.device}
+          {record.failureReason && <span className="block text-red-500">原因:{record.failureReason}</span>}
+        </>}
+        control={<SettingsBadge tone={record.success ? "success" : "warning"}>{record.success ? "成功" : "失败"}</SettingsBadge>}
+      />)}</div>}
 
-      {created && <CredentialsCard {...created} onCopy={copy} onClose={() => setCreated(null)} />}
+    {created && <CredentialsCard {...created} onCopy={copy} onClose={() => setCreated(null)} />}
 
-      {resetCredential && <CredentialsCard {...resetCredential} onCopy={copy} onClose={() => setResetCredential(null)} />}
+    {resetCredential && <CredentialsCard {...resetCredential} onCopy={copy} onClose={() => setResetCredential(null)} />}
 
-      <form onSubmit={create} className="space-y-2.5">
-        <div className="text-xs font-bold muted">新增成员账号</div>
-        <div className="grid gap-2.5 sm:grid-cols-2">
+    <form onSubmit={create}>
+      <SettingsRow
+        stacked
+        title="新增成员账号"
+        description="创建后把用户名、初始密码和恢复码当面交给家人"
+        control={<div className="grid w-full gap-2.5 sm:grid-cols-2">
           <div>
             <label className="ds-field-label" htmlFor="new-username">用户名</label>
             <input id="new-username" required className="input" placeholder="3-32 位小写字母或数字" value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value.toLowerCase() })} autoComplete="off" spellCheck={false} maxLength={32} />
@@ -282,34 +314,40 @@ export function AccountSettings({ onToast }: { onToast: (message: string) => voi
           </div>
           <div>
             <label className="ds-field-label" htmlFor="new-role">权限</label>
-            <select id="new-role" aria-label="新账号权限" title="新账号权限" className="input text-sm font-semibold" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}><option value="MEMBER">成员</option><option value="VIEWER">只读</option></select>
+            <SettingsSelect id="new-role" ariaLabel="新账号权限" value={form.role as "MEMBER" | "VIEWER"} onChange={(value) => setForm({ ...form, role: value })} options={[["MEMBER", "成员"], ["VIEWER", "只读"]] as const} />
           </div>
-        </div>
+        </div>}
+      />
+      <SettingsActions>
         <button disabled={creating} className="btn-primary flex items-center gap-2 text-xs disabled:cursor-not-allowed disabled:opacity-70">
-          {creating ? <><Loader2 size={14} className="animate-spin" />正在创建…</> : <><UserPlus size={14} />创建账号</>}
+          {creating ? <><Loader2 size={14} className="animate-spin" />正在创建...</> : <><UserPlus size={14} />创建账号</>}
         </button>
-      </form>
-      <button onClick={logout} className="btn-ghost flex items-center gap-2 text-xs"><LogOut size={14} />退出当前账号</button>
-    </div>
-  </details>
+      </SettingsActions>
+    </form>
 
-  <details className="surface group rounded-3xl p-5">
-    <summary className="flex cursor-pointer list-none items-center gap-3 [&::-webkit-details-marker]:hidden">
-      <div className="grid size-11 shrink-0 place-items-center rounded-2xl" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><ShieldCheck size={20} /></div>
-      <div className="min-w-0 flex-1"><h3 className="m-0 text-sm font-black">密码与恢复码</h3><p className="mb-0 mt-1 truncate text-xs muted">忘记密码时用恢复码自助重置,不必等别人帮忙</p></div>
-      <ChevronDown size={17} className="muted transition-transform group-open:rotate-180" />
-    </summary>
-    <div className="mt-5 space-y-4 border-t pt-4" style={{ borderColor: "var(--border)" }}>
-      <div className="rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}>
-        <div className="flex items-center gap-2 text-sm font-bold"><KeyRound size={15} style={{ color: "var(--primary)" }} />{recovery.loading ? "正在读取恢复码状态..." : recovery.hasCode ? "已设置恢复码" : "尚未设置恢复码"}</div>
-        <p className="mb-0 mt-1 text-xs leading-5 muted">{recovery.loading ? "正在读取当前账号的恢复码状态。" : recovery.hasCode ? `生成于 ${recovery.generatedAt ? formatLoginTime(recovery.generatedAt) : "未知时间"},忘记密码时可以凭它重置。` : "设置后忘记密码也能自己重置,不必等管理员帮忙。"}</p>
-      </div>
+    <SettingsActions>
+      <button onClick={logout} className="btn-ghost flex items-center gap-2 text-xs"><LogOut size={14} />退出当前账号</button>
+    </SettingsActions>
+  </SettingsSection>
+
+  <SettingsSection
+    icon={ShieldCheck}
+    title="密码与恢复码"
+    summary={recoverySummary}
+    badge={<SettingsBadge tone={recovery.hasCode ? "success" : "warning"}>{recovery.hasCode ? "已设置" : "未设置"}</SettingsBadge>}
+  >
+    <SettingsRow
+      icon={KeyRound}
+      title={recovery.loading ? "正在读取恢复码状态..." : recovery.hasCode ? "已设置恢复码" : "尚未设置恢复码"}
+      description={recovery.loading ? "正在读取当前账号的恢复码状态。" : recovery.hasCode ? `生成于 ${recovery.generatedAt ? formatLoginTime(recovery.generatedAt) : "未知时间"},忘记密码时可以凭它重置。` : "设置后忘记密码也能自己重置,不必等管理员帮忙。"}
+    />
+    <SettingsActions>
       <button type="button" onClick={() => { setRecoveryPassword(""); setRecoveryError(""); setShowRecoveryPassword(false); setRecoveryOpen(true); }} className="btn-primary flex items-center gap-2 text-xs">
         <KeyRound size={14} />{recovery.hasCode ? "重新生成恢复码" : "生成恢复码"}
       </button>
-      {recoveryCode && <CredentialsCard title="新的恢复码已生成" hint="恢复码只显示这一次,请立刻抄写或存进密码管理器;重新生成后旧码立即失效。" recoveryCode={recoveryCode} onCopy={copy} onClose={() => setRecoveryCode(null)} />}
-    </div>
-  </details>
+    </SettingsActions>
+    {recoveryCode && <CredentialsCard title="新的恢复码已生成" hint="恢复码只显示这一次,请立刻抄写或存进密码管理器;重新生成后旧码立即失效。" recoveryCode={recoveryCode} onCopy={copy} onClose={() => setRecoveryCode(null)} />}
+  </SettingsSection>
 
   <AnimatePresence>
     {resetTarget && (
@@ -329,7 +367,7 @@ export function AccountSettings({ onToast }: { onToast: (message: string) => voi
             <div className="grid size-10 shrink-0 place-items-center rounded-2xl" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><KeyRound size={19} /></div>
             <div className="min-w-0 flex-1">
               <h3 id="reset-password-title" className="m-0 text-base font-black">重置 {resetTarget.displayName} 的密码</h3>
-              <p className="mb-0 mt-1 text-xs leading-5 muted">设置一个临时密码，再当面告诉家人。改完密码后让对方重新登录。</p>
+              <p className="mb-0 mt-1 text-xs leading-5 muted">设置一个临时密码,再当面告诉家人。改完密码后让对方重新登录。</p>
             </div>
             <button type="button" onClick={() => setResetTarget(null)} className="icon-action size-11 min-h-11 shrink-0" aria-label="关闭重置密码" title="关闭"><X size={16} /></button>
           </div>
@@ -361,7 +399,7 @@ export function AccountSettings({ onToast }: { onToast: (message: string) => voi
           <div className="mt-5 flex gap-3">
             <button type="button" onClick={() => setResetTarget(null)} className="btn-ghost flex-1">取消</button>
             <button type="submit" disabled={resetting} className="btn-primary flex-1 disabled:cursor-not-allowed disabled:opacity-70">
-              {resetting ? <><Loader2 size={15} className="animate-spin" />正在重置…</> : "确认重置"}
+              {resetting ? <><Loader2 size={15} className="animate-spin" />正在重置...</> : "确认重置"}
             </button>
           </div>
         </motion.form>
