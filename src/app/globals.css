@@ -83,12 +83,12 @@
   --space-8: 2rem;
   --space-12: 3rem;
   /* Corner scale collapsed to three steps (8 / 12 / 16) plus the pill. */
-  --radius-sm: 0.5rem;
-  --radius-md: 0.75rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1rem;
-  --radius-card: 1rem;
-  --radius-control: 0.75rem;
+  --radius-sm: 0.625rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.5rem;
+  --radius-card: 1.25rem;
+  --radius-control: 0.875rem;
   --control-height: 2.75rem;
   /* Compact controls stay on the 40px touch floor, never below it. */
   --control-height-compact: 2.5rem;
@@ -127,80 +127,73 @@
   --z-drawer: 40;
   --z-modal: 50;
   --z-toast: 100;
-  /* Classic ink-blue and slate palette. */
+  /* 温和家居风:暖奶油底、陶土强调色、鼠尾草辅助色,阴影带暖调。 */
   color-scheme: light;
-  --background: #f5f6f8;
-  --surface: rgba(255, 255, 255, 0.92);
-  --surface-solid: #ffffff;
-  --surface-soft: #eef1f5;
-  --foreground: #1b2432;
-  --muted: #687386;
-  --border: rgba(39, 54, 77, 0.11);
-  --primary: #48649a;
+  --background: #f7f2ea;
+  --surface: rgba(255, 253, 249, 0.94);
+  --surface-solid: #fffdf9;
+  --surface-soft: #f1e9dd;
+  --foreground: #2a231d;
+  --muted: #7c6f62;
+  --border: rgba(84, 62, 40, 0.13);
+  --primary: #b4552f;
   --on-primary: #ffffff;
-  --primary-strong: #354f82;
-  --primary-soft: #e8edf6;
-  --success: #2f7d61;
-  --success-soft: #e6f2ec;
-  --warning: #ad7528;
-  --warning-soft: #f8f0e2;
-  --danger: #bb4d58;
-  --shadow: 0 12px 32px rgba(31, 43, 64, 0.055);
-  --shadow-sm: 0 3px 12px rgba(31, 43, 64, 0.045);
-  --shadow-lg: 0 16px 34px rgba(31, 43, 64, 0.12);
-  /* Layered elevation: a tight contact shadow, a wide ambient shadow and a 1px
-     inner highlight replace the old single heavy drop shadow. The theme-aware
-     --shadow-sm stays in the stack, so dark mode keeps its own depth values. */
-  --shadow-lift-1: 0 1px 1.5px rgba(23, 32, 49, 0.05);
-  --shadow-lift-2: 0 12px 26px -16px rgba(23, 32, 49, 0.3);
-  --shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.5);
-  --shadow-primary: 0 1px 1.5px color-mix(in srgb, var(--primary) 22%, transparent), 0 10px 22px -12px color-mix(in srgb, var(--primary) 62%, transparent);
-  --shadow-primary-hover: 0 2px 4px color-mix(in srgb, var(--primary) 24%, transparent), 0 16px 28px -12px color-mix(in srgb, var(--primary) 72%, transparent);
-  /* One hairline for secondary separators, derived from the theme border, so it
-     stays correct in dark mode without touching the dark palette blocks. */
-  --hairline: color-mix(in srgb, var(--border) 72%, transparent);
+  --primary-strong: #8f3f21;
+  --primary-soft: #f8e5d8;
+  --success: #3f7a5a;
+  --success-soft: #e4efe7;
+  --warning: #a86f1e;
+  --warning-soft: #f9eed9;
+  --danger: #b4443f;
+  --shadow: 0 14px 34px rgba(74, 50, 30, 0.07);
+  --shadow-sm: 0 3px 12px rgba(74, 50, 30, 0.05);
+  --shadow-lg: 0 20px 40px rgba(74, 50, 30, 0.14);
+  --shadow-lift-1: 0 1px 2px rgba(74, 50, 30, 0.06);
+  --shadow-lift-2: 0 14px 28px -18px rgba(74, 50, 30, 0.34);
+  --shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --shadow-primary: 0 1px 2px color-mix(in srgb, var(--primary) 24%, transparent), 0 12px 24px -14px color-mix(in srgb, var(--primary) 58%, transparent);
+  --shadow-primary-hover: 0 2px 5px color-mix(in srgb, var(--primary) 26%, transparent), 0 18px 30px -14px color-mix(in srgb, var(--primary) 70%, transparent);
+  --hairline: color-mix(in srgb, var(--border) 78%, transparent);
   --ring-color: color-mix(in srgb, var(--primary) 92%, transparent);
-  --selection-bg: color-mix(in srgb, var(--primary) 24%, transparent);
-  /* Warm brand accents used on the sign-in screen. Kept separate from the
-     action color so the home-feeling panel never competes with the form. */
+  --selection-bg: color-mix(in srgb, var(--primary) 22%, transparent);
   --brand-accent: #b5793a;
-  --brand-sage: #4a7c6a;
-  --brand-panel: #f3efe7;
-  --brand-panel-ink: #2b2419;
+  --brand-sage: #5f7f6a;
+  --brand-panel: #f3ece0;
+  --brand-panel-ink: #2a231d;
   --brand-muted: #6d6353;
   --brand-line: rgba(43, 36, 25, 0.22);
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --background: #111722;
-  --surface: rgba(27, 36, 51, 0.96);
-  --surface-solid: #1b2433;
-  --surface-soft: #252f40;
-  --foreground: #edf1f7;
-  --muted: #a0aabd;
-  --border: rgba(218, 228, 245, 0.11);
-  --primary: #9ab2e8;
-  --on-primary: #101522;
-  --primary-strong: #b8c9f1;
-  --primary-soft: #293852;
-  --success: #70c19b;
-  --success-soft: #203b33;
-  --warning: #e2b66f;
-  --warning-soft: #403521;
-  --danger: #e7828a;
-  --shadow: 0 4px 18px rgba(0, 0, 0, 0.2);
-  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.2);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3);
-  --shadow-lift-1: 0 1px 2px rgba(0, 0, 0, 0.32);
-  --shadow-lift-2: 0 16px 30px -18px rgba(0, 0, 0, 0.62);
+  --background: #1a1512;
+  --surface: rgba(39, 32, 27, 0.96);
+  --surface-solid: #271f1a;
+  --surface-soft: #352b23;
+  --foreground: #f5ede2;
+  --muted: #b4a596;
+  --border: rgba(245, 237, 226, 0.12);
+  --primary: #e2956a;
+  --on-primary: #241a13;
+  --primary-strong: #f2b491;
+  --primary-soft: #3e2b20;
+  --success: #86c2a0;
+  --success-soft: #24352c;
+  --warning: #e6bd7d;
+  --warning-soft: #3f3321;
+  --danger: #e58b84;
+  --shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.26);
+  --shadow-lg: 0 10px 26px rgba(0, 0, 0, 0.36);
+  --shadow-lift-1: 0 1px 2px rgba(0, 0, 0, 0.36);
+  --shadow-lift-2: 0 18px 32px -18px rgba(0, 0, 0, 0.66);
   --shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  --brand-accent: #d6a066;
-  --brand-sage: #7fb3a0;
-  --brand-panel: #1b2029;
-  --brand-panel-ink: #f2ece2;
-  --brand-muted: #a9a294;
-  --brand-line: rgba(242, 236, 226, 0.22);
+  --brand-accent: #e0a878;
+  --brand-sage: #8fb9a3;
+  --brand-panel: #221c18;
+  --brand-panel-ink: #f5ede2;
+  --brand-muted: #b0a394;
+  --brand-line: rgba(245, 237, 226, 0.22);
 }
 
 /* System-preference fallback. Independent routes (/items/[id], /consume/[id])
@@ -210,34 +203,34 @@
    palette identical to [data-theme="dark"] above. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
-  --background: #111722;
-  --surface: rgba(27, 36, 51, 0.96);
-  --surface-solid: #1b2433;
-  --surface-soft: #252f40;
-  --foreground: #edf1f7;
-  --muted: #a0aabd;
-  --border: rgba(218, 228, 245, 0.11);
-  --primary: #9ab2e8;
-  --on-primary: #101522;
-  --primary-strong: #b8c9f1;
-  --primary-soft: #293852;
-  --success: #70c19b;
-  --success-soft: #203b33;
-  --warning: #e2b66f;
-  --warning-soft: #403521;
-  --danger: #e7828a;
-  --shadow: 0 4px 18px rgba(0, 0, 0, 0.2);
-  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.2);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3);
-  --shadow-lift-1: 0 1px 2px rgba(0, 0, 0, 0.32);
-  --shadow-lift-2: 0 16px 30px -18px rgba(0, 0, 0, 0.62);
+  --background: #1a1512;
+  --surface: rgba(39, 32, 27, 0.96);
+  --surface-solid: #271f1a;
+  --surface-soft: #352b23;
+  --foreground: #f5ede2;
+  --muted: #b4a596;
+  --border: rgba(245, 237, 226, 0.12);
+  --primary: #e2956a;
+  --on-primary: #241a13;
+  --primary-strong: #f2b491;
+  --primary-soft: #3e2b20;
+  --success: #86c2a0;
+  --success-soft: #24352c;
+  --warning: #e6bd7d;
+  --warning-soft: #3f3321;
+  --danger: #e58b84;
+  --shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.26);
+  --shadow-lg: 0 10px 26px rgba(0, 0, 0, 0.36);
+  --shadow-lift-1: 0 1px 2px rgba(0, 0, 0, 0.36);
+  --shadow-lift-2: 0 18px 32px -18px rgba(0, 0, 0, 0.66);
   --shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  --brand-accent: #d6a066;
-  --brand-sage: #7fb3a0;
-  --brand-panel: #1b2029;
-  --brand-panel-ink: #f2ece2;
-  --brand-muted: #a9a294;
-  --brand-line: rgba(242, 236, 226, 0.22);
+  --brand-accent: #e0a878;
+  --brand-sage: #8fb9a3;
+  --brand-panel: #221c18;
+  --brand-panel-ink: #f5ede2;
+  --brand-muted: #b0a394;
+  --brand-line: rgba(245, 237, 226, 0.22);
   }
 }
 

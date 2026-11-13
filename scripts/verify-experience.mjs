@@ -395,8 +395,13 @@ const openDialog = () => document.querySelectorAll('[role="dialog"][aria-modal="
       paddingBottom: getComputedStyle(document.body).paddingBottom,
       backLinks: [...document.querySelectorAll("a")].length,
     }));
-    const dark = /rgb\(1[0-9], 2[0-9], 3[0-9]\)|rgb\(1[0-9], 2[0-9], 3[0-9]\)/.test(darkInfo.bg) || darkInfo.bg === "rgb(16, 21, 34)";
-    check("独立路由跟随系统深色模式", dark, `theme=${darkInfo.theme} bodyBg=${darkInfo.bg}`);
+    // 用亮度判断,而不是写死某个配色:换主题色时这条断言不该失效。
+    const channels = (darkInfo.bg.match(/\d+/g) || []).map(Number);
+    const luminance = channels.length >= 3
+      ? (0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]) / 255
+      : 1;
+    const dark = luminance < 0.22;
+    check("独立路由跟随系统深色模式", dark, `theme=${darkInfo.theme} bodyBg=${darkInfo.bg} luminance=${luminance.toFixed(3)}`);
     check("独立路由无多余底部留白(≤40px)", parseFloat(darkInfo.paddingBottom) <= 40, `padding-bottom=${darkInfo.paddingBottom}`);
     check("/consume/[id] 有返回入口", darkInfo.backLinks >= 1, `links=${darkInfo.backLinks}`);
   }
