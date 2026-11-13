@@ -199,6 +199,100 @@ await page.locator('[role="dialog"] button:has-text("放弃并关闭")').click()
 await page.waitForTimeout(900);
 check("确认放弃后弹窗关闭", (await dialog().count()) === 0 && (await page.locator('[role="dialog"]').count()) === 0, `dialogs=${await page.locator('[role="dialog"]').count()}`);
 
+// ------------------------------------------------------ 耐用品 / 消耗品自动识别
+await openCreate();
+const typeState = () => page.evaluate(() => {
+  const radios = [...document.querySelectorAll('[role="dialog"] input[type="radio"]')];
+  const hint = [...document.querySelectorAll('[role="dialog"] div')].map((node) => node.textContent.trim()).find((text) => text.startsWith("已按名称识别为")) || "";
+  return { durable: Boolean(radios[0]?.checked), consumable: Boolean(radios[1]?.checked), hint };
+});
+await page.locator("#item-name").fill("洗衣液 2L");
+await page.waitForTimeout(1000);
+const soapGuess = await typeState();
+check("输入「洗衣液」自动识别为消耗品并说明依据", soapGuess.consumable && /消耗品/.test(soapGuess.hint) && /洗衣液/.test(soapGuess.hint), JSON.stringify(soapGuess));
+await dialog().locator('label:has-text("耐用品")').first().click();
+await page.waitForTimeout(400);
+const manualType = await typeState();
+check("手动改成耐用品后不被自动改回", manualType.durable && manualType.hint === "", JSON.stringify(manualType));
+await page.locator("#item-name").fill("投影仪");
+await page.waitForTimeout(1000);
+const afterManual = await typeState();
+check("用户手动选过类型后不再自动识别", afterManual.durable && afterManual.hint === "", JSON.stringify(afterManual));
+await page.keyboard.press("Escape");
+await page.waitForTimeout(500);
+const discardType = page.locator('[role="dialog"] button:has-text("放弃并关闭")');
+if (await discardType.count()) { await discardType.first().click(); await page.waitForTimeout(600); }
+
+await openCreate();
+await page.locator("#item-name").fill("投影仪");
+await page.waitForTimeout(1000);
+const durableGuess = await typeState();
+check("耐用品名称保持耐用品并给出依据", durableGuess.durable && /耐用品/.test(durableGuess.hint), JSON.stringify(durableGuess));
+await page.locator("#item-name").fill("儿童绘本");
+await page.waitForTimeout(1000);
+const noSignal = await typeState();
+check("没有把握时不显示识别提示", noSignal.hint === "", JSON.stringify(noSignal));
+await page.keyboard.press("Escape");
+await page.waitForTimeout(500);
+const discardNoSignal = page.locator('[role="dialog"] button:has-text("放弃并关闭")');
+if (await discardNoSignal.count()) { await discardNoSignal.first().click(); await page.waitForTimeout(600); }
+
+// ------------------------------------------------- 盘点扫码(相机/屏幕/图片/手动)
+const fixtureItem = await page.evaluate(async () => {
+  const list = async () => { const body = await (await fetch("/api/items")).json(); return Array.isArray(body) ? body : (body?.items ?? []); };
+  const items = await list();
+  if (items.length) { const first = items[0]; return { code: first.itemCode || first.id, id: first.id, created: false }; }
+  const created = await fetch("/api/items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "ENT2-扫码检查", category: "日用", type: "DURABLE", quantity: 1, minQuantity: 0, remainingPercent: 100, unit: "件", price: null, purchaseDate: null, expiryDate: null, locationId: null, notes: null, imageUrl: null, recordPurchase: false, purchaseStore: null }) });
+  if (!created.ok) return null;
+  const item = await created.json();
+  return { code: item.itemCode || item.id, id: item.id, created: true };
+});
+await page.locator('[aria-label="盘点"]:visible').first().click();
+await page.waitForTimeout(1500);
+const scanEntry = page.locator('button[aria-label="扫码盘点"]:visible').first();
+check("盘点页有扫码入口", (await scanEntry.count()) === 1, "count=" + (await scanEntry.count()));
+if ((await scanEntry.count()) === 1) {
+  await scanEntry.click();
+  await page.waitForTimeout(1000);
+  const scanner = await page.evaluate(() => {
+    const modal = document.querySelector('[data-source][data-status]');
+    if (!modal) return null;
+    return {
+      source: modal.getAttribute("data-source"),
+      status: modal.getAttribute("data-status"),
+      role: modal.getAttribute("role"),
+      zIndex: getComputedStyle(modal).zIndex,
+      chips: [...modal.querySelectorAll('[data-source-chip]')].map((node) => node.textContent.trim()),
+      unsupported: modal.textContent.includes("当前浏览器不支持自动识别"),
+    };
+  });
+  check("扫码弹窗是 dialog 且有相机/屏幕/图片/手动入口", Boolean(scanner) && scanner.role === "dialog" && scanner.chips.includes("相机") && scanner.chips.includes("图片") && scanner.chips.includes("手动"), JSON.stringify(scanner));
+  if (scanner && scanner.chips.includes("手动")) {
+    await page.locator('[data-source-chip="manual"]').click();
+    await page.waitForTimeout(400);
+    await page.locator('input[aria-label="物品编号"]').fill("https://example.com/items/" + (fixtureItem?.code || ""));
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(1000);
+    const scannerText = await page.evaluate(() => document.querySelector('[data-source][data-status]')?.textContent || "");
+    const pageText = await page.evaluate(() => document.body.innerText);
+    const progress = pageText.match(/进度\s*(\d+)\s*\/\s*(\d+)/);
+    check("手动输入 URL 形式的编号能盘点入账", /已盘点/.test(scannerText) && /已确认/.test(pageText) && Boolean(progress) && Number(progress[1]) >= 1, "progress=" + (progress ? progress[1] + "/" + progress[2] : "?") + " feedback=" + /已盘点[^)]{0,30}\)/.exec(scannerText)?.[0]);
+    await page.locator('input[aria-label="物品编号"]').fill("INV-NOT-EXIST");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(900);
+    const notFound = await page.evaluate(() => document.body.innerText.includes("没有找到这个物品"));
+    check("未知编号给出中文提示", notFound, "toast=" + notFound);
+  }
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(600);
+  const scannerGone = await page.evaluate(() => document.querySelectorAll('[data-source][data-status]').length);
+  check("Escape 能关掉扫码弹窗", scannerGone === 0, "open=" + scannerGone);
+}
+if (fixtureItem?.created && fixtureItem.id) {
+  await page.evaluate(async (id) => { await fetch("/api/items/" + id, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ permanent: true }) }); }, fixtureItem.id);
+}
+await page.locator('[aria-label="概览"]:visible').first().click();
+await page.waitForTimeout(1200);
 // ------------------------------------------------------------------ 日期选择器
 // 旧版是原生 <input type="date"> + 三个 36px 纯图标快捷键(到期日期还复用了采购
 // 日期的「昨天/上周」)。现在统一走 DatePicker:可见文字、按语义分组的快捷项、
