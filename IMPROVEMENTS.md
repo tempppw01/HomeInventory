@@ -1,5 +1,47 @@
 # Project Improvements Summary
 
+## 交互设计:按设计技能准则做的一轮系统体检与修复
+
+按用户要求先装了 4 个设计类 agent 技能(skills.sh 市场,取自官方/高星仓库,装到用户级技能目录 `~/.agents/skills/`):
+
+| 技能 | 安装量 | 来源 | 用在什么上 |
+| --- | --- | --- | --- |
+| `frontend-design` | 1.11M | anthropics/skills(⭐194k) | 视觉方向、排版、避免「模板感」 |
+| `emil-design-eng` | 443K | emilkowalski/skills(⭐56k) | 组件打磨:按压反馈、动效决策、时长/曲线 |
+| `apple-design` | 296K | emilkowalski/skills | 流体交互:按下即响应、1:1 跟手、可打断、材质、无障碍三信号 |
+| `ui-ux-pro-max` | 449K | nextlevelbuilder(⭐149k) | 10 级优先规则表(44px、对比度、性能等硬指标) |
+
+然后用 `emil-design-eng` + `apple-design` 的条目派了两轮独立体检(动效与手势 / 状态覆盖与 wayfinding),每条都带 DOM 实测数值,产出 `output/findings/interaction-motion.md`(P1×5 + P2×7)与 `output/findings/interaction-states.md`(P1×3 + P2×8)。
+
+### 修掉的手感问题(动效体检 P1)
+
+- **按下零反馈**:实测次按钮/物品卡片/分类轨/侧栏导航按下时 `transform/filter/bg/shadow` 四项全无变化,全站 `:active` 只有 4 条规则且没有任何 `scale`。现在给 10 类可点元素统一 `transition-property: transform…` + `140ms` + 强 ease-out,并加 `:active { transform: scale(.97) }`(卡片 `.99`)。实测按下时 `matrix(0.97,0,0,0.97,0,0)`(卡片 `scale: .99`)。
+- **滑块不尊重抓取偏移**:在 60% 处按下,数值从 100 直接跳到 40(−60%),之后每 3.5px 跳一档。改成记录 `startY/startValue`,按下不改数值、与指针 1:1 跟随、松手才量化到 5% 并提交;填充改用 `scaleY` 不再动 `height`。实测:按下前后都是 60,指针移 14px → 数值 +20(期望 20.0)。
+- **弹窗进出场路径不对称**(进 y=35 / 出 y=25):改成同路径 `y: 12`、退场 `180ms` 更快收(emil:exit 比 enter 快),确认框与批量编辑弹窗同步。
+- **上下文菜单**:实测 `transition: all`、无入场动画、`transform-origin` 是自身中心。改成 `transform-origin` 指向点击位置、150ms 缩放淡入(`scale(.97)+opacity`)、只过渡 `transform/opacity`,并且 **Tab 离开菜单即关闭**(此前 Tab 走掉但菜单留在 DOM)。
+- **hover 动效没有触摸门控**:11 条 `:hover` 规则在触摸设备上 tap 后粘住。6 条自定义 hover 规则全部包进 `@media (hover: hover) and (pointer: fine)`(实测样式表里 8 个门控块)。
+
+### 修掉的状态与可达性问题(状态体检 P1)
+
+- **toast 读屏播报不到**:全站没有 live region。toast 补 `role="status" aria-live="polite"`(实测 `status/polite`)。
+- **两套确认框**:踢出设备、删除账号、回收站永久删除、撤销扫码消耗、恢复完整备份仍是原生 `confirm`,与应用内确认框割裂。全部改成 `useConfirm()`(带标题、按钮文案、危险色、Escape 与焦点归还)。
+- **导入/恢复错误吐英文**:非法 JSON 会直接显示 `Expected property name or '}' …`。改成「这个文件不是有效的物品 JSON,请选择「导出物品 JSON」生成的文件」等中文提示。
+
+### 顺带补齐的无障碍与细节
+
+- `MotionConfig reducedMotion="user"`:此前「减少动效」只把 CSS 压成 1ms,JS 弹簧照旧在动(实测 18 个元素仍在动 transform);现在 Motion 动画在 reduced 下只做透明度(实测弹窗 `transform: none`)。
+- 补 `prefers-reduced-transparency: reduce`(半透明工具栏退化为实心)与 `prefers-contrast: more`(边界与次要文字提亮)——此前完全缺失,而全站有 37 处 `backdrop-filter`。
+- 减少动效下保留 200ms 透明度交叉淡入,不再「全部 1ms 硬切」;主题切换过渡换成自定义曲线。
+- 侧栏导航补 `aria-current="page"`;侧栏(半透明层)补 `backdrop-filter`,材质与顶栏/底栏一致。
+- 新增交互曲线 token:`--ease-out: cubic-bezier(.23,1,.32,1)`、`--ease-in-out`、`--ease-drawer`、`--press-scale`。
+- `tsconfig.json` 把 `output/` 排除出类型检查(探针与技能源码不该参与构建)。
+
+### 验证
+
+- 交互复核探针 17/17:五类控件的按下反馈、滑块抓取偏移与 1:1、菜单 origin/过渡属性、`aria-current`、live region、reduced-motion 下无位移、hover 门控数量、reduced-transparency/contrast 存在、按压缩放与强曲线生效。
+- `scripts/verify-experience.mjs` **37/37**、`scripts/verify-entry-fixes.mjs` **67/67** 全绿;typecheck 0 error、eslint 0 error / 14 warning。
+- 保留的刻意取舍:有到期物品时每天首次打开仍会自动弹「提醒中心」(用户此前明确要求「辅助信息只在关键时刻自动弹出」),状态体检建议改成非阻塞提示 —— 记在这里待用户决定。
+
 ## 界面减负:按成熟产品的信息密度收敛
 
 用户反馈「当前页面太拥挤,参考成熟大厂 app 做一版」。先让独立走查把拥挤度量化成可比较的数字,再按几个成熟产品的通行做法收敛 —— 主要是四条:①**一个页面只留一个主要动作,其余收进「⋯」**(iOS / Things);②**列表项一行标题 + 一行元信息**,细节进详情页(Notion / Linear);③**用留白和色阶分层,而不是到处画线**(Material 3);④**一级入口固定 4–5 个**,二级能力靠入口下沉(微信 / 支付宝)。
