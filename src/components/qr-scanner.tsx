@@ -217,8 +217,9 @@ export function QrScannerModal({
     }
     seen.set(code, now);
     const verdict = onDetectRef.current(code);
-    const index = scannedRef.current + 1;
-    scannedRef.current = index;
+    // 只有真正盘点成功才计数:未知编号与重复扫描不应该让「已盘点 N 个」虚高。
+    const index = verdict === "matched" ? scannedRef.current + 1 : scannedRef.current;
+    if (verdict === "matched") scannedRef.current = index;
     setScanned(index);
     setLast({ code, verdict, index });
     setNotice(null);
@@ -329,7 +330,13 @@ export function QrScannerModal({
           return;
         }
         setSupport("ok");
-        await chooseSource(desktop ? "screen" : "camera");
+        if (desktop) {
+          // 桌面默认选中「屏幕」但不自动连接:屏幕共享会弹系统选择器,未授权时还会先报一次错。
+          setSource("screen");
+          setNotice({ tone: "warn", text: "点一下「屏幕」并选择要共享的窗口,就能识别屏幕上的二维码;也可以切到「相机」。", retry: false });
+          return;
+        }
+        await chooseSource("camera");
       })();
     });
     return () => cancelAnimationFrame(frame);
@@ -497,7 +504,7 @@ export function QrScannerModal({
               </button>
             );
           })}
-          <span className="inline-flex min-h-11 items-center px-1 text-[11px] font-bold muted">本次已识别 {scanned} 个</span>
+          <span className="inline-flex min-h-11 items-center px-1 text-[11px] font-bold muted">本次已盘点 {scanned} 个</span>
         </div>
 
         <p className="mb-3 mt-0 flex items-start gap-1.5 text-[11px] leading-5 muted">

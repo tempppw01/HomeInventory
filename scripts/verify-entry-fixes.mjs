@@ -268,6 +268,11 @@ if ((await scanEntry.count()) === 1) {
   });
   check("扫码弹窗是 dialog 且有相机/屏幕/图片/手动入口", Boolean(scanner) && scanner.role === "dialog" && scanner.chips.includes("相机") && scanner.chips.includes("图片") && scanner.chips.includes("手动"), JSON.stringify(scanner));
   if (scanner && scanner.chips.includes("手动")) {
+    const scannedCounter = () => page.evaluate(() => {
+      const modal = document.querySelector("[data-source][data-status]");
+      const node = modal ? [...modal.querySelectorAll("span")].find((element) => element.textContent.includes("本次已盘点")) : null;
+      return node ? Number((node.textContent.match(/\d+/) || ["0"])[0]) : -1;
+    });
     await page.locator('[data-source-chip="manual"]').click();
     await page.waitForTimeout(400);
     await page.locator('input[aria-label="物品编号"]').fill("https://example.com/items/" + (fixtureItem?.code || ""));
@@ -276,12 +281,15 @@ if ((await scanEntry.count()) === 1) {
     const scannerText = await page.evaluate(() => document.querySelector('[data-source][data-status]')?.textContent || "");
     const pageText = await page.evaluate(() => document.body.innerText);
     const progress = pageText.match(/进度\s*(\d+)\s*\/\s*(\d+)/);
+    const matchedBefore = await scannedCounter();
     check("手动输入 URL 形式的编号能盘点入账", /已盘点/.test(scannerText) && /已确认/.test(pageText) && Boolean(progress) && Number(progress[1]) >= 1, "progress=" + (progress ? progress[1] + "/" + progress[2] : "?") + " feedback=" + /已盘点[^)]{0,30}\)/.exec(scannerText)?.[0]);
     await page.locator('input[aria-label="物品编号"]').fill("INV-NOT-EXIST");
     await page.keyboard.press("Enter");
     await page.waitForTimeout(900);
+    const afterUnknown = await scannedCounter();
     const notFound = await page.evaluate(() => document.body.innerText.includes("没有找到这个物品"));
     check("未知编号给出中文提示", notFound, "toast=" + notFound);
+    check("「本次已盘点」只统计成功盘点", afterUnknown >= 1 && afterUnknown === matchedBefore, "matched=" + matchedBefore + " afterUnknown=" + afterUnknown);
   }
   await page.keyboard.press("Escape");
   await page.waitForTimeout(600);
