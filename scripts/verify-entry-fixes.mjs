@@ -199,6 +199,129 @@ await page.locator('[role="dialog"] button:has-text("放弃并关闭")').click()
 await page.waitForTimeout(900);
 check("确认放弃后弹窗关闭", (await dialog().count()) === 0 && (await page.locator('[role="dialog"]').count()) === 0, `dialogs=${await page.locator('[role="dialog"]').count()}`);
 
+// ------------------------------------------------------------------ 日期选择器
+// 旧版是原生 <input type="date"> + 三个 36px 纯图标快捷键(到期日期还复用了采购
+// 日期的「昨天/上周」)。现在统一走 DatePicker:可见文字、按语义分组的快捷项、
+// min/max、相对提示、键盘与 Escape 分层。
+const addDays = (days) => {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
+};
+const todayKey = addDays(0);
+
+await openCreate();
+// 日期字段在「更多信息」里,先展开再找触发器。
+await page.locator('[role="dialog"] button:has-text("更多信息")').click();
+await page.waitForTimeout(500);
+const nativeDateInputs = await page.evaluate(() => document.querySelectorAll('[role="dialog"] input[type="date"]').length);
+const purchaseTrigger = page.locator('button[data-date-picker-trigger][aria-label="购入日期"]').first();
+const triggerInfo = await purchaseTrigger.evaluate((node) => ({ haspopup: node.getAttribute("aria-haspopup"), expanded: node.getAttribute("aria-expanded"), usesInputClass: node.className.includes("input") }));
+check("日期字段不再是原生 input[type=date]", nativeDateInputs === 0 && triggerInfo.haspopup === "dialog" && triggerInfo.usesInputClass, "native=" + nativeDateInputs + " haspopup=" + triggerInfo.haspopup + " inputClass=" + triggerInfo.usesInputClass);
+
+await purchaseTrigger.click();
+await page.waitForTimeout(450);
+const purchasePanel = await page.evaluate(() => {
+  const panel = document.querySelector('[role="dialog"][aria-label="购入日期"]');
+  if (!panel) return null;
+  const rect = panel.getBoundingClientRect();
+  return {
+    dialogs: document.querySelectorAll('[role="dialog"]').length,
+    portal: panel.parentElement === document.body,
+    top: Math.round(rect.top),
+    bottom: Math.round(rect.bottom),
+    width: Math.round(rect.width),
+    innerHeight: window.innerHeight,
+    chips: [...panel.querySelectorAll("button")].map((node) => node.textContent.trim()).filter(Boolean),
+  };
+});
+check("日期面板 portal 到 body 且完整在视口内", Boolean(purchasePanel) && purchasePanel.portal && purchasePanel.top >= 0 && purchasePanel.bottom <= purchasePanel.innerHeight && purchasePanel.dialogs === 2, purchasePanel ? JSON.stringify({ dialogs: purchasePanel.dialogs, top: purchasePanel.top, bottom: purchasePanel.bottom, width: purchasePanel.width }) : "no panel");
+check("购入日期快捷项只给过去语义", Boolean(purchasePanel) && ["今天", "昨天", "3 天前", "上周", "1 个月前"].every((label) => purchasePanel.chips.includes(label)) && !purchasePanel.chips.includes("3 天后"), purchasePanel ? "chips=" + purchasePanel.chips.join("/") : "no panel");
+
+const gridInfo = await page.evaluate((today) => {
+  const cells = [...document.querySelectorAll('[role="dialog"][aria-label="购入日期"] [role="grid"] button[data-date]')];
+  const future = cells.filter((node) => node.getAttribute("data-date") > today);
+  return { total: cells.length, future: future.length, futureDisabled: future.filter((node) => node.disabled).length, rows: document.querySelectorAll('[role="dialog"][aria-label="购入日期"] [role="grid"] [role="row"]').length };
+}, todayKey);
+check("日历 6 行 × 7 列且超出 max 的日期禁用", gridInfo.total === 42 && gridInfo.rows === 6 && gridInfo.future > 0 && gridInfo.futureDisabled === gridInfo.future, JSON.stringify(gridInfo));
+
+await page.locator('[role="dialog"][aria-label="购入日期"] button').filter({ hasText: /^今天$/ }).first().click();
+await page.waitForTimeout(450);
+const afterPick = await purchaseTrigger.evaluate((node) => ({ value: node.getAttribute("data-value"), expanded: node.getAttribute("aria-expanded"), text: node.textContent.trim().slice(0, 12) }));
+check("点「今天」写入今天并关闭面板", afterPick.value === todayKey && afterPick.expanded === "false", JSON.stringify(afterPick));
+
+await purchaseTrigger.click();
+await page.waitForTimeout(450);
+await page.keyboard.press("Escape");
+await page.waitForTimeout(450);
+const afterDateEscape = await page.evaluate(() => ({ panel: document.querySelectorAll('[role="dialog"][aria-label="购入日期"]').length, itemModal: document.querySelectorAll('[role="dialog"][aria-label="录入新物品"]').length, focus: document.activeElement?.getAttribute("aria-label") || document.activeElement?.tagName }));
+check("Escape 只关日期面板,录入弹窗还在", afterDateEscape.panel === 0 && afterDateEscape.itemModal === 1 && afterDateEscape.focus === "购入日期", JSON.stringify(afterDateEscape));
+
+await purchaseTrigger.click();
+await page.waitForTimeout(450);
+const manualInput = page.locator('[role="dialog"][aria-label="购入日期"] input[aria-label="手动输入日期"]');
+await manualInput.fill("2026/3/15");
+await page.keyboard.press("Enter");
+await page.waitForTimeout(500);
+const manualValue = await purchaseTrigger.evaluate((node) => node.getAttribute("data-value"));
+check("手动输入 2026/3/15 解析为 2026-03-15", manualValue === "2026-03-15", "data-value=" + manualValue);
+
+await purchaseTrigger.click();
+await page.waitForTimeout(450);
+await manualInput.fill("abc");
+await page.keyboard.press("Enter");
+await page.waitForTimeout(450);
+const invalidInput = await page.evaluate(() => {
+  const panel = document.querySelector('[role="dialog"][aria-label="购入日期"]');
+  return { alert: panel?.querySelector('[role="alert"]')?.textContent.trim() || "", value: panel?.querySelector('input[aria-label="手动输入日期"]')?.value ?? "", open: Boolean(panel) };
+});
+check("非法日期给中文错误且不清空输入", invalidInput.open && Boolean(invalidInput.alert) && invalidInput.value === "abc", JSON.stringify(invalidInput));
+await page.keyboard.press("Escape");
+await page.waitForTimeout(400);
+
+await dialog().locator('label:has-text("消耗品")').first().click();
+await page.waitForTimeout(400);
+const expiryTrigger = page.locator('button[data-date-picker-trigger][aria-label="到期日期"]').first();
+await expiryTrigger.click();
+await page.waitForTimeout(450);
+const expiryChips = await page.evaluate(() => [...document.querySelectorAll('[role="dialog"][aria-label="到期日期"] button')].map((node) => node.textContent.trim()).filter(Boolean));
+check("到期日期快捷项不再出现「昨天/上周」", ["3 天后", "1 周后", "1 个月后", "1 年后"].every((label) => expiryChips.includes(label)) && !expiryChips.includes("昨天") && !expiryChips.includes("上周"), "chips=" + expiryChips.join("/"));
+await page.locator('[role="dialog"][aria-label="到期日期"] button').filter({ hasText: /^3 天后$/ }).first().click();
+await page.waitForTimeout(450);
+const expiryState = await expiryTrigger.evaluate((node) => ({ value: node.getAttribute("data-value"), relative: node.querySelector("[data-relative-text]")?.textContent.trim() || node.textContent.trim().slice(0, 20) }));
+check("到期日期显示「还有 N 天」", expiryState.value === addDays(3) && /还有 3 天/.test(expiryState.relative), JSON.stringify(expiryState));
+
+// 关掉录入弹窗(已填过日期 → 会先问是否放弃)
+await page.keyboard.press("Escape");
+await page.waitForTimeout(500);
+const discardItem = page.locator('[role="dialog"] button:has-text("放弃并关闭")');
+if (await discardItem.count()) { await discardItem.first().click(); await page.waitForTimeout(600); }
+
+await page.locator('[aria-label="任务"]:visible').first().click();
+await page.waitForTimeout(1200);
+const addTask = page.locator('main button:has-text("安排任务")').first();
+if (await addTask.count()) {
+  await addTask.click();
+  await page.waitForTimeout(900);
+  const taskDate = await page.evaluate(() => ({ trigger: Boolean(document.querySelector('[role="dialog"] button[data-date-picker-trigger][aria-label="下次日期"]')), native: document.querySelectorAll('[role="dialog"] input[type="date"]').length }));
+  check("任务「下次日期」用同一套日期面板", taskDate.trigger && taskDate.native === 0, JSON.stringify(taskDate));
+  await page.locator('[role="dialog"] button[aria-label="下次日期"]').first().click();
+  await page.waitForTimeout(500);
+  const taskChips = await page.evaluate(() => [...document.querySelectorAll('[role="dialog"][aria-label="下次日期"] button')].map((node) => node.textContent.trim()).filter(Boolean));
+  check("任务快捷项含「明天」", taskChips.includes("明天") && taskChips.includes("1 个月后"), "chips=" + taskChips.join("/"));
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(400);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(600);
+  const discardTask = page.locator('[role="dialog"] button:has-text("放弃并关闭")');
+  if (await discardTask.count()) { await discardTask.first().click(); await page.waitForTimeout(500); }
+} else {
+  check("任务「安排任务」入口可达", false, "未找到入口");
+}
+
+// 回到概览,后面的首屏断言依赖它
+await page.locator('[aria-label="概览"]:visible').first().click();
+await page.waitForTimeout(1400);
 // ------------------------------------------ 首屏:先说清「现在最该做什么」+ 降干扰
 const firstScreen = await page.evaluate(() => {
   const overview = document.querySelector("section.dashboard-overview");

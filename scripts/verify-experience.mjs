@@ -165,9 +165,11 @@ const openDialog = () => document.querySelectorAll('[role="dialog"][aria-modal="
     await page.waitForTimeout(900);
   }
   check("7 次视图切换的 dashboard 请求 ≤2", dashboardCalls <= 2, `GET /api/dashboard x${dashboardCalls}`);
-  dashboardCalls = 0;
+  // 切回「物品」本身也是一次视图切换,可能正好跨过 15s 缓存 TTL 而刷新一次;
+  // 这条断言只针对后面的快捷筛选,所以计数器在切换动作完成之后再清零。
   await page.locator('[aria-label="物品"]:visible').first().click();
-  await page.waitForTimeout(900);
+  await page.waitForTimeout(1200);
+  dashboardCalls = 0;
   for (const label of ["全部", "耐用品", "消耗品"]) {
     const button = page.locator(`main button:has-text("${label}")`).first();
     if (await button.count()) { await button.click(); await page.waitForTimeout(500); }
