@@ -261,7 +261,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return (
       <div className="grid min-h-dvh place-items-center bg-[var(--background)]">
         <div className="flex flex-col items-center gap-3">
-          <span className="grid size-11 place-items-center rounded-2xl text-white shadow-lg" style={{ background: "var(--primary)" }}>
+          <span className="grid size-11 place-items-center rounded-2xl text-[var(--on-primary)] shadow-lg" style={{ background: "var(--primary)" }}>
             <Archive size={22} />
           </span>
           <p className="m-0 text-sm muted">正在检查账号状态...</p>
@@ -296,7 +296,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       <aside className="auth-brand">
         <div className="auth-brand-inner">
           <div className="flex items-center gap-3">
-            <span className="grid size-11 place-items-center rounded-2xl text-white shadow-lg" style={{ background: "var(--primary)" }}>
+            <span className="grid size-11 place-items-center rounded-2xl text-[var(--on-primary)] shadow-lg" style={{ background: "var(--primary)" }}>
               <Archive size={22} />
             </span>
             <div>
@@ -362,7 +362,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       <main className="auth-panel">
         <div className="w-full max-w-sm">
           <div className="mb-7 flex items-center gap-2.5 lg:hidden">
-            <span className="grid size-10 place-items-center rounded-2xl text-white shadow-lg" style={{ background: "var(--primary)" }}>
+            <span className="grid size-10 place-items-center rounded-2xl text-[var(--on-primary)] shadow-lg" style={{ background: "var(--primary)" }}>
               <Archive size={20} />
             </span>
             <div>
