@@ -82,7 +82,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
               aria-label={current.title}
               initial={{ opacity: 0, y: 14, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              exit={{ opacity: 0, y: 14, scale: 0.98, transition: { duration: .16, ease: [0.23, 1, 0.32, 1] } }}
               transition={{ type: "spring", damping: 28, stiffness: 340 }}
               className="w-full max-w-sm rounded-[28px] p-5 shadow-2xl"
               style={{ background: "var(--surface-solid)" }}

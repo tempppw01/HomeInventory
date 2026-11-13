@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Check, ClipboardCopy, Eye, EyeOff, History, KeyRound, Loader2, LogOut, MonitorX, ShieldCheck, UserPlus, Users, X } from "lucide-react";
 import { generatePassword, PASSWORD_MIN_LENGTH } from "@/lib/password";
 import { SettingsActions, SettingsBadge, SettingsRow, SettingsSection, SettingsSelect } from "@/components/settings-primitives";
+import { useConfirm } from "@/components/confirm-dialog";
 
 type User = {
   id: string;
@@ -67,6 +68,7 @@ function CredentialsCard({ title, hint, username, password, passwordLabel = "初
 }
 
 export function AccountSettings({ onToast }: { onToast: (message: string) => void }) {
+  const askConfirm = useConfirm();
   const [users, setUsers] = useState<User[]>([]);
   const [loginRecords, setLoginRecords] = useState<LoginRecord[]>([]);
   const [form, setForm] = useState({ username: "", displayName: "", password: "", role: "MEMBER" });
@@ -197,7 +199,7 @@ export function AccountSettings({ onToast }: { onToast: (message: string) => voi
   };
 
   const removeUser = async (user: User) => {
-    if (!confirm(`确定删除账号“${user.displayName}”?`)) return;
+    if (!(await askConfirm(`确定删除账号“${user.displayName}”?该账号的登录状态会立即失效。`, { title: "删除账号", confirmLabel: "删除账号", tone: "danger" }))) return;
     const response = await fetch(`/api/auth/users/${user.id}`, { method: "DELETE" });
     const result = await response.json();
     if (!response.ok) { onToast(result.error || "删除失败"); return; }
@@ -206,7 +208,7 @@ export function AccountSettings({ onToast }: { onToast: (message: string) => voi
   };
 
   const revokeSession = async (user: User, session: User["sessions"][number]) => {
-    if (!confirm(`确定踢出“${user.displayName}”在 ${session.device} 上的登录吗?该设备需要重新登录。`)) return;
+    if (!(await askConfirm(`“${user.displayName}”在 ${session.device} 上的登录会被踢出,该设备需要重新登录。`, { title: "踢出此设备", confirmLabel: "踢出设备", tone: "danger" }))) return;
     const response = await fetch(`/api/auth/sessions/${session.id}`, { method: "DELETE" });
     const result = await response.json();
     if (!response.ok) { onToast(result.error || "踢出设备失败"); return; }

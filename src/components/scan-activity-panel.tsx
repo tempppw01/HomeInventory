@@ -1,4 +1,5 @@
 "use client";
+import { useConfirm } from "@/components/confirm-dialog";
 
 import { History, LoaderCircle, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -14,6 +15,7 @@ type ScanActivity = {
 };
 
 export function ScanActivityPanel({ onToast }: { onToast: (message: string) => void }) {
+  const askConfirm = useConfirm();
   const [records, setRecords] = useState<ScanActivity[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -40,7 +42,7 @@ export function ScanActivityPanel({ onToast }: { onToast: (message: string) => v
   }, [load]);
 
   const undo = async (record: ScanActivity) => {
-    if (!confirm(`确定撤销“${record.itemName || "物品"}”这次扫码消耗吗？库存将恢复 1 ${record.detail?.match(/1 (.+)$/)?.[1] || "个"}。`)) return;
+    if (!(await askConfirm(`确定撤销“${record.itemName || "物品"}”这次扫码消耗吗？库存将恢复 1 ${record.detail?.match(/1 (.+)$/)?.[1] || "个"}。`, { title: "撤销扫码消耗", confirmLabel: "撤销并恢复库存" }))) return;
     setUndoing(record.id);
     try {
       const response = await fetch(`/api/activity/${record.id}/undo`, { method: "POST" });

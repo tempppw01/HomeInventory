@@ -71,7 +71,7 @@ export function BatchEditModal({
       <motion.div
         initial={{ y: 35, opacity: 0, scale: 0.98 }}
         animate={{ y: 0, opacity: 1, scale: 1 }}
-        exit={{ y: 25, opacity: 0 }}
+        exit={{ y: 35, opacity: 0, scale: 0.98, transition: { duration: .18, ease: [0.23, 1, 0.32, 1] } }}
         transition={{ type: "spring", damping: 28, stiffness: 340 }}
         role="dialog"
         aria-modal="true"

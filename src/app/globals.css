@@ -118,6 +118,11 @@
   --motion-base: 180ms;
   --motion-slow: 260ms;
   --ease-standard: cubic-bezier(.2,.8,.2,1);
+  /* 交互曲线:进场/按压用强 ease-out,屏内移动 ease-in-out,抽屉用 iOS 曲线。 */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --press-scale: 0.97;
   --z-header: 20;
   --z-drawer: 40;
   --z-modal: 50;
@@ -250,7 +255,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
-  transition: background-color 220ms ease, color 220ms ease;
+  transition: background-color 220ms var(--ease-out), color 220ms var(--ease-out);
 }
 button { cursor: pointer; }
 /* Unlayered on purpose: it must beat the plain `button` rule above. */
@@ -317,13 +322,19 @@ code, pre, kbd, .font-mono, .font-code { font-family: var(--font-mono); font-var
   min-height: var(--control-height); border: 0; border-radius: var(--button-radius); color: var(--on-primary); background: var(--primary);
   padding: var(--button-padding-y) var(--button-padding-x); font-weight: 700; line-height: var(--leading-control); box-shadow: var(--shadow-primary); transition: transform var(--motion-base) var(--ease-standard), filter var(--motion-base) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard);
 }
-.btn-primary:hover, .ds-button-primary:hover { transform: translateY(-1px); filter: brightness(1.05); box-shadow: var(--shadow-primary-hover); }
+@media (hover: hover) and (pointer: fine) {
+  .btn-primary:hover, .ds-button-primary:hover { transform: translateY(-1px); filter: brightness(1.05); box-shadow: var(--shadow-primary-hover); }
+}
 .btn-primary:active, .ds-button-primary:active { transform: translateY(0); filter: brightness(0.97); box-shadow: var(--shadow-primary); }
 .btn-ghost, .ds-button-secondary { min-height: var(--control-height); border: 1px solid var(--border); border-radius: var(--button-radius); background: var(--surface-solid); line-height: var(--leading-control); padding: calc(var(--button-padding-y) - 0.125rem) calc(var(--button-padding-x) - 0.25rem); transition: border-color var(--motion-base) var(--ease-standard), background-color var(--motion-base) var(--ease-standard), transform var(--motion-base) var(--ease-standard); }
-.btn-ghost:hover, .ds-button-secondary:hover { border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); background: var(--primary-soft); }
+@media (hover: hover) and (pointer: fine) {
+  .btn-ghost:hover, .ds-button-secondary:hover { border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); background: var(--primary-soft); }
+}
 .btn-ghost:active, .ds-button-secondary:active { transform: translateY(0); background: var(--surface-soft); }
 .ds-button-quiet { min-height: var(--control-height); border: 0; border-radius: var(--button-radius); color: var(--foreground); background: transparent; padding: 0 var(--space-2); line-height: var(--leading-control); transition: color var(--motion-base) var(--ease-standard), background-color var(--motion-base) var(--ease-standard); }
-.ds-button-quiet:hover { color: var(--primary); background: var(--primary-soft); }
+@media (hover: hover) and (pointer: fine) {
+  .ds-button-quiet:hover { color: var(--primary); background: var(--primary-soft); }
+}
 .ds-button-sm { min-height: var(--control-height-compact); padding-block: 0.375rem; font-size: var(--text-xs); line-height: var(--leading-control); }
 .ds-button-icon { width: var(--icon-button-size); height: var(--icon-button-size); min-height: var(--icon-button-size); padding: 0; }
 .ds-form-field { display: block; }
@@ -345,8 +356,21 @@ code, pre, kbd, .font-mono, .font-code { font-family: var(--font-mono); font-var
 /* Reusable primitives for new screens and gradual migration of old ones. */
 .ds-icon-button { display: inline-grid; width: var(--icon-button-size); height: var(--icon-button-size); min-height: var(--icon-button-size); place-items: center; padding: 0; }
 .icon-action { display: inline-grid; width: 2.5rem; height: 2.5rem; min-width: 2.5rem; min-height: 2.5rem; place-items: center; padding: 0; border: 0; border-radius: var(--radius-md); color: var(--muted); background: transparent; transition: color var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard); }
-.icon-action:hover { color: var(--primary); background: var(--surface-soft); }
+@media (hover: hover) and (pointer: fine) {
+  .icon-action:hover { color: var(--primary); background: var(--surface-soft); }
+}
 .icon-action:active { color: var(--primary); background: color-mix(in srgb, var(--primary-soft) 78%, transparent); }
+
+/* 按下即反馈:统一 140ms 的 transform/颜色过渡,并在按下瞬间缩放。 */
+.btn-primary, .ds-button-primary, .btn-ghost, .ds-button-secondary, .ds-button-quiet,
+.icon-action, .ds-icon-button, .browse-rail-item, .ds-nav-item, .ds-mobile-nav-item {
+  transition-property: transform, color, background-color, border-color, box-shadow, filter, opacity;
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--ease-out);
+}
+.btn-primary:active, .ds-button-primary:active, .btn-ghost:active, .ds-button-secondary:active,
+.ds-button-quiet:active, .icon-action:active, .ds-icon-button:active, .browse-rail-item:active,
+.ds-nav-item:active, .ds-mobile-nav-item:active { transform: scale(var(--press-scale)); }
 .ds-row { display: flex; align-items: center; gap: var(--space-3); }
 .ds-stack { display: flex; flex-direction: column; gap: var(--space-4); }
 .ds-section { padding: var(--space-6); border: var(--card-border-width) solid var(--hairline); border-radius: var(--radius-lg); background: var(--surface-solid); box-shadow: var(--card-shadow); }
@@ -355,7 +379,9 @@ code, pre, kbd, .font-mono, .font-code { font-family: var(--font-mono); font-var
   position: relative;
   color: var(--muted);
 }
-.ds-nav-item:hover { color: var(--foreground); background: var(--surface-soft); }
+@media (hover: hover) and (pointer: fine) {
+  .ds-nav-item:hover { color: var(--foreground); background: var(--surface-soft); }
+}
 .ds-nav-item[data-active="true"] { color: var(--primary-strong); background: color-mix(in srgb, var(--primary-soft) 82%, transparent); }
 .ds-nav-item[data-active="true"]::before {
   position: absolute;
@@ -386,7 +412,9 @@ code, pre, kbd, .font-mono, .font-code { font-family: var(--font-mono); font-var
 .browse-layout { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: var(--space-5); align-items: start; }
 .browse-rail { position: sticky; top: 1.5rem; display: flex; flex-direction: column; gap: .2rem; padding-right: var(--space-3); border-right: 1px solid var(--hairline); }
 .browse-rail-item { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: var(--space-2); border: 0; border-radius: var(--radius-md); padding: .55rem .65rem; color: var(--muted); background: transparent; font-size: var(--text-sm); font-weight: 650; text-align: left; transition: color var(--motion-base) var(--ease-standard), background-color var(--motion-base) var(--ease-standard); }
-.browse-rail-item:hover { color: var(--foreground); background: var(--surface-soft); }
+@media (hover: hover) and (pointer: fine) {
+  .browse-rail-item:hover { color: var(--foreground); background: var(--surface-soft); }
+}
 .browse-rail-item[data-active="true"] { color: var(--primary); background: var(--primary-soft); }
 .browse-rail-count { flex: 0 0 auto; color: var(--muted); font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
 .browse-rail-item[data-active="true"] .browse-rail-count { color: var(--primary); }
@@ -434,8 +462,27 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   }
 }
 
+/* 降低透明度:半透明工具栏与玻璃层退化为实心。 */
+@media (prefers-reduced-transparency: reduce) {
+  .mobile-topbar, .mobile-bottom-nav, .glass, .ds-glass, .mobile-add-button {
+    background: var(--surface-solid);
+    backdrop-filter: none;
+  }
+}
+
+/* 更高对比度:边界与次要文字提亮。 */
+@media (prefers-contrast: more) {
+  :root {
+    --border: color-mix(in srgb, var(--foreground) 38%, transparent);
+    --hairline: color-mix(in srgb, var(--foreground) 26%, transparent);
+    --muted: color-mix(in srgb, var(--foreground) 74%, transparent);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+  /* 减少动效 ≠ 没有反馈:位移/缩放取消,弹层保留 200ms 透明度交叉淡入。 */
+  [role="dialog"], [role="menu"] { transition: opacity 200ms var(--ease-out) !important; }
 }
 
 @keyframes shimmer { 100% { transform: translateX(100%); } }

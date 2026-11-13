@@ -45,6 +45,11 @@ export function useContextMenu() {
 export function ContextMenu({ menu, items, onClose }: { menu: MenuState; items: ContextMenuItem[]; onClose: () => void }) {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setMounted(true));
+    return () => { cancelAnimationFrame(frame); setMounted(false); };
+  }, [menu]);
 
   // A context menu is transient: unless focus moves into it, the arrow keys stay
   // on the card behind and the menu is mouse-only. Move focus to the first
@@ -99,13 +104,14 @@ export function ContextMenu({ menu, items, onClose }: { menu: MenuState; items: 
     else moveFocus(current, event.key === "Home" ? "first" : "last");
   };
 
+  // 入场:150ms 缩放淡入,而且从触发点长出来(transform-origin 指向点击位置)。
   const width = 208;
   const left = typeof window === "undefined" ? menu.x : Math.min(menu.x, Math.max(8, window.innerWidth - width - 8));
   const top = typeof window === "undefined" ? menu.y : Math.min(menu.y, Math.max(8, window.innerHeight - Math.min(items.length * 38 + 16, 360) - 8));
-  return <div ref={menuRef} data-context-menu role="menu" aria-label="快捷菜单" onKeyDown={onMenuKeyDown} className="fixed z-[120] min-w-[208px] overflow-hidden rounded-2xl border p-1.5 shadow-2xl" style={{ left, top, background: "var(--surface-solid)", borderColor: "var(--border)" }} onPointerDown={(event) => event.stopPropagation()}>
+  return <div ref={menuRef} data-context-menu role="menu" aria-label="快捷菜单" onKeyDown={onMenuKeyDown} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onClose(); }} className="fixed z-[120] min-w-[208px] origin-top-left overflow-hidden rounded-2xl border p-1.5 shadow-2xl transition-transform duration-150 ease-out" style={{ left, top, transformOrigin: `${menu.x - left}px ${menu.y - top}px`, transform: mounted ? "scale(1)" : "scale(.97)", opacity: mounted ? 1 : 0, transitionProperty: "transform, opacity", background: "var(--surface-solid)", borderColor: "var(--border)" }} onPointerDown={(event) => event.stopPropagation()}>
     {items.map((item, index) => <div key={`${item.label}-${index}`}>
       {item.separatorBefore && <div className="my-1 border-t" style={{ borderColor: "var(--border)" }} />}
-      <button role="menuitem" type="button" tabIndex={-1} disabled={item.disabled} onClick={() => { if (!item.disabled) { item.onClick(); onClose(); } }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition hover:bg-[var(--surface-soft)] disabled:cursor-not-allowed disabled:opacity-40" style={item.danger ? { color: "var(--danger)" } : undefined}>
+      <button role="menuitem" type="button" tabIndex={-1} disabled={item.disabled} onClick={() => { if (!item.disabled) { item.onClick(); onClose(); } }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-colors hover:bg-[var(--surface-soft)] disabled:cursor-not-allowed disabled:opacity-40" style={item.danger ? { color: "var(--danger)" } : undefined}>
         {item.icon && <item.icon size={16} className="shrink-0" />}
         <span className="truncate">{item.label}</span>
       </button>
