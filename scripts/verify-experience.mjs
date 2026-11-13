@@ -63,6 +63,13 @@ const login = async (page, reducedMotion = "no-preference") => {
     await page.waitForTimeout(700);
   }
   await page.waitForFunction(() => document.querySelectorAll("[role=dialog][aria-modal=true]").length === 0, null, { timeout: 4000 }).catch(() => {});
+  // 库里有过期物品时,应用会按天自动弹一次「提醒中心」;这是刻意的行为,探针要能容错,
+  // 否则它会挡住后面的导航点击。
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if ((await page.locator('[role="dialog"][aria-modal="true"]:visible').count()) === 0) break;
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(400);
+  }
 };
 const openDialog = () => document.querySelectorAll('[role="dialog"][aria-modal="true"]').length;
 
@@ -239,6 +246,9 @@ const openDialog = () => document.querySelectorAll('[role="dialog"][aria-modal="
     return () => seen;
   };
   const nativeCount = countNativeDialogs(page);
+  // 采购清单现在是折叠区块(减少物品页拥挤),先展开再找删除按钮。
+  const shoppingSummary = page.locator('main details summary:has-text("采购清单")').first();
+  if (await shoppingSummary.count()) { await shoppingSummary.click(); await page.waitForTimeout(600); }
   for (const [label, selector] of [
     ["采购项删除", 'button[aria-label="删除采购项"]'],
   ]) {
@@ -455,7 +465,8 @@ const openDialog = () => document.querySelectorAll('[role="dialog"][aria-modal="
   await page.waitForTimeout(600);
 
   // bottom sheet close button size + scroll lock
-  await page.locator('button[aria-label="添加物品"]:visible').first().click();
+  // 移动端底部导航不再有悬浮加号(它和顶栏的「录入物品」重复),改用顶栏入口。
+  await page.locator('button[aria-label="录入物品"]:visible').first().click();
   await page.waitForTimeout(1000);
   const sheet = await page.evaluate(() => {
     const button = document.querySelector('[role="dialog"][aria-modal="true"] button[aria-label^="关闭"]');

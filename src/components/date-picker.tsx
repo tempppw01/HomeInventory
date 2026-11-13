@@ -462,13 +462,13 @@ export function DatePicker({
     >
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
-          {label && <div className="truncate text-[11px] font-black muted">{label}</div>}
+          {label && <div className="truncate text-xs font-black muted">{label}</div>}
           <div className="flex items-center gap-2">
             <span className="truncate text-sm font-black" data-date-trigger-text>
               {displayText}
             </span>
             {showHint && relative && (
-              <span className="shrink-0 text-[11px] font-bold" style={{ color: relative.tone }} data-relative={relative.text}>
+              <span className="shrink-0 text-xs font-bold" style={{ color: relative.tone }} data-relative={relative.text}>
                 {relative.text}
               </span>
             )}
@@ -511,7 +511,7 @@ export function DatePicker({
         <>
           <div className="grid grid-cols-7 gap-1 px-0.5 pb-1" aria-hidden="true">
             {WEEKDAY_ORDER.map((day) => (
-              <span key={day} className="grid place-items-center py-0.5 text-[11px] font-bold muted">
+              <span key={day} className="grid place-items-center py-0.5 text-xs font-bold muted">
                 {day}
               </span>
             ))}
@@ -625,7 +625,7 @@ export function DatePicker({
           </button>
         </div>
         {error && (
-          <p className="mb-0 mt-1.5 text-[11px] font-bold" style={{ color: "var(--danger)" }} role="alert">
+          <p className="mb-0 mt-1.5 text-xs font-bold" style={{ color: "var(--danger)" }} role="alert">
             {error}
           </p>
         )}
@@ -685,7 +685,7 @@ export function DatePicker({
           </span>
         </span>
         {showHint && relative && (
-          <span className="shrink-0 text-[11px] font-bold" style={{ color: relative.tone }} data-relative-text>
+          <span className="shrink-0 text-xs font-bold" style={{ color: relative.tone }} data-relative-text>
             {relative.text}
           </span>
         )}

@@ -146,5 +146,5 @@ export function SettingsBadge({ tone = "muted", children }: { tone?: "muted" | "
     warning: { background: "var(--warning-soft, #fff4dc)", color: "var(--warning)" },
     primary: { background: "var(--primary-soft)", color: "var(--primary)" },
   };
-  return <span className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold" style={palette[tone]}>{children}</span>;
+  return <span className="shrink-0 rounded-full px-2.5 py-1 text-xs font-bold" style={palette[tone]}>{children}</span>;
 }

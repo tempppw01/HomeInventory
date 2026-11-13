@@ -306,7 +306,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
                   HOME INVENTORY
                 </span>
               </div>
-              <div className="text-[11px] font-semibold tracking-[.16em] muted">家的每一件东西,都有位置</div>
+              <div className="text-xs font-semibold tracking-[.16em] muted">家的每一件东西,都有位置</div>
             </div>
           </div>
 
@@ -367,7 +367,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
             </span>
             <div>
               <div className="text-base font-black">归物 HomeInventory</div>
-              <div className="text-[11px] muted">家的每一件东西,都有位置</div>
+              <div className="text-xs muted">家的每一件东西,都有位置</div>
             </div>
           </div>
 
@@ -653,7 +653,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
                   >
                     生成强密码
                   </button>
-                  <span className="text-[11px] muted">重置后所有设备都需要重新登录</span>
+                  <span className="text-xs muted">重置后所有设备都需要重新登录</span>
                 </div>
 
                 {recoveryError && (
@@ -691,7 +691,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
                 style={{ background: "color-mix(in srgb, var(--primary) 8%, transparent)", border: "1px solid color-mix(in srgb, var(--primary) 30%, transparent)" }}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-bold tracking-wide" style={{ color: "var(--primary)" }}>新的恢复码</span>
+                  <span className="text-xs font-bold tracking-wide" style={{ color: "var(--primary)" }}>新的恢复码</span>
                   <button type="button" onClick={copyRecoveryCode} className="btn-ghost ds-button-sm flex items-center gap-1.5">
                     {copyState === "copied" ? <><Check size={13} />已复制</> : <><Copy size={13} />复制</>}
                   </button>
@@ -754,7 +754,7 @@ function PasswordStrengthMeter({ password }: { password: string }) {
           />
         ))}
       </div>
-      <span className="shrink-0 text-[11px] font-bold" style={{ color }}>
+      <span className="shrink-0 text-xs font-bold" style={{ color }}>
         {empty ? "密码强度" : strength.label}
       </span>
     </div>

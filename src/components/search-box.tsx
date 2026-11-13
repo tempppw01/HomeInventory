@@ -155,7 +155,7 @@ export function SearchBox({
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-bold">{item.name}</div>
-                    <div className="mt-0.5 truncate text-[11px] muted">
+                    <div className="mt-0.5 truncate text-xs muted">
                       {item.itemCode || item.id} · {item.location?.name || "未设置位置"}
                     </div>
                   </div>

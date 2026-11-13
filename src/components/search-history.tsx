@@ -37,11 +37,11 @@ export function SearchHistory({ onSelect, onClear, onHasEntries }: { onSelect: (
   return (
     <div className="border-t pt-2" style={{ borderColor: "var(--border)" }}>
       <div className="mb-2 flex items-center justify-between px-2">
-        <span className="text-[11px] font-bold muted">最近搜索</span>
+        <span className="text-xs font-bold muted">最近搜索</span>
         <button
           type="button"
           onClick={onClear}
-          className="flex items-center gap-1 text-[11px] font-bold muted hover:text-[var(--foreground)]"
+          className="flex items-center gap-1 text-xs font-bold muted hover:text-[var(--foreground)]"
         >
           <X size={12} />
           清空

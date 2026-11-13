@@ -504,10 +504,10 @@ export function QrScannerModal({
               </button>
             );
           })}
-          <span className="inline-flex min-h-11 items-center px-1 text-[11px] font-bold muted">本次已盘点 {scanned} 个</span>
+          <span className="inline-flex min-h-11 items-center px-1 text-xs font-bold muted">本次已盘点 {scanned} 个</span>
         </div>
 
-        <p className="mb-3 mt-0 flex items-start gap-1.5 text-[11px] leading-5 muted">
+        <p className="mb-3 mt-0 flex items-start gap-1.5 text-xs leading-5 muted">
           <ScanLine size={14} className="mt-0.5 shrink-0" style={{ color: "var(--primary)" }} />
           <span className="min-w-0 flex-1">{STAGE_TITLE[source]}</span>
         </p>

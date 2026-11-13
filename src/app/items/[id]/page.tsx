@@ -1,10 +1,10 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { Archive, CalendarDays, Droplets, Lightbulb, MapPin, Package, Sparkles, WalletCards, Warehouse } from "lucide-react";
+import { Archive, CalendarDays, Droplets, Lightbulb, MapPin, Package, Sparkles, Timer, WalletCards, Warehouse } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { currentUser } from "@/lib/account-auth";
-import { dailyUsageCost, isLiquidConsumable } from "@/lib/item-metrics";
+import { dailyUsageCost, estimatedUseDays, isLiquidConsumable } from "@/lib/item-metrics";
 import { itemAiHighlights } from "@/lib/item-ai";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +22,7 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
   });
   if (!item) notFound();
   const dailyCost = dailyUsageCost(item);
+  const useDays = estimatedUseDays(item);
   const showRemaining = isLiquidConsumable(item);
   const ai = itemAiHighlights(item);
 
@@ -49,6 +50,7 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
             <Info icon={MapPin} label="存放位置" value={item.location?.name || "未设置"} />
             <Info icon={CalendarDays} label="录入时间" value={item.createdAt.toLocaleDateString("zh-CN")} />
             {dailyCost && <Info icon={WalletCards} label="日均使用成本" value={`¥${dailyCost.cost.toFixed(dailyCost.cost >= 10 ? 0 : 2)} / 天`} />}
+            {useDays && <Info icon={Timer} label="预计还能用" value={`约 ${useDays} 天`} />}
             {showRemaining && <Info icon={Droplets} label="当前剩余量" value={`${Math.round(item.remainingPercent)}%`} />}
           </div>
           {ai.hasHighlights && <div className="mt-6 rounded-2xl p-4" style={{ background: "color-mix(in srgb, var(--primary) 7%, var(--surface-soft))" }}><div className="flex items-center gap-2 text-sm font-black" style={{ color: "var(--primary)" }}><Sparkles size={17} />AI 识别信息</div>{ai.summary && <p className="mb-0 mt-3 text-sm leading-6">{ai.summary}</p>}<div className="mt-3 grid gap-2 sm:grid-cols-2">{ai.storage && <div className="flex gap-2 rounded-xl p-3 text-xs leading-5" style={{ background: "var(--surface-solid)" }}><Warehouse size={15} className="mt-0.5 shrink-0" style={{ color: "var(--primary)" }} /><span><b>存储建议：</b>{ai.storage}</span></div>}{(ai.usage || ai.replenishment) && <div className="flex gap-2 rounded-xl p-3 text-xs leading-5" style={{ background: "var(--surface-solid)" }}><Lightbulb size={15} className="mt-0.5 shrink-0" style={{ color: "var(--primary)" }} /><span><b>使用与补货：</b>{[ai.usage, ai.replenishment].filter(Boolean).join("；")}</span></div>}</div></div>}

@@ -72,7 +72,7 @@
   --tracking-label: 0.01em;
   --measure: 66ch;
   --text-body: 1rem;
-  --text-display: clamp(var(--page-title-size), 1.35rem + 1.4vw, var(--page-title-size-wide));
+  --text-display: clamp(var(--page-title-size), 1.25rem + 1vw, var(--page-title-size-wide));
   /* Spacing rhythm: every gap is a multiple of 4px (--space-1). */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -339,6 +339,7 @@ code, pre, kbd, .font-mono, .font-code { font-family: var(--font-mono); font-var
 .ds-page-header { display: flex; align-items: end; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--page-section-gap); }
 .ds-page-title { margin: 0; font-size: var(--text-display); font-weight: 900; line-height: var(--leading-title); letter-spacing: var(--tracking-title); text-wrap: balance; }
 .ds-page-description { margin: var(--page-title-gap) 0 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-body); max-width: var(--measure); text-wrap: pretty; }
+.ds-page-description:empty { display: none; }
 .ds-section + .ds-section { margin-top: var(--page-section-gap); }
 
 /* Reusable primitives for new screens and gradual migration of old ones. */
@@ -387,7 +388,7 @@ code, pre, kbd, .font-mono, .font-code { font-family: var(--font-mono); font-var
 .browse-rail-item { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: var(--space-2); border: 0; border-radius: var(--radius-md); padding: .55rem .65rem; color: var(--muted); background: transparent; font-size: var(--text-sm); font-weight: 650; text-align: left; transition: color var(--motion-base) var(--ease-standard), background-color var(--motion-base) var(--ease-standard); }
 .browse-rail-item:hover { color: var(--foreground); background: var(--surface-soft); }
 .browse-rail-item[data-active="true"] { color: var(--primary); background: var(--primary-soft); }
-.browse-rail-count { flex: 0 0 auto; color: var(--muted); font-family: var(--font-mono); font-size: .6875rem; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.browse-rail-count { flex: 0 0 auto; color: var(--muted); font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
 .browse-rail-item[data-active="true"] .browse-rail-count { color: var(--primary); }
 }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--ring-color); outline-offset: 2px; }
@@ -444,7 +445,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 @media (max-width: 767px) {
-  :root { --page-padding-x: var(--space-4); --page-padding-y: var(--space-3); --page-section-gap: var(--space-4); --page-title-size: 1.625rem; --control-height: 2.75rem; --bottom-nav-space: 112px; }
+  :root { --page-padding-x: var(--space-4); --page-padding-y: var(--space-3); --page-section-gap: var(--space-4); --page-title-size: 1.5rem; --control-height: 2.75rem; --bottom-nav-space: 112px; }
   /* Clears the bottom navigation plus the floating assistant launcher, which
      otherwise sits on top of the last row's controls. The reserved space grows
      with the home-indicator inset instead of being a fixed pixel count. */

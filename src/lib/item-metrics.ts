@@ -30,6 +30,12 @@ export function isLiquidConsumable(item: Pick<ItemMetricsInput, "type" | "name" 
   return /水|奶|饮料|酒|油|液|露|乳|汁|酱|洗发|沐浴/.test(item.name);
 }
 
+/** 消耗品按近期消耗速度还能用几天;液体按整瓶记录,不参与估算。 */
+export function estimatedUseDays(item: Pick<ItemMetricsInput, "type" | "name" | "category" | "unit"> & { quantity: number; consumeRate: number | null }) {
+  if (item.type !== "CONSUMABLE" || isLiquidConsumable(item) || !item.consumeRate || item.consumeRate < 0.1 || item.quantity <= 0) return null;
+  return Math.max(1, Math.ceil(item.quantity / item.consumeRate));
+}
+
 /**
  * Physical count units must not be stored as fractions. Liquids sold by the
  * bottle are still counted as whole bottles; their in-use amount belongs in
