@@ -31,6 +31,8 @@ import { useEscapeClose } from "@/lib/use-escape-close";
 import { useModalFocusManagement } from "@/lib/dialog-focus";
 import { ConfirmProvider, useConfirm } from "@/components/confirm-dialog";
 import { DatePicker, type DatePickerPreset } from "@/components/date-picker";
+import { guessItemType, type ItemTypeGuess } from "@/lib/item-type-guess";
+import { QrScannerModal, normalizeScannedCode } from "@/components/qr-scanner";
 
 // A read-only account is rejected by the server with 403, so offering write
 // buttons only produces a failed round trip. Views read this flag instead.
@@ -884,6 +886,7 @@ function AuditView({ items, locations, onRefresh, onToast }: { items: Item[]; lo
     try { return new Set(JSON.parse(localStorage.getItem(storageKey) || "[]")); } catch { return new Set(); }
   });
   const [scanValue, setScanValue] = useState("");
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [finished, setFinished] = useState(false);
   const [working, setWorking] = useState(false);
   const [locationId, setLocationId] = useState("ALL");
@@ -904,16 +907,16 @@ function AuditView({ items, locations, onRefresh, onToast }: { items: Item[]; lo
     updateConfirmed(next);
   };
   const unconfirmed = scopedItems.filter((item) => !confirmed.has(item.id));
-  const handleScan = (raw = scanValue) => {
-    const value = raw.trim();
-    if (!value) return;
-    const id = value.match(/\/items\/([^/?#]+)/)?.[1] || value;
-    const match = scopedItems.find((item) => item.id === id || item.itemCode?.toLowerCase() === value.toLowerCase());
-    if (!match) { onToast("没有找到这个物品，请检查二维码或编号"); return; }
-    if (confirmed.has(match.id)) { onToast(`${match.name} 已确认，无需重复盘点`); setScanValue(""); return; }
+  const handleScan = (raw = scanValue): "matched" | "duplicate" | "unknown" => {
+    const value = normalizeScannedCode(raw);
+    if (!value) return "unknown";
+    const match = scopedItems.find((item) => item.id === value || item.itemCode?.toLowerCase() === value.toLowerCase());
+    if (!match) { onToast("没有找到这个物品,请检查二维码或编号"); return "unknown"; }
+    if (confirmed.has(match.id)) { onToast(`${match.name} 已确认,无需重复盘点`); setScanValue(""); return "duplicate"; }
     updateConfirmed(new Set([...confirmed, match.id]));
     setScanValue("");
-    onToast(`已确认：${match.name}`);
+    onToast(`已确认:${match.name}`);
+    return "matched";
   };
   const handleUnconfirmed = async (action: "empty" | "lost") => {
     if (!unconfirmed.length || working) return;
@@ -945,7 +948,8 @@ function AuditView({ items, locations, onRefresh, onToast }: { items: Item[]; lo
 
   return <><PageTitle title="家庭盘点" text="逐件确认物品仍在；扫码、输入编号或直接点选都可以。" action={<button className="btn-primary flex items-center gap-2" onClick={finish}><Check size={16} />结束盘点</button>} />
     <div className="mb-4 flex flex-wrap items-center gap-2"><label className="flex items-center gap-2 text-xs font-bold muted">盘点范围<select className="input h-9 min-h-9 w-auto py-1 text-xs" value={locationId} onChange={(event) => setLocationId(event.target.value)}><option value="ALL">全部空间</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>{history[0] && <span className="text-xs muted">最近盘点：{new Date(history[0].at).toLocaleDateString("zh-CN")} · {history[0].confirmed}/{history[0].total} 件 · {history[0].locationName}</span>}</div>
-    <section className="mb-5 flex flex-col gap-3 rounded-2xl border p-3 sm:flex-row sm:items-center" style={{ borderColor: "var(--border)", background: "var(--surface-soft)" }}><div className="grid size-9 shrink-0 place-items-center rounded-xl" style={{ background: "var(--surface-solid)", color: "var(--primary)" }}><QrCode size={17} /></div><form className="flex min-w-0 flex-1 gap-2" onSubmit={(event) => { event.preventDefault(); handleScan(); }}><input value={scanValue} onChange={(event) => setScanValue(event.target.value)} className="input min-w-0 flex-1" placeholder="扫描二维码或输入物品编号" aria-label="扫描二维码或输入物品编号" /><button type="submit" className="btn-primary shrink-0 px-3">确认</button></form></section>
+    <section className="mb-5 flex flex-col gap-3 rounded-2xl border p-3 sm:flex-row sm:items-center" style={{ borderColor: "var(--border)", background: "var(--surface-soft)" }}><button type="button" onClick={() => setScannerOpen(true)} className="btn-primary flex shrink-0 items-center gap-2 px-3" aria-label="扫码盘点" title="手机用相机、电脑用屏幕共享识别二维码"><QrCode size={17} />扫码</button><form className="flex min-w-0 flex-1 gap-2" onSubmit={(event) => { event.preventDefault(); handleScan(); }}><input value={scanValue} onChange={(event) => setScanValue(event.target.value)} className="input min-w-0 flex-1" placeholder="输入物品编号,或点左侧扫码" aria-label="输入物品编号或点左侧扫码盘点" /><button type="submit" className="btn-primary shrink-0 px-3">确认</button></form></section>
+    {scannerOpen && <QrScannerModal onClose={() => setScannerOpen(false)} onDetect={handleScan} />}
     <div className="mb-4 flex items-center justify-between gap-3 text-sm"><span className="font-black">进度 <span style={{ color: "var(--primary)" }}>{scopedItems.filter((item) => confirmed.has(item.id)).length} / {scopedItems.length}</span></span><button onClick={() => { void askConfirm("重新开始本次盘点？当前确认记录会清空。", { title: "重新开始盘点", confirmLabel: "重新开始", tone: "danger" }).then((ok) => { if (ok) updateConfirmed(new Set()); }); }} className="text-xs font-bold muted hover:text-[var(--foreground)]">重新开始</button></div><div className="h-2 overflow-hidden rounded-full" style={{ background: "var(--surface-soft)" }}><div className="h-full rounded-full transition-all" style={{ width: `${scopedItems.length ? scopedItems.filter((item) => confirmed.has(item.id)).length / scopedItems.length * 100 : 0}%`, background: "var(--primary)" }} /></div>
     {scopedItems.length ? <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{scopedItems.map((item) => { const checked = confirmed.has(item.id); return <button type="button" key={item.id} onClick={() => toggle(item.id)} className="flex min-w-0 items-center gap-3 rounded-2xl border p-3 text-left transition hover:-translate-y-px" style={{ borderColor: checked ? "var(--primary)" : "var(--border)", background: checked ? "var(--primary-soft)" : "var(--surface-solid)" }}><span className="grid size-7 shrink-0 place-items-center rounded-full border" style={{ borderColor: checked ? "var(--primary)" : "var(--border)", background: checked ? "var(--primary)" : "transparent", color: "var(--on-primary)" }}>{checked && <Check size={15} strokeWidth={3} />}</span><div className="min-w-0 flex-1"><div className="truncate text-sm font-black">{item.name}</div><div className="mt-0.5 truncate text-xs muted">{item.itemCode || item.id} · {item.location?.name || "未设置位置"}</div></div><span className="shrink-0 text-xs font-bold muted">{item.quantity}{item.unit}</span></button>; })}</div> : <div className="surface mt-5 rounded-3xl py-16"><EmptyState icon={ClipboardCheck} title="这个空间没有可盘点的物品" text="换一个空间，或先录入物品后再来核对。" /></div>}
     {unconfirmed.length > 0 && <section className="mt-7 border-t pt-5" style={{ borderColor: "var(--border)" }}><h2 className="m-0 text-base font-black">未确认物品</h2><p className="mb-3 mt-1 text-xs muted">盘点结束前，你可以保留它们待下次核对，或统一处理。</p><div className="flex flex-wrap gap-2"><button onClick={() => void handleUnconfirmed("empty")} disabled={working} className="btn-ghost text-amber-700">标记为耗尽</button><button onClick={() => void handleUnconfirmed("lost")} disabled={working} className="btn-ghost text-red-500">移入回收站</button></div></section>}</>;
@@ -1164,6 +1168,9 @@ function ItemModal({ locations, allItems, item, onClose, onSaved }: { locations:
   const [imageOpen, setImageOpen] = useState(() => Boolean(item?.imageUrl));
   // 数量用字符串承接:受控 number 会把「清空」立刻回填成 0,再输入就变成 02.5。
   const [qtyText, setQtyText] = useState(() => String(item ? item.quantity : emptyDraft.quantity));
+  // 类型自动识别:只在「新建物品」且用户还没自己选过类型时介入,永远可一键改回。
+  const [typeTouched, setTypeTouched] = useState(Boolean(item));
+  const [typeGuess, setTypeGuess] = useState<ItemTypeGuess | null>(null);
   const normalizedName = normalizedItemName(draft.name);
   const commonTemplate = !item && normalizedName ? findCommonItemTemplate(draft.name) : null;
   const duplicates = !item && normalizedName ? allItems.filter((entry) => normalizedItemName(entry.name) === normalizedName) : [];
@@ -1180,6 +1187,7 @@ function ItemModal({ locations, allItems, item, onClose, onSaved }: { locations:
   })();
   const applyTemplate = () => {
     if (!commonTemplate) return;
+    setTypeTouched(true);
     setDraft((current) => ({
       ...current,
       category: current.category === "日用" ? (commonTemplate.category === "医药" ? suggestMedicineCategory(current.name) : commonTemplate.category) : current.category,
@@ -1225,6 +1233,24 @@ function ItemModal({ locations, allItems, item, onClose, onSaved }: { locations:
   };
   const commitQuantityText = () => { const normalized = normalizeItemQuantity(draft.quantity, draft.unit); set("quantity", normalized); setQtyText(String(normalized)); };
   const changeUnit = (unit: string) => { const quantity = normalizeItemQuantity(draft.quantity, unit); setDraft((current) => ({ ...current, unit, quantity })); setQtyText(String(quantity)); };
+  // 手动点类型 = 关掉自动识别,后续不再覆盖用户的选择。
+  const chooseItemType = (type: ItemType) => {
+    setTypeTouched(true);
+    setTypeGuess(null);
+    setDraft((current) => ({ ...current, type, expiryDate: type === "DURABLE" ? "" : current.expiryDate }));
+  };
+  useEffect(() => {
+    if (item || typeTouched) return;
+    const name = draft.name.trim();
+    // 防抖 320ms:输入停下来再判断,不会每敲一个字就跳类型。
+    const timer = window.setTimeout(() => {
+      const guess = name.length >= 2 ? guessItemType({ name, category: draft.category, unit: draft.unit }) : null;
+      if (!guess) { setTypeGuess(null); return; }
+      setTypeGuess(guess);
+      setDraft((current) => (current.type === guess.type ? current : { ...current, type: guess.type, expiryDate: guess.type === "DURABLE" ? "" : current.expiryDate }));
+    }, 320);
+    return () => window.clearTimeout(timer);
+  }, [draft.name, draft.category, draft.unit, item, typeTouched]);
   // 首次渲染的草稿快照,用来判断「填过东西」;用 state 而不是 ref,避免渲染期读 ref。
   const [initialDraft] = useState(draft);
   const dirty = JSON.stringify(draft) !== JSON.stringify(initialDraft);
@@ -1290,7 +1316,7 @@ function ItemModal({ locations, allItems, item, onClose, onSaved }: { locations:
   return <><Modal title={item ? "编辑物品" : "录入新物品"} subtitle={item?.itemCode || "只填名称和数量也可以，其他信息稍后补充"} onClose={requestClose}><form onSubmit={submit} className="space-y-4">
     {!item && savedTemplates.length > 0 && <div className="-mt-1 overflow-x-auto pb-1"><div className="mb-1.5 flex items-center justify-between"><span className="text-[11px] font-bold muted">最近使用 / 我的模板</span><button type="button" onClick={() => { setSavedTemplates([]); localStorage.removeItem(itemTemplateStorageKey); }} className="text-[11px] muted hover:text-[var(--danger)]">清空</button></div><div className="flex min-w-max gap-2">{savedTemplates.slice().sort((a, b) => b.usedAt - a.usedAt).map((template) => <button key={template.id} type="button" onClick={() => applySavedTemplate(template)} className="rounded-xl border px-2.5 py-1.5 text-left text-xs font-bold transition hover:border-[var(--primary)] hover:bg-[var(--primary-soft)]" style={{ borderColor: "var(--border)" }}><span className="block max-w-32 truncate">{template.name}</span><span className="mt-0.5 block text-[10px] font-normal muted">{template.category} · {template.unit}</span></button>)}</div></div>}
     <div className="flex gap-3">{draft.imageUrl ? <button type="button" onClick={() => setImagePreviewOpen(true)} className="group relative grid size-20 shrink-0 place-items-center overflow-hidden rounded-2xl border bg-cover bg-center transition hover:brightness-90 focus-visible:outline-offset-2" style={{ backgroundImage: `url(${draft.imageUrl})`, borderColor: "var(--primary)" }} aria-label="放大查看物品图片" title="点击放大查看"><span className="absolute inset-x-0 bottom-0 bg-black/55 py-1 text-[10px] font-bold text-white opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">放大</span></button> : <div className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-2xl border border-dashed" style={{ borderColor: "var(--border)", background: "var(--surface-soft)" }}>{uploading ? <Sparkles className="animate-pulse" size={22} /> : <ImagePlus className="muted" size={24} />}</div>}<div className="min-w-0 flex-1"><label htmlFor="item-name" className="mb-1.5 block text-xs font-bold muted">物品名称 *</label><input required id="item-name" maxLength={80} className="input" value={draft.name} onChange={(e) => set("name", e.target.value)} placeholder="拍照让 AI 识别，或直接输入名称" /><div className="mt-2 flex gap-2"><button type="button" disabled={aiLoading || (!draft.name && !draft.imageUrl)} onClick={() => runAi("identify")} className="btn-ghost flex items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-40"><Sparkles size={14} />{aiLoading ? "分析中…" : "AI 补全"}</button>{draft.type === "CONSUMABLE" && <button type="button" disabled={aiLoading || (!draft.name && !draft.imageUrl)} onClick={() => runAi("shelf_life")} className="btn-ghost flex items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-40"><Bot size={14} />分析保质期</button>}</div></div></div>
-    <div className="grid grid-cols-2 gap-3"><label className="cursor-pointer rounded-2xl border px-3 py-2.5 transition" style={draft.type === "DURABLE" ? { borderColor: "var(--primary)", background: "var(--primary-soft)" } : { borderColor: "var(--border)" }}><input type="radio" className="hidden" checked={draft.type === "DURABLE"} onChange={() => setDraft((old) => ({ ...old, type: "DURABLE", expiryDate: "" }))} /><div className="text-sm font-bold">📦 耐用品</div></label><label className="cursor-pointer rounded-2xl border px-3 py-2.5 transition" style={draft.type === "CONSUMABLE" ? { borderColor: "var(--primary)", background: "var(--primary-soft)" } : { borderColor: "var(--border)" }}><input type="radio" className="hidden" checked={draft.type === "CONSUMABLE"} onChange={() => set("type", "CONSUMABLE")} /><div className="text-sm font-bold">🧴 消耗品</div></label></div>
+    <div className="grid grid-cols-2 gap-3"><label className="cursor-pointer rounded-2xl border px-3 py-2.5 transition" style={draft.type === "DURABLE" ? { borderColor: "var(--primary)", background: "var(--primary-soft)" } : { borderColor: "var(--border)" }}><input type="radio" className="hidden" checked={draft.type === "DURABLE"} onChange={() => chooseItemType("DURABLE")} /><div className="text-sm font-bold">📦 耐用品</div></label><label className="cursor-pointer rounded-2xl border px-3 py-2.5 transition" style={draft.type === "CONSUMABLE" ? { borderColor: "var(--primary)", background: "var(--primary-soft)" } : { borderColor: "var(--border)" }}><input type="radio" className="hidden" checked={draft.type === "CONSUMABLE"} onChange={() => chooseItemType("CONSUMABLE")} /><div className="text-sm font-bold">🧴 消耗品</div></label></div>{typeGuess && <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><Sparkles size={14} className="shrink-0" /><span className="min-w-0 flex-1">已按名称识别为{typeGuess.type === "CONSUMABLE" ? "消耗品" : "耐用品"}<span className="ml-1 font-normal">· {typeGuess.reason}</span></span><span className="shrink-0 text-[11px] font-bold opacity-75">点上方可改</span></div>}
     {(duplicates.length > 0 || similarItems.length > 0 || commonTemplate) && <div className="space-y-1.5 rounded-xl px-3 py-2 text-xs" style={{ background: "var(--warning-soft, #fff4dc)", color: "#8a571c" }}>{duplicates.length > 0 && <div className="flex items-center gap-2"><CircleAlert size={15} className="shrink-0" /><span className="min-w-0 flex-1 truncate">已有同名物品：{duplicates.slice(0, 2).map((entry) => entry.location?.name || "未设置位置").join("、")}；仍可继续新增。</span></div>}{similarItems.length > 0 && <div className="flex items-center gap-2"><CircleAlert size={15} className="shrink-0 opacity-75" /><span className="min-w-0 flex-1 truncate">可能已有相似物品：{similarItems.map((entry) => entry.name).join("、")}</span></div>}{commonTemplate && <div className="flex items-center gap-2"><Sparkles size={15} className="shrink-0" /><span className="min-w-0 flex-1 truncate">识别为常见{commonTemplate.category}用品{suggestedLocation ? `，可放在 ${suggestedLocation.name}` : ""}</span><button type="button" onClick={applyTemplate} className="shrink-0 font-black underline underline-offset-2">一键采用</button></div>}</div>}
     {draftAi.hasHighlights && <div className="rounded-2xl border p-3" style={{ borderColor: "color-mix(in srgb, var(--primary) 24%, var(--border))", background: "color-mix(in srgb, var(--primary) 5%, var(--surface-solid))" }}><div className="flex items-center gap-1.5 text-xs font-black" style={{ color: "var(--primary)" }}><Sparkles size={14} />AI 信息</div>{draftAi.summary && <p className="mb-0 mt-2 text-xs leading-5">{draftAi.summary}</p>}<div className="mt-2 grid gap-2 sm:grid-cols-2">{draftAi.storage && <div className="text-xs leading-5"><span className="font-bold">存储：</span>{draftAi.storage}</div>}{(draftAi.usage || draftAi.replenishment) && <div className="text-xs leading-5"><span className="font-bold">使用与补货：</span>{[draftAi.usage, draftAi.replenishment].filter(Boolean).join("；")}</div>}</div></div>}
     <div className="grid grid-cols-2 gap-3"><Field label="分类"><select className="input" value={draft.category} onChange={(e) => set("category", e.target.value)}>{categories.map((c) => <option key={c}>{c}</option>)}</select></Field><div><div className="mb-1.5 flex items-center justify-between"><span className="text-xs font-bold muted">存放位置</span><button type="button" onClick={() => setQuickLocationOpen(true)} className="flex items-center gap-1 text-[11px] font-bold" style={{ color: "var(--primary)" }}><Plus size={13} />新建</button></div><select className="input" value={draft.locationId} onChange={(e) => set("locationId", e.target.value)}><option value="">未设置</option>{availableLocations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select>{suggestedLocation && <button type="button" onClick={() => set("locationId", suggestedLocation.id)} className="mt-1.5 flex max-w-full items-center gap-1 text-[11px] font-bold" style={{ color: "var(--primary)" }}><MapPin size={12} /><span className="truncate">建议放在 {suggestedLocation.name}</span></button>}</div></div>
