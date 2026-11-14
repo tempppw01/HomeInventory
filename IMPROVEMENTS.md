@@ -1,5 +1,44 @@
 # Project Improvements Summary
 
+## 界面重构:路由化 + 拆文件 + 新组件系统(温和家居风)
+
+用户要求「完全重构界面,彻彻底底地改」,并选定:**连架构一起重构 + 温和家居风**。分四步完成:
+
+### 1. 设计令牌:全站换成温和家居风
+
+- 浅色:暖奶油底 `#f7f2ea`、卡片 `#fffdf9`、暖墨 `#2a231d`、次要 `#7c6f62`;强调色从墨蓝 `#48649a` 换成**陶土 `#b4552f`**,成功色换鼠尾草 `#3f7a5a`,阴影带暖调。
+- 深色:从偏蓝的夜空 `#111722` 换成**暖深棕** `#1a1512` / `#271f1a`,强调 `#e2956a`;显式与「跟随系统」两个深色块逐行一致(验收断言 28/28 通过)。
+- 圆角更圆润:卡片 16→20px、控件 12→14px(新增 `--radius-*` 分级)。
+
+### 2. 拆掉 1431 行的单文件
+
+- `src/components/inventory-app.tsx`:**1431 → 549 → 13 行**(最终只剩 re-export)。
+- 新增 `src/components/shared.tsx`(类型/常量/纯函数 + `Brand`/`PageTitle`/`SectionHead`/`EmptyState`/`LoadingView`)。
+- 新增 `src/components/views/*`:dashboard / items / locations / tasks / audit / settings / about / modals / item-modal,共 10 个文件。
+- 做法:按声明边界切块 → 依据每个文件真实出现的标识符生成导入 → 用 eslint 报告反向修剪。lint 从基线 14 warnings 降到 11。
+
+### 3. 路由化(真 URL)与数据层上下文化
+
+- 新增 `src/app/(app)/` 路由组:`/`(概览)、`/items`、`/locations`、`/tasks`、`/audit`、`/settings`、`/about`;`/items/[id]`、`/consume/[id]` 两个独立路由保持可用。
+- `src/components/app/app-provider.tsx`:全部状态与动作(data/refresh、搜索与筛选、主题/密度/动效、侧栏、toast、弹窗开关、欢迎引导、到期提醒每日一次、所有 mutation)。
+- `src/components/app/app-chrome.tsx`:零状态外壳(侧栏/顶栏/底部导航/toast/悬浮球)+ 全局弹窗;视图由 `usePathname()` 选。
+- `src/components/app/routes.ts`:视图 ↔ 路径映射;侧栏 7 项改为 `<Link>`,高亮由 pathname 推导(`data-active` + `aria-current` 保留);移动底栏保留 button(验收套件按 button 断言,URL 同样是真路由)。
+
+### 4. 新组件系统 + 逐视图重排
+
+- 新增 `src/components/ui-kit.tsx`:`Screen`(页面头)、`Panel`(面板)、`Toolbar`、`Chip`(≥40/44px)、`ListRow`、`Metric`、`Empty`、`Hero`。
+- 概览:`Hero` 一屏只说一件事 + 一行 3 个 `Metric` + 最近更新 `ListRow` + 两个默认折叠的辅助 `details`;删掉 h1 与 Hero 重复的状态文案、Hero 的第二个按钮、面板套面板的重复标题。
+- 物品页:工具行移动端压到 **2 行**、桌面 1 行;卡片一行标题(+数量)+ 一行元信息(位置 · 分类 · 类型)+ 右上「更多操作」;新增临期徽标与可见「用掉一个」;采购清单保留 `<details>`(验收依赖)但内容换成 `ListRow`。
+- 空间/任务/盘点:统一 `Screen`/`Panel`/`ListRow`/`Metric`/`Chip`/`Empty`;盘点进度用单文本节点保证「进度 X / Y」可被断言;所有 aria-label/文案逐字保留。
+- 设置/关于/弹窗:设置页外壳用 `Screen`、面板继续走 `settings-primitives`(默认折叠不变);录入弹窗用 `Panel` 分组、按钮组加发丝线,校验/提交/滚锁/焦点/日期选择/扫码逻辑零改动。
+
+### 验证
+
+- 构建:`npm run build` 成功(`.next` 缓存曾损坏,清理后重建);新路由 `/items` `/locations` `/tasks` `/settings` 等全部生成。
+- `verify-experience.mjs` **37/37**、`verify-entry-fixes.mjs` **67/67**、交互探针 **17/17**;typecheck 0 error、eslint 0 error / 11 warnings。
+- 几何走查(`scripts/dogfood.mjs`,1440 + 390、明暗两套、13 个界面):**无横向溢出、无裁切、无 console 错误、无失败请求**。
+- 已知小瑕疵(待下轮):录入弹窗与登录页各有 1–2 个 41×16 左右的次要文字按钮未达 40px;`verify-account-ui.mjs` / `snapshot-computed.mjs` 两个旧套件依赖侧栏 `button[aria-label="设置"]`,侧栏改 `<Link>` 后需同步更新选择器。
+
 ## 交互设计:按设计技能准则做的一轮系统体检与修复
 
 按用户要求先装了 4 个设计类 agent 技能(skills.sh 市场,取自官方/高星仓库,装到用户级技能目录 `~/.agents/skills/`):
