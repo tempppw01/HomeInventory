@@ -261,7 +261,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return (
       <div className="grid min-h-dvh place-items-center bg-[var(--background)]">
         <div className="flex flex-col items-center gap-3">
-          <span className="grid size-11 place-items-center rounded-2xl text-[var(--on-primary)] shadow-lg" style={{ background: "var(--primary)" }}>
+          <span className="grid size-11 place-items-center rounded-[var(--radius-control)] text-[var(--on-primary)] shadow-lg" style={{ background: "var(--primary)" }}>
             <Archive size={22} />
           </span>
           <p className="m-0 text-sm muted">正在检查账号状态...</p>
@@ -273,13 +273,20 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   if (loadError) {
     return (
       <div className="grid min-h-dvh place-items-center bg-[var(--background)] px-4">
-        <div className="surface w-full max-w-sm rounded-3xl p-6 text-center shadow-xl">
-          <span className="mx-auto grid size-11 place-items-center rounded-2xl" style={{ background: "color-mix(in srgb, var(--danger) 12%, transparent)", color: "var(--danger)" }}>
+        <div className="surface w-full max-w-sm rounded-[var(--radius-card)] p-6 text-center sm:p-7">
+          <span
+            className="mx-auto grid size-11 place-items-center rounded-[var(--radius-control)]"
+            style={{
+              background: "color-mix(in srgb, var(--danger) 10%, var(--surface-solid))",
+              border: "1px solid color-mix(in srgb, var(--danger) 26%, transparent)",
+              color: "var(--danger)",
+            }}
+          >
             <AlertCircle size={21} />
           </span>
-          <h1 className="mb-0 mt-4 text-lg font-black">连接不上服务器</h1>
-          <p className="mb-0 mt-2 text-sm muted">{loadError}</p>
-          <button type="button" onClick={retry} className="btn-primary mt-5 flex w-full items-center justify-center gap-2">
+          <h1 className="mb-0 mt-4 text-lg font-black leading-tight tracking-[-0.01em]">连接不上服务器</h1>
+          <p className="mx-auto mb-0 mt-2 max-w-[32ch] text-sm leading-6 muted">{loadError}</p>
+          <button type="button" onClick={retry} className="btn-primary mt-5 flex min-h-11 w-full items-center justify-center gap-2">
             <RefreshCw size={16} />重新尝试
           </button>
         </div>
@@ -296,13 +303,13 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       <aside className="auth-brand">
         <div className="auth-brand-inner">
           <div className="flex items-center gap-3">
-            <span className="grid size-11 place-items-center rounded-2xl text-[var(--on-primary)] shadow-lg" style={{ background: "var(--primary)" }}>
+            <span className="grid size-11 place-items-center rounded-[var(--radius-control)] text-[var(--on-primary)] shadow-lg" style={{ background: "var(--primary)" }}>
               <Archive size={22} />
             </span>
             <div>
               <div className="flex items-center gap-2 text-lg font-black tracking-tight">
                 归物
-                <span className="rounded-md px-1.5 py-0.5 text-[9px] font-bold" style={{ background: "color-mix(in srgb, var(--brand-accent) 20%, transparent)", color: "var(--brand-accent)" }}>
+                <span className="rounded-[var(--radius-sm)] px-1.5 py-0.5 text-[9px] font-bold" style={{ background: "color-mix(in srgb, var(--brand-accent) 20%, transparent)", color: "var(--brand-accent)" }}>
                   HOME INVENTORY
                 </span>
               </div>
@@ -311,7 +318,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex flex-1 flex-col justify-center py-10">
-            <h2 className="mb-0 text-3xl font-black leading-tight tracking-tight sm:text-4xl">
+            <h2 className="mb-0 text-3xl font-black leading-[1.15] tracking-[-0.02em] sm:text-4xl">
               把家里的杂物
               <br />
               收得井井有条
@@ -321,32 +328,41 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
               家里每个人都能随时查到,动线更短,心更安定。
             </p>
 
-            <ul className="mb-0 mt-9 grid list-none gap-3.5 p-0">
+            <ul className="mb-0 mt-8 grid list-none gap-4 p-0">
               <li className="flex items-start gap-3">
-                <span className="grid size-9 shrink-0 place-items-center rounded-xl" style={{ background: "color-mix(in srgb, var(--primary) 16%, transparent)", color: "var(--primary)" }}>
+                <span
+                  className="grid size-9 shrink-0 place-items-center rounded-[var(--radius-control)]"
+                  style={{ background: "color-mix(in srgb, var(--primary) 14%, transparent)", border: "1px solid color-mix(in srgb, var(--primary) 22%, transparent)", color: "var(--primary)" }}
+                >
                   <MapPin size={17} />
                 </span>
                 <div>
                   <div className="text-sm font-bold">位置一目了然</div>
-                  <div className="text-xs" style={{ color: "var(--brand-muted)" }}>按房间和柜子分层,找东西不用翻箱倒柜</div>
+                  <div className="text-xs leading-5" style={{ color: "var(--brand-muted)" }}>按房间和柜子分层,找东西不用翻箱倒柜</div>
                 </div>
               </li>
               <li className="flex items-start gap-3">
-                <span className="grid size-9 shrink-0 place-items-center rounded-xl" style={{ background: "color-mix(in srgb, var(--brand-accent) 18%, transparent)", color: "var(--brand-accent)" }}>
+                <span
+                  className="grid size-9 shrink-0 place-items-center rounded-[var(--radius-control)]"
+                  style={{ background: "color-mix(in srgb, var(--brand-accent) 16%, transparent)", border: "1px solid color-mix(in srgb, var(--brand-accent) 24%, transparent)", color: "var(--brand-accent)" }}
+                >
                   <Sparkles size={17} />
                 </span>
                 <div>
                   <div className="text-sm font-bold">临期和补货自动提醒</div>
-                  <div className="text-xs" style={{ color: "var(--brand-muted)" }}>快过期的先吃掉,快用完的顺手加进采购清单</div>
+                  <div className="text-xs leading-5" style={{ color: "var(--brand-muted)" }}>快过期的先吃掉,快用完的顺手加进采购清单</div>
                 </div>
               </li>
               <li className="flex items-start gap-3">
-                <span className="grid size-9 shrink-0 place-items-center rounded-xl" style={{ background: "color-mix(in srgb, var(--brand-sage) 20%, transparent)", color: "var(--brand-sage)" }}>
+                <span
+                  className="grid size-9 shrink-0 place-items-center rounded-[var(--radius-control)]"
+                  style={{ background: "color-mix(in srgb, var(--brand-sage) 18%, transparent)", border: "1px solid color-mix(in srgb, var(--brand-sage) 26%, transparent)", color: "var(--brand-sage)" }}
+                >
                   <ShieldCheck size={17} />
                 </span>
                 <div>
                   <div className="text-sm font-bold">家人各有账号</div>
-                  <div className="text-xs" style={{ color: "var(--brand-muted)" }}>管理员、成员、只读三种权限,数据留在自己的服务器</div>
+                  <div className="text-xs leading-5" style={{ color: "var(--brand-muted)" }}>管理员、成员、只读三种权限,数据留在自己的服务器</div>
                 </div>
               </li>
             </ul>
@@ -361,28 +377,28 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
       <main className="auth-panel">
         <div className="w-full max-w-sm">
-          <div className="mb-7 flex items-center gap-2.5 lg:hidden">
-            <span className="grid size-10 place-items-center rounded-2xl text-[var(--on-primary)] shadow-lg" style={{ background: "var(--primary)" }}>
+          <div className="mb-6 flex items-center gap-2.5 lg:hidden">
+            <span className="grid size-10 place-items-center rounded-[var(--radius-control)] text-[var(--on-primary)] shadow-lg" style={{ background: "var(--primary)" }}>
               <Archive size={20} />
             </span>
             <div>
-              <div className="text-base font-black">归物 HomeInventory</div>
+              <div className="text-base font-black tracking-[-0.01em]">归物 HomeInventory</div>
               <div className="text-xs muted">家的每一件东西,都有位置</div>
             </div>
           </div>
 
           {view === "credentials" && (
             <>
-              <div className="mb-6">
-                <h1 className="mb-0 text-2xl font-black tracking-tight">
+              <header className="mb-6">
+                <h1 className="mb-0 text-2xl font-black leading-tight tracking-[-0.01em]">
                   {setupRequired ? "创建管理员账号" : "欢迎回家"}
                 </h1>
-                <p className="mb-0 mt-2 text-sm muted">
+                <p className="mb-0 mt-2 text-sm leading-6 muted">
                   {setupRequired
                     ? "这是第一次使用,先创建一个管理员账号,之后可以邀请家人加入。"
                     : "登录后继续管理家里的物品清单。"}
                 </p>
-              </div>
+              </header>
 
               <form onSubmit={submit} noValidate className="space-y-4">
                 <div className="ds-form-field">
@@ -450,7 +466,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
                     <button
                       type="button"
                       onClick={() => setShowPassword((current) => !current)}
-                      className="icon-action absolute right-1.5 top-1/2 -translate-y-1/2"
+                      className="icon-action absolute right-1.5 top-1/2 max-md:size-11 max-md:min-h-11 -translate-y-1/2"
                       aria-label={showPassword ? "隐藏密码" : "显示密码"}
                       title={showPassword ? "隐藏密码" : "显示密码"}
                     >
@@ -464,12 +480,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
                 </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold">
+                  <label className="flex min-h-11 cursor-pointer items-center gap-2 text-xs font-semibold">
                     <input
                       type="checkbox"
                       checked={remember}
                       onChange={(event) => setRemember(event.target.checked)}
-                      className="size-4 accent-[var(--primary)]"
+                      className="size-5 accent-[var(--primary)]"
                     />
                     记住我(30 天内免登录)
                   </label>
@@ -478,13 +494,13 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
                       <button
                         type="button"
                         onClick={() => { setPassword(generatePassword()); setTouched((current) => ({ ...current, password: true })); }}
-                        className="text-xs font-bold"
+                        className="min-h-10 text-xs font-bold max-md:min-h-11"
                         style={{ color: "var(--primary)" }}
                       >
                         生成强密码
                       </button>
                     ) : (
-                      <button type="button" onClick={openRecovery} className="text-xs font-bold" style={{ color: "var(--primary)" }}>
+                      <button type="button" onClick={openRecovery} className="min-h-10 text-xs font-bold max-md:min-h-11" style={{ color: "var(--primary)" }}>
                         忘记密码?
                       </button>
                     )}
@@ -494,15 +510,19 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
                 {error && (
                   <div
                     role="alert"
-                    className="flex items-start gap-2 rounded-xl p-2.5 text-sm"
-                    style={{ background: "color-mix(in srgb, var(--danger) 10%, transparent)", color: "var(--danger)" }}
+                    className="flex items-start gap-2 rounded-[var(--radius-control)] border p-3 text-sm leading-6"
+                    style={{
+                      background: "color-mix(in srgb, var(--danger) 8%, var(--surface-solid))",
+                      borderColor: "color-mix(in srgb, var(--danger) 26%, transparent)",
+                      color: "var(--danger)",
+                    }}
                   >
                     <AlertCircle size={16} className="mt-0.5 shrink-0" />
                     <span className="min-w-0">{error}</span>
                   </div>
                 )}
 
-                <button type="submit" disabled={submitting} className="btn-primary flex w-full items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-70">
+                <button type="submit" disabled={submitting} className="btn-primary flex min-h-11 w-full items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-70">
                   {submitting ? <><Loader2 size={16} className="animate-spin" />{setupRequired ? "正在创建..." : "正在登录..." }</> : setupRequired ? "创建账号并进入" : "登录"}
                 </button>
 
@@ -517,16 +537,16 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
           {view === "recovery" && (
             <>
-              <button type="button" onClick={backToLogin} className="mb-5 inline-flex items-center gap-1.5 text-xs font-bold" style={{ color: "var(--muted)" }}>
+              <button type="button" onClick={backToLogin} className="-ml-1 mb-5 inline-flex min-h-10 items-center gap-1.5 rounded-[var(--radius-control)] px-1 text-xs font-bold max-md:min-h-11" style={{ color: "var(--muted)" }}>
                 <ArrowLeft size={14} />返回登录
               </button>
 
-              <div className="mb-6">
-                <h1 className="mb-0 text-2xl font-black tracking-tight">找回密码</h1>
-                <p className="mb-0 mt-2 text-sm muted">
+              <header className="mb-6">
+                <h1 className="mb-0 text-2xl font-black leading-tight tracking-[-0.01em]">找回密码</h1>
+                <p className="mb-0 mt-2 text-sm leading-6 muted">
                   用账号的一次性恢复码重置密码。恢复码可以在「设置 → 账号与家庭成员」里生成。
                 </p>
-              </div>
+              </header>
 
               <form onSubmit={submitRecovery} noValidate className="space-y-4">
                 <div className="ds-form-field">
@@ -599,7 +619,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
                     <button
                       type="button"
                       onClick={() => setShowRecoveryPassword((current) => !current)}
-                      className="icon-action absolute right-1.5 top-1/2 -translate-y-1/2"
+                      className="icon-action absolute right-1.5 top-1/2 max-md:size-11 max-md:min-h-11 -translate-y-1/2"
                       aria-label={showRecoveryPassword ? "隐藏新密码" : "显示新密码"}
                       title={showRecoveryPassword ? "隐藏新密码" : "显示新密码"}
                     >
@@ -632,7 +652,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
                     <button
                       type="button"
                       onClick={() => setShowRecoveryConfirm((current) => !current)}
-                      className="icon-action absolute right-1.5 top-1/2 -translate-y-1/2"
+                      className="icon-action absolute right-1.5 top-1/2 max-md:size-11 max-md:min-h-11 -translate-y-1/2"
                       aria-label={showRecoveryConfirm ? "隐藏确认密码" : "显示确认密码"}
                       title={showRecoveryConfirm ? "隐藏确认密码" : "显示确认密码"}
                     >
@@ -644,30 +664,34 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <button
                     type="button"
                     onClick={() => { setRecoveryPassword(generatePassword()); setShowRecoveryPassword(true); setRecoveryTouched((current) => ({ ...current, password: true })); }}
-                    className="text-xs font-bold"
+                    className="min-h-10 text-xs font-bold max-md:min-h-11"
                     style={{ color: "var(--primary)" }}
                   >
                     生成强密码
                   </button>
-                  <span className="text-xs muted">重置后所有设备都需要重新登录</span>
+                  <span className="text-xs leading-5 muted">重置后所有设备都需要重新登录</span>
                 </div>
 
                 {recoveryError && (
                   <div
                     role="alert"
-                    className="flex items-start gap-2 rounded-xl p-2.5 text-sm"
-                    style={{ background: "color-mix(in srgb, var(--danger) 10%, transparent)", color: "var(--danger)" }}
+                    className="flex items-start gap-2 rounded-[var(--radius-control)] border p-3 text-sm leading-6"
+                    style={{
+                      background: "color-mix(in srgb, var(--danger) 8%, var(--surface-solid))",
+                      borderColor: "color-mix(in srgb, var(--danger) 26%, transparent)",
+                      color: "var(--danger)",
+                    }}
                   >
                     <AlertCircle size={16} className="mt-0.5 shrink-0" />
                     <span className="min-w-0">{recoveryError}</span>
                   </div>
                 )}
 
-                <button type="submit" disabled={recoverySubmitting} className="btn-primary flex w-full items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-70">
+                <button type="submit" disabled={recoverySubmitting} className="btn-primary flex min-h-11 w-full items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-70">
                   {recoverySubmitting ? <><Loader2 size={16} className="animate-spin" />正在重置...</> : "重置密码"}
                 </button>
               </form>
@@ -676,23 +700,30 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
           {view === "recovery-done" && (
             <>
-              <div className="mb-5 flex items-center gap-2.5">
-                <span className="grid size-10 shrink-0 place-items-center rounded-2xl" style={{ background: "color-mix(in srgb, var(--success) 14%, transparent)", color: "var(--success)" }}>
+              <header className="mb-6 flex items-center gap-2.5">
+                <span
+                  className="grid size-10 shrink-0 place-items-center rounded-[var(--radius-control)]"
+                  style={{
+                    background: "color-mix(in srgb, var(--success) 12%, var(--surface-solid))",
+                    border: "1px solid color-mix(in srgb, var(--success) 26%, transparent)",
+                    color: "var(--success)",
+                  }}
+                >
                   <Check size={20} />
                 </span>
                 <div>
-                  <h1 className="mb-0 text-xl font-black tracking-tight">密码已重置</h1>
-                  <p className="mb-0 mt-0.5 text-xs muted">账号 {recoveryUsername} 的密码已更新,所有设备已退出登录。</p>
+                  <h1 className="mb-0 text-xl font-black leading-tight tracking-[-0.01em]">密码已重置</h1>
+                  <p className="mb-0 mt-1 text-xs leading-5 muted">账号 {recoveryUsername} 的密码已更新,所有设备已退出登录。</p>
                 </div>
-              </div>
+              </header>
 
               <div
-                className="rounded-2xl p-3.5"
-                style={{ background: "color-mix(in srgb, var(--primary) 8%, transparent)", border: "1px solid color-mix(in srgb, var(--primary) 30%, transparent)" }}
+                className="rounded-[var(--radius-card)] p-3.5"
+                style={{ background: "color-mix(in srgb, var(--primary) 6%, var(--surface-solid))", border: "1px solid color-mix(in srgb, var(--primary) 22%, transparent)" }}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-bold tracking-wide" style={{ color: "var(--primary)" }}>新的恢复码</span>
-                  <button type="button" onClick={copyRecoveryCode} className="btn-ghost ds-button-sm flex items-center gap-1.5">
+                  <span className="text-xs font-bold tracking-wide" style={{ color: "var(--primary-strong)" }}>新的恢复码</span>
+                  <button type="button" onClick={copyRecoveryCode} className="btn-ghost flex min-h-10 items-center gap-1.5 px-2.5 text-xs max-md:min-h-11">
                     {copyState === "copied" ? <><Check size={13} />已复制</> : <><Copy size={13} />复制</>}
                   </button>
                 </div>
@@ -717,14 +748,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
                 </p>
               )}
 
-              <p className="mb-0 mt-3 text-xs muted">
+              <p className="mb-0 mt-3 text-xs leading-5 muted">
                 之后可以在「设置 → 账号与家庭成员」里重新生成恢复码。
               </p>
 
               <button
                 type="button"
                 onClick={() => { setUsername(recoveryUsername); setPassword(""); setError(""); setSubmitted(false); backToLogin(); }}
-                className="btn-primary mt-5 flex w-full items-center justify-center gap-2"
+                className="btn-primary mt-5 flex min-h-11 w-full items-center justify-center gap-2"
               >
                 <ArrowLeft size={16} />用新用户名登录
               </button>

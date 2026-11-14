@@ -3,6 +3,8 @@ import { useConfirm } from "@/components/confirm-dialog";
 
 import { History, LoaderCircle, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { SettingsBadge, SettingsRow } from "@/components/settings-primitives";
+import { ListRow } from "@/components/ui-kit";
 
 type ScanActivity = {
   id: string;
@@ -42,7 +44,7 @@ export function ScanActivityPanel({ onToast }: { onToast: (message: string) => v
   }, [load]);
 
   const undo = async (record: ScanActivity) => {
-    if (!(await askConfirm(`确定撤销“${record.itemName || "物品"}”这次扫码消耗吗？库存将恢复 1 ${record.detail?.match(/1 (.+)$/)?.[1] || "个"}。`, { title: "撤销扫码消耗", confirmLabel: "撤销并恢复库存" }))) return;
+    if (!(await askConfirm(`确定撤销“${record.itemName || "物品"}”这次扫码消耗吗?库存将恢复 1 ${record.detail?.match(/1 (.+)$/)?.[1] || "个"}。`, { title: "撤销扫码消耗", confirmLabel: "撤销并恢复库存" }))) return;
     setUndoing(record.id);
     try {
       const response = await fetch(`/api/activity/${record.id}/undo`, { method: "POST" });
@@ -57,5 +59,21 @@ export function ScanActivityPanel({ onToast }: { onToast: (message: string) => v
     }
   };
 
-  return <div className="rounded-2xl p-4" style={{ background: "var(--surface-soft)" }}><div className="mb-2 flex items-center gap-2 text-xs font-bold muted"><History size={14} />扫码消耗记录</div>{loading ? <div className="flex items-center gap-2 py-2 text-xs muted"><LoaderCircle size={14} className="animate-spin" />正在加载…</div> : records.length === 0 ? <p className="mb-0 py-2 text-xs muted">还没有扫码消耗记录。</p> : <div className="space-y-2">{records.slice(0, 12).map((record) => <div key={record.id} className="flex items-center gap-2 rounded-xl p-2.5" style={{ background: "var(--surface-solid)" }}><div className="min-w-0 flex-1"><div className="truncate text-xs font-bold">{record.action === "CONSUME" ? "扫码消耗" : "撤销消耗"} · {record.itemName || "物品"}</div><div className="mt-0.5 truncate text-xs muted">{new Date(record.createdAt).toLocaleString("zh-CN")} · {record.user?.displayName || "公开扫码"}{record.action === "CONSUME" && record.undoneAt ? " · 已撤销" : ""}</div></div>{isAdmin && record.action === "CONSUME" && !record.undoneAt && <button disabled={undoing === record.id} onClick={() => void undo(record)} className="btn-ghost flex shrink-0 items-center gap-1 px-2 py-1.5 text-xs text-red-500 disabled:opacity-50"><Undo2 size={13} />{undoing === record.id ? "处理中" : "撤销"}</button>}</div>)}</div>}</div>;
+  // 与其它设置面板同一节奏:分组标题走 SettingsRow,记录行走 ListRow + 发丝线,不再套内层卡片。
+  return <div>
+    <SettingsRow icon={History} title="扫码消耗记录" control={<SettingsBadge tone="muted">{records.length} 条</SettingsBadge>} />
+    {loading
+      ? <div className="flex items-center gap-2 py-3 text-xs muted"><LoaderCircle size={14} className="animate-spin" />正在加载...</div>
+      : records.length === 0
+        ? <p className="mb-0 py-3 text-xs muted">还没有扫码消耗记录。</p>
+        : <div className="max-h-80 overflow-y-auto border-t pr-1" style={{ borderColor: "var(--hairline)" }}>{records.slice(0, 12).map((record) => <ListRow
+          key={record.id}
+          icon={record.action === "CONSUME" ? History : Undo2}
+          title={<span className="block whitespace-normal break-words">{record.action === "CONSUME" ? "扫码消耗" : "撤销消耗"} · {record.itemName || "物品"}</span>}
+          meta={<span className="block whitespace-normal break-words">{`${new Date(record.createdAt).toLocaleString("zh-CN")} · ${record.user?.displayName || "公开扫码"}${record.action === "CONSUME" && record.undoneAt ? " · 已撤销" : ""}`}</span>}
+          trailing={isAdmin && record.action === "CONSUME" && !record.undoneAt
+            ? <button disabled={undoing === record.id} onClick={() => void undo(record)} className="btn-ghost flex shrink-0 items-center gap-1 px-2 py-1.5 text-xs text-red-500 disabled:opacity-50 min-h-10 max-md:min-h-11"><Undo2 size={13} />{undoing === record.id ? "处理中" : "撤销"}</button>
+            : undefined}
+        />)}</div>}
+  </div>;
 }

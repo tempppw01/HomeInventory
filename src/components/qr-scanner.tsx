@@ -462,7 +462,7 @@ export function QrScannerModal({
         data-qr-scanner="true"
         data-source={source}
         data-status={status}
-        className="max-h-[min(92vh,88dvh)] w-full max-w-lg overflow-y-auto rounded-t-[28px] p-5 shadow-2xl sm:rounded-[28px] sm:p-6"
+        className="max-h-[min(92vh,88dvh)] w-full max-w-lg overflow-y-auto rounded-t-[28px] rounded-b-none p-5 shadow-2xl sm:rounded-[28px] sm:p-6"
         style={{
           background: "var(--surface-solid)",
           paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))",
@@ -471,12 +471,12 @@ export function QrScannerModal({
           transition: reduced ? "none" : "opacity 200ms ease, transform 220ms cubic-bezier(.2,.8,.2,1)",
         }}
       >
-        <div className="mb-4 flex items-start gap-3">
-          <div className="grid size-10 shrink-0 place-items-center rounded-2xl" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>
+        <div className="mb-5 flex items-start gap-3 sm:mb-6">
+          <div className="grid size-11 shrink-0 place-items-center rounded-2xl" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>
             <QrCode size={19} />
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="m-0 text-lg font-black">{title}</h2>
+            <h2 className="m-0 text-xl font-black leading-snug">{title}</h2>
             <p id="qr-scanner-hint" className="mb-0 mt-1 text-xs leading-5 muted">
               {hint}
             </p>
@@ -496,7 +496,7 @@ export function QrScannerModal({
                 onClick={() => void chooseSource(id)}
                 aria-pressed={active}
                 data-source-chip={id}
-                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-xs font-bold transition"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-3.5 text-xs font-bold transition sm:min-h-10"
                 style={active ? { background: "var(--primary)", color: "var(--on-primary)" } : { background: "var(--surface-soft)", color: "var(--muted)" }}
               >
                 <Icon size={15} />
@@ -513,7 +513,7 @@ export function QrScannerModal({
         </p>
 
         {live && (
-          <div className={`relative overflow-hidden rounded-2xl bg-black ${support === "unsupported" ? "hidden" : ""}`} style={{ aspectRatio: "4 / 3" }}>
+          <div className={`relative overflow-hidden rounded-[20px] bg-black ${support === "unsupported" ? "hidden" : ""}`} style={{ aspectRatio: "4 / 3" }}>
             <video
               ref={videoRef}
               autoPlay
@@ -524,7 +524,7 @@ export function QrScannerModal({
               className={`size-full ${source === "screen" ? "object-contain" : "object-cover"}`}
             />
             <div className="pointer-events-none absolute inset-0 grid place-items-center" aria-hidden="true">
-              <div className="size-36 rounded-2xl border-2 border-white/80" />
+              <div className="size-36 rounded-[20px] border-2 border-white/80" />
             </div>
             {stageBusy && (
               <div className="absolute inset-0 grid place-items-center bg-black/55 text-xs font-bold text-white">
@@ -538,7 +538,7 @@ export function QrScannerModal({
         )}
 
         {source === "image" && (
-          <div className="grid place-items-center gap-3 rounded-2xl border border-dashed p-6 text-center" style={{ borderColor: "var(--border)", background: "var(--surface-soft)" }}>
+          <div className="grid place-items-center gap-3 rounded-[20px] border border-dashed p-6 text-center" style={{ borderColor: "var(--hairline)", background: "var(--surface-soft)" }}>
             <ImageIcon size={22} style={{ color: "var(--primary)" }} />
             <p className="m-0 text-xs leading-5 muted">支持 JPG / PNG / WebP 的照片或截图,选中后立即识别一次。</p>
             <button type="button" onClick={() => imageInputRef.current?.click()} disabled={busyImage} className="btn-primary inline-flex min-h-11 items-center gap-2 px-4 text-sm disabled:opacity-60">
@@ -568,7 +568,7 @@ export function QrScannerModal({
 
         <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => void pickImage(event)} aria-label="选择二维码图片" />
 
-        <div className="mt-3 rounded-2xl px-3 py-2.5 text-xs leading-5" style={{ background: "var(--surface-soft)" }} aria-live="polite">
+        <div className="mt-3 rounded-[20px] px-4 py-3 text-xs leading-5" style={{ background: "var(--surface-soft)" }} aria-live="polite">
           <div className="flex items-center gap-1.5 font-bold" style={{ color: !last ? "var(--muted)" : last.verdict === "unknown" ? "var(--danger)" : "var(--success)" }}>
             {last && last.verdict !== "unknown" ? <CircleCheck size={15} /> : null}
             <span className="min-w-0 flex-1">{resultText}</span>
@@ -583,7 +583,7 @@ export function QrScannerModal({
           <div
             role="alert"
             data-qr-notice={notice.tone}
-            className="mt-3 rounded-2xl p-3 text-xs leading-5"
+            className="mt-3 rounded-[20px] p-3 text-xs leading-5"
             style={{
               background: notice.tone === "error" ? "color-mix(in srgb, var(--danger) 12%, var(--surface-solid))" : "var(--surface-soft)",
               color: notice.tone === "error" ? "var(--danger)" : "var(--muted)",

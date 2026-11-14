@@ -76,12 +76,12 @@ export function BatchEditModal({
         role="dialog"
         aria-modal="true"
         aria-label="批量编辑物品"
-        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-[28px] p-5 shadow-2xl sm:rounded-[28px] sm:p-6"
+        className="max-h-[min(92vh,88dvh)] w-full max-w-lg overflow-y-auto rounded-t-[28px] rounded-b-none p-5 shadow-2xl sm:rounded-[28px] sm:p-6"
         style={{ background: "var(--surface-solid)" }}
       >
-        <div className="mb-6 flex items-start justify-between">
+        <div className="mb-5 flex items-start justify-between sm:mb-6">
           <div>
-            <h2 className="m-0 text-xl font-black">批量编辑物品</h2>
+            <h2 className="m-0 text-xl font-black leading-snug">批量编辑物品</h2>
             <p className="mb-0 mt-1 text-xs muted">
               将同时修改 {selectedCount} 件物品
             </p>
@@ -89,7 +89,7 @@ export function BatchEditModal({
           <button
             type="button"
             onClick={onClose}
-            className="btn-ghost grid size-9 min-h-9 place-items-center p-0"
+            className="btn-ghost grid size-11 min-h-11 place-items-center p-0"
             aria-label="关闭批量编辑"
           >
             <X size={17} />

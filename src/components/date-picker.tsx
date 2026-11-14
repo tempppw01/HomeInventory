@@ -420,7 +420,9 @@ export function DatePicker({
     if (selected && cell.key === keyOf(selected)) {
       style.background = "var(--primary)";
       style.color = "var(--on-primary)";
-      style.boxShadow = cell.isToday ? "inset 0 0 0 2px color-mix(in srgb, var(--on-primary) 70%, transparent)" : undefined;
+      style.boxShadow = cell.isToday
+        ? "inset 0 0 0 2px color-mix(in srgb, var(--on-primary) 70%, transparent), 0 6px 16px color-mix(in srgb, var(--primary) 28%, transparent)"
+        : "0 6px 16px color-mix(in srgb, var(--primary) 28%, transparent)";
     } else if (cell.isToday) {
       style.boxShadow = "inset 0 0 0 2px var(--primary)";
       style.color = "var(--primary)";
@@ -431,9 +433,9 @@ export function DatePicker({
   };
 
   const chipClass =
-    "min-h-11 rounded-xl border px-3 text-xs font-bold transition-colors sm:min-h-10 disabled:cursor-not-allowed disabled:opacity-40";
+    "min-h-11 rounded-full border px-3.5 text-xs font-bold transition-colors sm:min-h-10 disabled:cursor-not-allowed disabled:opacity-40";
   const navClass =
-    "grid size-11 place-items-center rounded-xl transition-colors hover:bg-[var(--surface-soft)] sm:size-10";
+    "grid size-11 place-items-center rounded-full transition-colors hover:bg-[var(--surface-soft)] sm:size-10";
 
   const panel = open ? (
     <div
@@ -448,13 +450,13 @@ export function DatePicker({
       onKeyDown={onPanelKeyDown}
       className={
         placement?.drawer
-          ? "fixed inset-x-0 bottom-0 z-[130] w-full rounded-t-3xl border p-3 shadow-2xl"
-          : "fixed z-[130] w-[336px] rounded-2xl border p-3 shadow-2xl"
+          ? "fixed inset-x-0 bottom-0 z-[130] w-full rounded-t-[28px] border p-3 shadow-2xl"
+          : "fixed z-[130] w-[336px] rounded-[24px] border p-3 shadow-2xl"
       }
       style={{
         zIndex: 130,
         background: "var(--surface-solid)",
-        borderColor: "var(--border)",
+        borderColor: "var(--hairline)",
         visibility: placement ? "visible" : "hidden",
         ...(placement && !placement.drawer ? { left: placement.left, top: placement.top } : {}),
         ...(placement?.drawer ? { paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" } : {}),
@@ -474,7 +476,7 @@ export function DatePicker({
             )}
           </div>
         </div>
-        <button type="button" onClick={closePanel} className="grid size-8 place-items-center rounded-lg muted" aria-label="关闭日期选择">
+        <button type="button" onClick={closePanel} className="grid size-11 place-items-center rounded-full muted sm:size-10" aria-label="关闭日期选择">
           <X size={15} />
         </button>
       </div>
@@ -488,7 +490,7 @@ export function DatePicker({
         </button>
         <button
           type="button"
-          className="min-h-11 flex-1 rounded-xl px-2 text-sm font-black transition-colors hover:bg-[var(--surface-soft)] sm:min-h-10"
+          className="min-h-11 flex-1 rounded-[14px] px-2 text-sm font-black transition-colors hover:bg-[var(--surface-soft)] sm:min-h-10"
           aria-label={titleLabel}
           data-mode={mode}
           onClick={() => setMode(modeOrder[mode])}
@@ -509,7 +511,7 @@ export function DatePicker({
 
       {mode === "days" ? (
         <>
-          <div className="grid grid-cols-7 gap-1 px-0.5 pb-1" aria-hidden="true">
+          <div className="grid grid-cols-7 gap-x-1 px-0.5 pb-1" aria-hidden="true">
             {WEEKDAY_ORDER.map((day) => (
               <span key={day} className="grid place-items-center py-0.5 text-xs font-bold muted">
                 {day}
@@ -518,7 +520,7 @@ export function DatePicker({
           </div>
           <div role="grid" aria-label={`${viewMonth.getFullYear()} 年 ${viewMonth.getMonth() + 1} 月日历`}>
             {Array.from({ length: 6 }, (_, row) => (
-              <div role="row" key={row} className="grid grid-cols-7 gap-1 py-0.5">
+              <div role="row" key={row} className="grid grid-cols-7 gap-x-1 gap-y-1.5 py-0.5">
                 {cells.slice(row * 7, row * 7 + 7).map((cell) => {
                   const isSelected = !!selected && cell.key === keyOf(selected);
                   return (
@@ -535,7 +537,7 @@ export function DatePicker({
                       tabIndex={cell.key === focusKey ? 0 : -1}
                       disabled={cell.outOfRange}
                       onClick={() => selectDate(cell.key)}
-                      className="grid aspect-square w-full min-h-11 min-w-0 place-items-center rounded-xl text-sm font-bold transition-colors hover:bg-[var(--surface-soft)] disabled:cursor-not-allowed sm:min-h-10"
+                      className="grid aspect-square w-full min-h-11 min-w-0 place-items-center rounded-[14px] text-sm font-bold transition-colors hover:bg-[var(--surface-soft)] disabled:cursor-not-allowed sm:min-h-10"
                       style={cellStyle(cell)}
                     >
                       {cell.date.getDate()}
@@ -556,7 +558,7 @@ export function DatePicker({
                 type="button"
                 disabled={!monthHasSelectable(viewMonth.getFullYear(), index)}
                 onClick={() => pickMonth(viewMonth.getFullYear(), index)}
-                className="min-h-11 rounded-xl text-sm font-bold transition-colors hover:bg-[var(--surface-soft)] disabled:cursor-not-allowed disabled:opacity-35 sm:min-h-10"
+                className="min-h-11 rounded-[14px] text-sm font-bold transition-colors hover:bg-[var(--surface-soft)] disabled:cursor-not-allowed disabled:opacity-35 sm:min-h-10"
                 style={isCurrent ? { background: "var(--primary)", color: "var(--on-primary)" } : undefined}
               >
                 {monthLabel}
@@ -572,7 +574,7 @@ export function DatePicker({
               type="button"
               disabled={!yearHasSelectable(year)}
               onClick={() => pickMonth(year, viewMonth.getMonth())}
-              className="min-h-11 rounded-xl text-sm font-bold transition-colors hover:bg-[var(--surface-soft)] disabled:cursor-not-allowed disabled:opacity-35 sm:min-h-10"
+              className="min-h-11 rounded-[14px] text-sm font-bold transition-colors hover:bg-[var(--surface-soft)] disabled:cursor-not-allowed disabled:opacity-35 sm:min-h-10"
               style={year === viewMonth.getFullYear() ? { background: "var(--primary)", color: "var(--on-primary)" } : undefined}
             >
               {year}
@@ -592,7 +594,7 @@ export function DatePicker({
                 disabled={!withinRange(target, minDate, maxDate)}
                 onClick={() => selectDate(keyOf(target))}
                 className={chipClass}
-                style={{ borderColor: "var(--border)" }}
+                style={{ background: "var(--surface-soft)", borderColor: "var(--hairline)" }}
               >
                 {preset.label}
               </button>
@@ -601,7 +603,7 @@ export function DatePicker({
         </div>
       )}
 
-      <div className="mt-2 border-t pt-2" style={{ borderColor: "var(--border)" }}>
+      <div className="mt-2 border-t pt-2" style={{ borderColor: "var(--hairline)" }}>
         <div className="flex items-center gap-2">
           <input
             className="input min-w-0 flex-1"
@@ -620,7 +622,7 @@ export function DatePicker({
               applyText();
             }}
           />
-          <button type="button" onClick={applyText} className="btn-ghost shrink-0 px-3 text-xs">
+          <button type="button" onClick={applyText} className="btn-ghost shrink-0 px-4 text-xs">
             应用
           </button>
         </div>
@@ -635,7 +637,7 @@ export function DatePicker({
             disabled={!withinRange(today, minDate, maxDate)}
             onClick={() => selectDate(todayKey)}
             className={chipClass}
-            style={{ borderColor: "var(--border)" }}
+            style={{ background: "var(--primary-soft)", color: "var(--primary)", borderColor: "transparent" }}
           >
             今天
           </button>
@@ -645,7 +647,7 @@ export function DatePicker({
               disabled={!value}
               onClick={() => selectDate("")}
               className={chipClass}
-              style={{ borderColor: "var(--border)" }}
+              style={{ background: "var(--surface-soft)", borderColor: "var(--hairline)" }}
             >
               清除
             </button>

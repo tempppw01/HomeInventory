@@ -17,15 +17,23 @@ export default async function ConsumePage({ params }: { params: Promise<{ id: st
   return (
     // This route has no bottom navigation, so it opts out of the reserved
     // --bottom-nav-space (see globals.css) and offers its own way back.
-    <div className="relative" data-bottom-nav-space="none" style={{ "--bottom-nav-space": "0px" } as CSSProperties}>
+    // ConsumeScan renders the <main> landmark; the wrapper stays a plain div so
+    // the two landmarks never nest.
+    <div
+      className="flex min-h-screen flex-col gap-4 px-4 py-6"
+      data-bottom-nav-space="none"
+      style={{ "--bottom-nav-space": "0px" } as CSSProperties}
+    >
       <Link
         href="/"
-        className="absolute left-1 top-[max(0.5rem,env(safe-area-inset-top))] z-10 inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-bold"
-        style={{ color: "var(--primary)" }}
+        className="inline-flex min-h-11 w-fit items-center gap-2 rounded-2xl px-3 text-sm font-bold"
+        style={{ background: "var(--surface-solid)", color: "var(--primary)" }}
       >
         <Archive size={18} /> 返回归物
       </Link>
-      <ConsumeScan item={item} />
+      <div className="flex flex-1 items-center">
+        <ConsumeScan item={item} />
+      </div>
     </div>
   );
 }

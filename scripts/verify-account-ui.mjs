@@ -37,7 +37,8 @@ await page.waitForTimeout(2500);
 await dismissWelcome(page);
 
 // Navigate to settings and open the account section.
-await page.click('button[aria-label="设置"]');
+// 侧栏导航已从 <button> 改成路由 <Link>,选择器不再限定 button。
+await page.click('[aria-label="设置"]');
 await page.waitForTimeout(1200);
 await page.click("summary:has-text('账号与家庭成员')");
 await page.waitForTimeout(900);

@@ -124,8 +124,8 @@ export function SearchBox({
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 4 }}
             exit={{ opacity: 0, y: -4 }}
-            className="absolute left-0 right-0 top-full max-h-72 overflow-y-auto overscroll-contain rounded-2xl border p-1 shadow-2xl"
-            style={{ background: "var(--surface-solid)", borderColor: "var(--border)" }}
+            className="absolute left-0 right-0 top-full max-h-72 overflow-y-auto overscroll-contain rounded-[20px] border p-1.5 shadow-2xl"
+            style={{ background: "var(--surface-solid)", borderColor: "var(--hairline)" }}
           >
             {showHistoryPanel ? (
               <SearchHistory 
@@ -140,8 +140,8 @@ export function SearchBox({
                   key={item.id}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => handleSelect(item)}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-[var(--surface-soft)]"
-                  style={index === activeIndex ? { background: "var(--surface-soft)" } : undefined}
+                  className="flex min-h-11 w-full items-center gap-3 rounded-[14px] px-3 py-2.5 text-left transition-colors hover:bg-[var(--surface-soft)]"
+                  style={index === activeIndex ? { background: "var(--primary-soft)" } : undefined}
                 >
                   <div
                     className="grid size-9 shrink-0 place-items-center rounded-xl bg-cover bg-center text-lg"
@@ -163,7 +163,7 @@ export function SearchBox({
                 </button>
               ))
             ) : (
-              <div className="px-3 py-4 text-center text-xs muted">
+              <div className="px-3 py-6 text-center text-xs muted">
                 没有找到物品
               </div>
             )}
