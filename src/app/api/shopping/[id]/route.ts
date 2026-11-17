@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiError, requireWritableUser } from "@/lib/api";
+import { shoppingPatchSchema } from "@/lib/validation";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -8,8 +9,9 @@ export async function PATCH(request: NextRequest, { params }: Context) {
   try {
     const user = await requireWritableUser();
     const { id } = await params;
-    const body = await request.json();
+    const body = shoppingPatchSchema.parse(await request.json());
     const status = body.status === "PURCHASED" ? "PURCHASED" : "PENDING";
+
     const item = await prisma.$transaction(async (tx) => {
       const updated = await tx.shoppingItem.update({ where: { id }, data: { status, ...(typeof body.isFavorite === "boolean" ? { isFavorite: body.isFavorite } : {}) } });
       const replenishItemId = typeof body.replenishItemId === "string" ? body.replenishItemId : null;

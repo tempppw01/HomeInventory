@@ -2,7 +2,7 @@
 
 import { motion } from "motion/react";
 import { Check, CheckSquare, ChevronDown, ImagePlus, Minus, MoreHorizontal, Pill, Printer, QrCode, Search, ShoppingBasket, Sparkles, Copy, Pencil, Trash2, X, Package } from "lucide-react";
-import { useContext, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { categoryIconMap } from "@/components/shared";
 import type { Item, Location, ShoppingItem } from "@/types";
 import { SearchBox } from "@/components/search-box";
@@ -29,7 +29,10 @@ function TagBadge({ tone, children }: { tone: "warning" | "danger" | "muted"; ch
   return <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-bold" style={palette}>{children}</span>;
 }
 
-export function ItemsView({ allItems, locations, items, shopping, search, setSearch, filter, setFilter, categoryFilter, setCategoryFilter, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onRemainingChange, onDelete, onQr, onAi, onPrint, onToast, onCopy, onToggleShopping, onFavoriteShopping, onAddShopping, onDeleteShopping, onBatchAi }: { allItems: Item[]; locations: Location[]; items: Item[]; shopping: ShoppingItem[]; search: string; setSearch: (s: string) => void; filter: ItemQuickFilter; setFilter: (f: ItemQuickFilter) => void; categoryFilter: string; setCategoryFilter: (f: string) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onRemainingChange: (item: Item, remainingPercent: number) => void; onDelete: (i: Item) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onPrint: (items: Item[]) => void; onToast: (message: string) => void; onCopy: (i: Item) => void; onToggleShopping: (item: ShoppingItem) => void; onFavoriteShopping: (item: ShoppingItem) => void; onAddShopping: () => void; onDeleteShopping: (id: string) => void; onBatchAi: () => void }) {
+// 一屏大约能看到 12-20 张卡片,60 是个「首屏够用、滚动不空窗」的量。
+const PAGE_SIZE = 60;
+
+export function ItemsView({ allItems, locations, items, shopping, search, setSearch, filter, setFilter, categoryFilter, setCategoryFilter, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onRemainingChange, onDelete, onQr, onAi, onPrint, onToast, onCopy, onToggleShopping, onFavoriteShopping, onAddShopping, onDeleteShopping, onBatchAi, onToastWithUndo }: { allItems: Item[]; locations: Location[]; items: Item[]; shopping: ShoppingItem[]; search: string; setSearch: (s: string) => void; filter: ItemQuickFilter; setFilter: (f: ItemQuickFilter) => void; categoryFilter: string; setCategoryFilter: (f: string) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onRemainingChange: (item: Item, remainingPercent: number) => void; onDelete: (i: Item) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onPrint: (items: Item[]) => void; onToast: (message: string) => void; onCopy: (i: Item) => void; onToggleShopping: (item: ShoppingItem) => void; onFavoriteShopping: (item: ShoppingItem) => void; onAddShopping: () => void; onDeleteShopping: (id: string) => void; onBatchAi: () => void; onToastWithUndo: (message: string, undo: () => Promise<void>) => void }) {
   const askConfirm = useConfirm();
   const readOnly = useContext(ReadOnlyContext);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -41,8 +44,30 @@ export function ItemsView({ allItems, locations, items, shopping, search, setSea
   const selectedItems = allItems.filter((item) => selected.has(item.id));
   const toggle = (id: string) => setSelected((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const selectVisible = () => setSelected(new Set(items.map((item) => item.id)));
+
+  // 列表分批渲染:一次只挂载 PAGE_SIZE 张卡片,滚到底部自动追加(也有「加载更多」兜底按钮)。
+  // 500 件时此前会一次性渲染 537 张卡片,现在首屏只挂载 60 张。
+  // 翻页进度按「查询条件」重置:数据每 15 秒刷新一次不应该把用户已经展开的列表收回去,
+  // 所以这里用渲染期比较 key 的写法(React 官方推荐的 adjust-state-during-render),
+  // 而不是在 effect 里同步 setState(那会触发级联渲染,React 19 的 lint 也会报错)。
+  const queryKey = `${search}|${filter}|${categoryFilter}`;
+  const [page, setPage] = useState({ key: queryKey, count: PAGE_SIZE });
+  if (page.key !== queryKey) setPage({ key: queryKey, count: PAGE_SIZE });
+  const visibleCount = Math.min(page.count, Math.max(items.length, PAGE_SIZE));
+  const visibleItems = items.slice(0, visibleCount);
+  const loadMoreRef = useRef<HTMLButtonElement | null>(null);
+  const loadMore = () => setPage((current) => ({ ...current, count: current.count + PAGE_SIZE }));
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target || visibleCount >= items.length) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) loadMore();
+    }, { rootMargin: "600px 0px" });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [visibleCount, items.length]);
   const bulk = async (body: Record<string, unknown>, successMessage = "批量更新完成") => { try { await request("/api/items/bulk", { method: "PATCH", body: JSON.stringify({ ...body, ids: [...selected] }) }); setSelected(new Set()); setBulkLocationOpen(false); onToast(successMessage); } catch (error) { onToast(error instanceof Error ? error.message : "批量更新失败"); } };
-  const bulkDelete = async () => { if (!(await askConfirm(`确定将选中的 ${selected.size} 件物品移入回收站吗?可以稍后在回收站恢复。`, { title: "移入回收站", confirmLabel: "移入回收站" }))) return; try { await request("/api/items/bulk", { method: "DELETE", body: JSON.stringify({ ids: [...selected] }) }); setSelected(new Set()); onToast("已移入回收站"); } catch (error) { onToast(error instanceof Error ? error.message : "批量删除失败"); } };
+  const bulkDelete = async () => { if (!(await askConfirm(`确定将选中的 ${selected.size} 件物品移入回收站吗?可以稍后在回收站恢复。`, { title: "移入回收站", confirmLabel: "移入回收站" }))) return; try { await request("/api/items/bulk", { method: "DELETE", body: JSON.stringify({ ids: [...selected] }) }); const ids = [...selected]; setSelected(new Set()); onToastWithUndo(ids.length + " 件已移入回收站", async () => { await request("/api/items/bulk", { method: "PATCH", body: JSON.stringify({ ids, restore: true }) }); }); } catch (error) { onToast(error instanceof Error ? error.message : "批量删除失败"); } };
   const pendingShopping = shopping.filter((item) => item.status === "PENDING");
   const presentCategories = Array.from(new Set(allItems.map((item) => item.category).filter(Boolean)));
   const medicineCategories = presentCategories.filter(isMedicineCategory);
@@ -92,7 +117,16 @@ export function ItemsView({ allItems, locations, items, shopping, search, setSea
         </nav>
         <div className="min-w-0">
           {items.length
-            ? <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">{items.map((item, index) => <motion.div className="h-full min-w-0" key={item.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index * 0.05, 0.2) }}><ItemCard item={item} selected={selected.has(item.id)} showSelect={selectMode} onSelect={() => toggle(item.id)} onEdit={() => onEdit(item)} onOpenDetail={() => onOpenDetail(item)} onImageUpload={(file) => onImageUpload(item, file)} onDuplicate={() => void onDuplicate(item)} onConsume={() => onConsume(item)} onRemainingChange={(remainingPercent) => onRemainingChange(item, remainingPercent)} onDelete={() => onDelete(item)} onQr={() => onQr(item)} onAi={() => onAi(item)} onCopy={() => onCopy(item)} /></motion.div>)}</div>
+            ? <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+              {visibleItems.map((item, index) => <motion.div className="h-full min-w-0" key={item.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index * 0.05, 0.2) }}><ItemCard item={item} selected={selected.has(item.id)} showSelect={selectMode} onSelect={() => toggle(item.id)} onEdit={() => onEdit(item)} onOpenDetail={() => onOpenDetail(item)} onImageUpload={(file) => onImageUpload(item, file)} onDuplicate={() => void onDuplicate(item)} onConsume={() => onConsume(item)} onRemainingChange={(remainingPercent) => onRemainingChange(item, remainingPercent)} onDelete={() => onDelete(item)} onQr={() => onQr(item)} onAi={() => onAi(item)} onCopy={() => onCopy(item)} /></motion.div>)}
+              {visibleItems.length < items.length && (
+                <div className="col-span-full flex justify-center py-4">
+                  <button ref={(node) => { loadMoreRef.current = node; }} type="button" onClick={loadMore} className="btn-ghost min-h-11 px-4 text-xs">
+                    还有 {items.length - visibleItems.length} 件,加载更多
+                  </button>
+                </div>
+              )}
+            </div>
             : <Panel><Empty icon={Search} title="没有找到物品" text="换个关键词或筛选条件试试" /></Panel>}
         </div>
       </div>

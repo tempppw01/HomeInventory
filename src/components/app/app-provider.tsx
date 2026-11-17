@@ -333,7 +333,11 @@ function useAppState() {
 
   const removeItem = async (item: Item) => {
     if (!(await askConfirm(`确定将“${item.name}”移入回收站吗?`, { title: "移入回收站", confirmLabel: "移入回收站" }))) return;
-    await request(`/api/items/${item.id}`, { method: "DELETE", body: JSON.stringify({ memberId }) }); setToast("物品已移入回收站,可在回收站恢复"); await refresh();
+    await request(`/api/items/${item.id}`, { method: "DELETE", body: JSON.stringify({ memberId }) });
+    // 手滑是家用场景最常见的误操作:5 秒内可以从 toast 直接恢复,不必去回收站翻。
+    setToast(`「${item.name}」已移入回收站`);
+    setToastAction({ label: "撤销", onClick: async () => { try { await request(`/api/items/${item.id}/restore`, { method: "POST" }); setToastAction(null); setToast(`「${item.name}」已恢复`); await refresh(); } catch (error) { setToast(error instanceof Error ? error.message : "撤销失败"); } } });
+    await refresh();
   };
 
   const addRestockSuggestion = async (item: Item) => {
@@ -372,6 +376,7 @@ function useAppState() {
 
   return {
     data, loading, refresh, ensureFresh, aiAvailable: data?.aiAvailable ?? false,
+    setToastAction,
     view, pathname, openView, beginNavigation,
     search, setSearch, typeFilter, categoryFilter, changeTypeFilter, changeCategoryFilter, filteredItems,
     readOnly, role, lowStock, pendingShopping, tasks, expiring, expired, totalValue, now,

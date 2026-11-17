@@ -55,8 +55,57 @@ export const bulkItemPatchSchema = z.object({
   category: z.string().trim().min(1).max(40).optional(),
   locationId: z.union([z.string().trim().min(1).max(80), z.null()]).optional(),
   restockPausedUntil: z.union([z.string().datetime(), z.null()]).optional().transform((value) => value ? new Date(value) : value),
+  /** 撤销「批量移入回收站」:把这些物品从回收站恢复。 */
+  restore: z.boolean().optional(),
 }).refine((value) => Object.keys(value).some((key) => key !== "ids" && value[key as keyof typeof value] !== undefined), { message: "没有可更新的内容" });
 
+/** 采购项的局部更新:状态、常买标记,以及「已购买后补货到原物品」。 */
+export const shoppingPatchSchema = z.object({
+  status: z.enum(["PENDING", "PURCHASED"]).optional(),
+  isFavorite: z.boolean().optional(),
+  quantity: z.coerce.number().min(0).max(999999).optional(),
+  replenishItemId: z.union([z.string().trim().min(1).max(80), z.null()]).optional(),
+});
+
+/** 任务的增删改。recurrence 用宽松字符串,非法值在路由里降级为 NONE(既有行为)。 */
+export const taskCreateSchema = z.object({
+  title: z.string().trim().min(1, "请输入任务名称").max(80),
+  description: z.string().max(500).optional().nullable(),
+  dueAt: z.string().trim().min(1, "请选择有效日期"),
+  recurrence: z.string().max(20).optional(),
+});
+
+export const taskPatchSchema = z.object({
+  id: z.string().trim().min(1).max(80),
+  action: z.enum(["toggle", "delete", "undo"]).optional(),
+  previousDueAt: z.string().optional(),
+});
+
+/** 家庭成员:只需要名字(与颜色)。 */
+export const memberSchema = z.object({
+  name: z.string().trim().min(1, "请输入成员名称").max(30),
+  color: z.string().trim().max(20).optional(),
+});
+
+/** 新建账号:用户名规则与前端提示保持一致。 */
+export const userCreateSchema = z.object({
+  username: z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9._-]{2,31}$/, "请填写有效用户名、显示名称和至少 8 位密码"),
+  displayName: z.string().trim().min(1, "请填写有效用户名、显示名称和至少 8 位密码").max(40),
+  password: z.string().min(8, "请填写有效用户名、显示名称和至少 8 位密码").max(200),
+  role: z.enum(["ADMIN", "MEMBER", "VIEWER"]).optional(),
+});
+
+/** 管理员对账号的局部更新:停用、改角色、重置密码。 */
+export const userPatchSchema = z.object({
+  active: z.boolean().optional(),
+  role: z.enum(["ADMIN", "MEMBER", "VIEWER"]).optional(),
+  password: z.string().min(8).max(200).optional(),
+});
+
+/** 搜索历史写入:只要一个非空查询词。 */
+export const searchHistorySchema = z.object({
+  query: z.string().trim().min(1, "搜索词不能为空").max(120),
+});
 export const shoppingSchema = z.object({
   name: z.string().trim().min(1, "请输入采购项").max(80),
   quantity: z.coerce.number().positive().max(999999).default(1),

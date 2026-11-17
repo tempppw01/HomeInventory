@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { canAdmin, hashPassword, requireUser } from "@/lib/account-auth";
 import { generateRecoveryCode } from "@/lib/recovery-code";
 import { hashRecoveryCode } from "@/lib/recovery-hash";
+import { userPatchSchema } from "@/lib/validation";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -11,7 +12,7 @@ export async function PATCH(request: NextRequest, { params }: Context) {
     const actor = await requireUser();
     if (!canAdmin(actor.role)) return NextResponse.json({ error: "只有管理员可以管理账号" }, { status: 403 });
     const { id } = await params;
-    const body = await request.json().catch(() => ({}));
+    const body = userPatchSchema.parse(await request.json().catch(() => ({})));
     const target = await prisma.user.findUnique({ where: { id } });
     if (!target) return NextResponse.json({ error: "账号不存在" }, { status: 404 });
     const data: { active?: boolean; role?: "ADMIN" | "MEMBER" | "VIEWER"; passwordHash?: string; recoveryCodeHash?: string; recoveryGeneratedAt?: Date } = {};
@@ -20,7 +21,7 @@ export async function PATCH(request: NextRequest, { params }: Context) {
     // 重置密码的同时轮换恢复码:一次管理员操作后,旧密码和旧恢复码都失效。
     const rotatedRecoveryCode = typeof body.password === "string" && body.password.length >= 8 ? generateRecoveryCode() : null;
     if (rotatedRecoveryCode) {
-      data.passwordHash = hashPassword(body.password);
+      data.passwordHash = hashPassword(body.password as string);
       data.recoveryCodeHash = hashRecoveryCode(rotatedRecoveryCode);
       data.recoveryGeneratedAt = new Date();
     }

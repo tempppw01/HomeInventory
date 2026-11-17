@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/api";
 import { requireUser } from "@/lib/account-auth";
+import { searchHistorySchema } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -22,11 +23,8 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const user = await requireUser();
-    const { query } = await request.json();
-    if (!query || typeof query !== "string" || query.trim().length === 0) {
-      return NextResponse.json({ error: "搜索词不能为空" }, { status: 400 });
-    }
-    const trimmedQuery = query.trim();
+    const { query } = searchHistorySchema.parse(await request.json());
+    const trimmedQuery = query;
     // 检查是否已存在相同的搜索词
     const existing = await prisma.searchHistory.findFirst({
       where: { userId: user.id, query: trimmedQuery },

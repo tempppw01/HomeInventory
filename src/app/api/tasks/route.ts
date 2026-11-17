@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiError, requireWritableUser } from "@/lib/api";
 import { requireUser } from "@/lib/account-auth";
+import { taskCreateSchema, taskPatchSchema } from "@/lib/validation";
 
 function nextDate(date: Date, recurrence: string) {
   const next = new Date(date);
@@ -23,10 +24,9 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     await requireWritableUser();
-    const body = await request.json();
-    const title = String(body.title || "").trim();
-    if (!title) return NextResponse.json({ error: "请输入任务名称" }, { status: 400 });
-    const recurrence = ["NONE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"].includes(body.recurrence) ? body.recurrence : "NONE";
+    const body = taskCreateSchema.parse(await request.json());
+    const title = body.title;
+    const recurrence = ["NONE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"].includes(body.recurrence ?? "") ? (body.recurrence as string) : "NONE";
     const dueAt = new Date(body.dueAt);
     if (!Number.isFinite(dueAt.getTime())) return NextResponse.json({ error: "请选择有效日期" }, { status: 400 });
     const task = await prisma.householdTask.create({ data: { title, description: body.description ? String(body.description).trim() : null, dueAt, recurrence } });
@@ -37,8 +37,8 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     await requireWritableUser();
-    const body = await request.json();
-    const id = String(body.id || "");
+    const body = taskPatchSchema.parse(await request.json());
+    const id = body.id;
     const existing = await prisma.householdTask.findUnique({ where: { id } });
     if (!existing) return NextResponse.json({ error: "任务不存在" }, { status: 404 });
     if (body.action === "delete") { await prisma.householdTask.delete({ where: { id } }); return NextResponse.json({ ok: true }); }
@@ -54,7 +54,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json(await prisma.householdTask.update({ where: { id }, data: { status: "OPEN", completedAt: null } }));
     }
     if (body.action === "undo") {
-      const previousDueAt = new Date(body.previousDueAt);
+      const previousDueAt = new Date(body.previousDueAt ?? "");
       if (!Number.isFinite(previousDueAt.getTime())) return NextResponse.json({ error: "撤销信息已失效" }, { status: 400 });
       return NextResponse.json(await prisma.householdTask.update({ where: { id }, data: { status: "OPEN", dueAt: previousDueAt, nextDueAt: null, completedAt: null } }));
     }
