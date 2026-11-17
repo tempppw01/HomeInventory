@@ -8,10 +8,10 @@ import { useEffect, useState } from "react";
 import type { DashboardData, Item, ShoppingItem } from "@/types";
 import { isLiquidConsumable } from "@/lib/item-metrics";
 import { itemAiHighlights } from "@/lib/item-ai";
-import { Badge } from "@/components/ui";
+import { Badge, SectionHead } from "@/components/ui-kit";
 import { Empty, Hero, ListRow, Metric, Panel, Screen } from "@/components/ui-kit";
 import { categoryIconMap } from "@/components/shared";
-import { View, expiryDays, expiryDateLabel, expiryAdvice, expiryGroupLabel, SectionHead } from "../shared";
+import { View, expiryDays, expiryDateLabel, expiryAdvice, expiryGroupLabel } from "../shared";
 import { ItemCard } from "./items-view";
 export function DashboardView({ data, now, lowStock, expiring, expired, pending, totalValue, onNavigate, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onDelete, onAddRestock, onQr, onAi, onAlerts, onCreate }: { data: DashboardData; now: number; lowStock: Item[]; expiring: Item[]; expired: Item[]; pending: ShoppingItem[]; totalValue: number; onNavigate: (v: View) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onDelete: (i: Item) => void; onAddRestock: (i: Item) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onAlerts: () => void; onCreate: () => void }) {
   const [recentView, setRecentView] = useState<"cards" | "list">("list");

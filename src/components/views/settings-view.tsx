@@ -7,7 +7,7 @@ import { DataTools } from "@/components/data-tools";
 import { HouseholdPreferences } from "@/components/household-preferences";
 import { AccountSettings } from "@/components/account-settings";
 import { APP_VERSION } from "@/lib/version";
-import { Field } from "@/components/ui";
+import { Field } from "@/components/ui-kit";
 import { Panel, Screen } from "@/components/ui-kit";
 import {
   SettingsSection, SettingsRow, SettingsSelect, SettingsBadge,

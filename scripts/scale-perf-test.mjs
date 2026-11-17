@@ -102,7 +102,27 @@ record("宽匹配搜索不超时", searchBroad.status === 200, `status=${searchB
   page.on("pageerror", (error) => errors.push(String(error).slice(0, 120)));
 
   const started = Date.now();
+  // 新上下文会重新弹一次欢迎引导,不关掉会挡住后续点击。
+  const skipWelcome = page.locator('[aria-label="暂时跳过欢迎引导"]');
+  if (await skipWelcome.count()) { await skipWelcome.first().click(); await page.waitForTimeout(600); }
+  const openDialog = page.locator('[role="dialog"][aria-modal="true"]:visible');
+  // 新上下文会自动弹欢迎引导 / 到期提醒,循环关掉,避免挡住后续点击。
+  const dismissDialogs = async () => {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const dialog = page.locator('[role="dialog"][aria-modal="true"]:visible');
+      if ((await dialog.count()) === 0) return;
+      const skip = page.locator('[aria-label="暂时跳过欢迎引导"]:visible');
+      if (await skip.count()) await skip.first().click({ timeout: 3000 }).catch(() => {});
+      else await page.keyboard.press("Escape").catch(() => {});
+      await page.waitForTimeout(400);
+    }
+  };
+
+  if (await openDialog.count()) { await page.keyboard.press("Escape"); await page.waitForTimeout(400); }
+
   await page.goto(`${BASE}/items`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(800);
+  await dismissDialogs();
   const domReady = Date.now() - started;
   await page.waitForSelector(".browse-rail-item", { timeout: 30000 });
   const railReady = Date.now() - started;
@@ -113,15 +133,30 @@ record("宽匹配搜索不超时", searchBroad.status === 200, `status=${searchB
   record("物品页可交互 < 6s(500 件)", railReady < 6000, `${railReady}ms`);
   record("物品页无 JS 运行错误", errors.length === 0, errors.join(" | "));
 
-  // 搜索交互延迟
-  await page.locator("#global-search").click().catch(() => {});
-  const searchStart = Date.now();
-  await page.keyboard.type("S-物品123", { delay: 30 });
-  await page.waitForTimeout(900);
-  const searchElapsed = Date.now() - searchStart;
-  const resultsShown = await page.evaluate(() => (document.body.innerText.match(/S-物品123/g) ?? []).length);
-  console.log(`      搜索交互:${searchElapsed}ms,命中文本 ${resultsShown} 处`);
-  record("搜索交互 1.5s 内有结果(含防抖)", searchElapsed < 2500 && resultsShown > 0, `${searchElapsed}ms 命中=${resultsShown}`);
+  // 搜索交互延迟:直接用物品页的搜索框,以「列表真的筛到目标」为判据
+  // (此前用顶栏浮层的 innerText 命中数,受浮层渲染时机影响会误报)
+  const pageSearch = page.locator('main input[placeholder*="搜索"]').first();
+  let searchElapsed = 0;
+  let filteredCount = -1;
+  let hit = false;
+  if (await pageSearch.count()) {
+    await pageSearch.click();
+    const searchStart = Date.now();
+    await pageSearch.fill("S-物品123");
+    await page.waitForTimeout(900);
+    searchElapsed = Date.now() - searchStart;
+    const state = await page.evaluate(() => ({
+      cards: document.querySelectorAll('main [aria-label="更多操作"]').length,
+      text: document.querySelector("main")?.innerText ?? "",
+    }));
+    filteredCount = state.cards;
+    hit = state.text.includes("S-物品123");
+    await pageSearch.fill("");
+    await page.waitForTimeout(500);
+  }
+  console.log(`      搜索交互:${searchElapsed}ms,筛后卡片 ${filteredCount},命中=${hit}`);
+  record("搜索交互 2.5s 内筛出目标(含防抖)", searchElapsed < 2500 && hit, `${searchElapsed}ms hit=${hit} cards=${filteredCount}`);
+  record("搜索结果收敛到少量卡片", filteredCount >= 0 && filteredCount <= 5, `cards=${filteredCount}`);
 
   // 滚动流畅度
   const frameStats = await page.evaluate(async () => {

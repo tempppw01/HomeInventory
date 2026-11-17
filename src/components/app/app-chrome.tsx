@@ -6,8 +6,8 @@ import { Bell, Bot, Info, Monitor, Moon, PanelLeftClose, Plus, Settings, Sun, Tr
 import { PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
 import type { Item } from "@/types";
 
-import { PageShell } from "@/components/ui";
-import { Brand, LoadingView, assistantPositionStorageKey, mobileNavItems, navItems, type AssistantPosition } from "@/components/shared";
+import { LoadingView, PageShell } from "@/components/ui-kit";
+import { Brand, assistantPositionStorageKey, mobileNavItems, navItems, type AssistantPosition } from "@/components/shared";
 import { useApp } from "@/components/app/app-provider";
 import { pathForView } from "@/components/app/routes";
 import { APP_VERSION } from "@/lib/version";

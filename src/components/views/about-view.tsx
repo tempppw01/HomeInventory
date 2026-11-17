@@ -1,9 +1,10 @@
 "use client";
 
 import { Archive, BookOpen, Boxes, Database, Info, Scale, Sparkles } from "lucide-react";
+import { PageTitle } from "@/components/ui-kit";
 import { APP_VERSION } from "@/lib/version";
 import { ListRow, Panel } from "../ui-kit";
-import { PageTitle } from "../shared";
+
 
 export function AboutView() {
   return (

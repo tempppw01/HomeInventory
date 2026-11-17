@@ -1,16 +1,13 @@
 "use client";
 
-import {
-  Archive, Bath, Boxes, ChevronRight, CookingPot, LayoutDashboard, MapPin, Package, Settings, Sofa, Warehouse, ClipboardCheck, ListTodo,
-  ShoppingBasket, Milk, SprayCan, Tv, Laptop, Shirt, Pill, Tent,
-} from "lucide-react";
+import { Archive, Bath, Boxes, CookingPot, LayoutDashboard, MapPin, Package, Settings, Sofa, Warehouse, ClipboardCheck, ListTodo, ShoppingBasket, Milk, SprayCan, Tv, Laptop, Shirt, Pill, Tent } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { createContext } from "react";
 import type { Item, ItemType, Location } from "@/types";
 import { usageDays } from "@/lib/item-metrics";
 import { APP_VERSION } from "@/lib/version";
 import { isMedicineCategory, MEDICINE_CATEGORIES } from "@/lib/categories";
-import { PageHeader } from "@/components/ui";
+
 import { DatePickerPreset } from "@/components/date-picker";
 export const ReadOnlyContext = createContext(false);
 
@@ -247,9 +244,3 @@ export function Brand({ compact = false }: { compact?: boolean }) {
   return <div className="flex items-center gap-2.5"><div className="grid size-10 place-items-center rounded-2xl text-[var(--on-primary)] shadow-lg" style={{ background: "var(--primary)" }}><Archive size={21} /></div>{!compact && <div><div className="flex items-center gap-2 text-lg font-black tracking-tight">归物 <span className="rounded-md px-1.5 py-0.5 text-[9px] font-bold" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>v{APP_VERSION}</span></div><div className="text-xs font-semibold tracking-[.18em] muted">HOME INVENTORY</div></div>}</div>;
 }
 
-export function PageTitle({ title, text, action }: { title: string; text?: string; action?: React.ReactNode }) {
-  return <PageHeader title={title} description={text} action={action} />;
-}
-
-export function SectionHead({ title, action, onClick }: { title: string; action: string; onClick: () => void }) { return <div className="flex items-center justify-between gap-3"><h2 className="m-0 text-base font-black sm:text-lg">{title}</h2><button onClick={onClick} className="flex min-h-10 items-center gap-1 text-xs font-bold max-md:min-h-11" style={{ color: "var(--primary)" }}>{action}<ChevronRight size={14} /></button></div>; }
-export function LoadingView() { return <div><div className="skeleton mb-3 h-9 w-64 rounded-xl" /><div className="skeleton mb-7 h-4 w-80 max-w-full rounded-lg" /><div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{[1,2,3,4].map((i) => <div key={i} className="skeleton h-36 rounded-3xl" />)}</div><div className="mt-5 grid gap-4 md:grid-cols-2">{[1,2].map((i) => <div key={i} className="skeleton h-72 rounded-3xl" />)}</div></div>; }

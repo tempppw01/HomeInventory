@@ -11,7 +11,7 @@ import { isLiquidConsumable } from "@/lib/item-metrics";
 import { itemAiHighlights } from "@/lib/item-ai";
 import { ContextMenu, useContextMenu, ContextMenuItem } from "@/components/context-menu";
 import { isMedicineCategory, medicineCategoryLabel } from "@/lib/categories";
-import { Field } from "@/components/ui";
+import { Field } from "@/components/ui-kit";
 import { useConfirm } from "@/components/confirm-dialog";
 import { Chip, Empty, ListRow, Panel, Screen, Toolbar } from "@/components/ui-kit";
 import { ReadOnlyContext, ItemQuickFilter, expiryDays, expiryDateLabel, request } from "../shared";

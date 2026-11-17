@@ -13,7 +13,7 @@ import {
 } from "@/lib/item-metrics";
 import { itemAiHighlights } from "@/lib/item-ai";
 import { isMedicineCategory, suggestMedicineCategory } from "@/lib/categories";
-import { Field } from "@/components/ui";
+import { Field } from "@/components/ui-kit";
 
 import { useEscapeClose } from "@/lib/use-escape-close";
 import { useConfirm } from "@/components/confirm-dialog";

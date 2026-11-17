@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { ButtonHTMLAttributes, HTMLAttributes, LabelHTMLAttributes, ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { ChevronRight } from "lucide-react";
 
@@ -165,3 +165,40 @@ export function Hero({ eyebrow, headline, detail, action, tone = "accent" }: {
     </section>
   );
 }
+// ---- 从旧的 ui.tsx / shared.tsx 合并进来的原语(全站只保留这一份)----
+
+type ButtonVariant = "primary" | "secondary" | "quiet";
+type ButtonSize = "default" | "sm" | "icon";
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: ButtonSize; danger?: boolean };
+type FieldProps = LabelHTMLAttributes<HTMLLabelElement> & { label: ReactNode; hint?: ReactNode; children: ReactNode };
+
+export function Button({ variant = "secondary", size = "default", danger = false, className = "", ...props }: ButtonProps) {
+  const variantClass = variant === "primary" ? "ds-button-primary" : variant === "quiet" ? "ds-button-quiet" : "ds-button-secondary";
+  const sizeClass = size === "sm" ? "ds-button-sm" : size === "icon" ? "ds-button-icon" : "";
+  return <button {...props} className={`${variantClass} ${sizeClass} ${danger ? "ds-button-danger" : ""} ${className}`.trim()} />;
+}
+
+export function Field({ label, hint, children, className = "", ...props }: FieldProps) {
+  return <label {...props} className={`ds-form-field ${className}`.trim()}><span className="ds-field-label">{label}</span>{children}{hint && <span className="ds-field-hint">{hint}</span>}</label>;
+}
+
+export function Badge({ tone = "neutral", className = "", ...props }: HTMLAttributes<HTMLSpanElement> & { tone?: "neutral" | "primary" | "success" | "warning" | "danger" }) {
+  return <span {...props} className={`ui-badge ${className}`.trim()} data-tone={tone} />;
+}
+
+export function PageShell({ className = "", ...props }: HTMLAttributes<HTMLElement>) {
+  return <main {...props} className={`ds-page-shell ${className}`.trim()} />;
+}
+
+// PageTitle 是 PageHeader 的薄封装(标题 + 说明 + 右侧操作)。
+export function PageHeader({ title, description, action, className = "" }: { title: string; description?: string; action?: ReactNode; className?: string }) {
+  return <header className={`ds-page-header ${className}`.trim()}><div className="min-w-0"><h1 className="ds-page-title">{title}</h1>{description && <p className="ds-page-description">{description}</p>}</div>{action && <div className="shrink-0">{action}</div>}</header>;
+}
+
+export function PageTitle({ title, text, action }: { title: string; text?: string; action?: ReactNode }) {
+  return <PageHeader title={title} description={text} action={action} />;
+}
+
+export function SectionHead({ title, action, onClick }: { title: string; action: string; onClick: () => void }) { return <div className="flex items-center justify-between gap-3"><h2 className="m-0 text-base font-black sm:text-lg">{title}</h2><button onClick={onClick} className="flex min-h-10 items-center gap-1 text-xs font-bold max-md:min-h-11" style={{ color: "var(--primary)" }}>{action}<ChevronRight size={14} /></button></div>; }
+
+export function LoadingView() { return <div><div className="skeleton mb-3 h-9 w-64 rounded-xl" /><div className="skeleton mb-7 h-4 w-80 max-w-full rounded-lg" /><div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{[1,2,3,4].map((i) => <div key={i} className="skeleton h-36 rounded-3xl" />)}</div><div className="mt-5 grid gap-4 md:grid-cols-2">{[1,2].map((i) => <div key={i} className="skeleton h-72 rounded-3xl" />)}</div></div>; }

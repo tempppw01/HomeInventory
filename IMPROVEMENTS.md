@@ -1,5 +1,40 @@
 # Project Improvements Summary
 
+## 全面优化:P0 → P3(死代码、性能、可撤销、新功能、原语收敛)
+
+按自评清单把 4 个优先级全部做完,每批单独提交并跑全套验收。
+
+### P0 清理
+- 删除死代码:`inventory-app.tsx`(16 行兼容层,0 引用)、`ShoppingView`(37 行,0 引用)、`ui.tsx` 的 `Card`/`TextField`(0 引用)。
+- 统一空态:`EmptyState` 并入 ui-kit 的 `Empty`,全站只剩一种空态。
+- **AI 按钮门控**:`/api/dashboard` 新增 `aiAvailable`,未配置时按钮变成引导(管理员直达设置页),不再「点了才报错」。
+- 删除重复入口:物品卡 ⋯ 菜单里的「用掉 1 个单位」、设置页的「进入家庭盘点」。
+- 更正一处评估误判:盘点「重新开始」本来就有二次确认。
+
+### P1 性能与质量
+- **物品列表分批渲染**:一次只挂载 60 张,滚到底自动追加。实测 500 件时首屏从 **537 张卡片 / 26487px** 降到 **61 张 / 3610px**;翻页进度按查询条件重置(数据每 15 秒刷新不会回收已展开的列表)。
+- **删除可撤销**:单件与批量移入回收站都在 toast 给 5 秒「撤销」;`/api/items/bulk` 新增 `restore` 分支。
+- **24 个纯函数单测**(node:test 零依赖):数量归一化、补货阈值与液体判定、使用天数、日均成本、可用天数、药品分类、类型识别。
+- **写路由统一 zod**:未校验的写路由 15 → 9(其余 5 处是刻意宽松的登录/初始化/备份/导入/AI)。
+
+### P2 新功能
+- 物品详情页「变更记录」:`/api/activity` 支持 `itemId` 过滤,详情页展示最近 12 条(时间/说明/操作人)。
+- **CSV 导出**(按当前筛选):纯前端生成,带 UTF-8 BOM,Excel 打开中文不乱码。
+- **批量改数量与剩余量**:批量编辑弹窗新增两个字段,数量按每件物品自己的单位逐件归一化。
+- **到期日历**:概览页折叠面板,按月网格显示每天到期件数,过期红/临期黄区分。
+- **离线只读**:Service Worker(导航 network-first、静态资源 cache-first、**/api 不缓存**)+ `/offline` 页面;生产环境首屏空闲后注册。
+- **CI**:typecheck + eslint + 单测 + API 契约 + 权限矩阵 + 备份回环 + 极端输入,四套接口测试在真实服务上跑。
+
+### P3 结构收敛
+- 原语层从 3 份合并为 1 份:`ui.tsx` 的 Button/Field/Badge/PageShell 与 `shared.tsx` 的 PageTitle/SectionHead/LoadingView 全部并入 `ui-kit.tsx`,`ui.tsx` 删除。
+- CSS 收敛:`globals.css` 583 → 570 行,删掉随组件删除的 12 条死规则与 11 处残留组合选择器。
+
+### 验收(每批提交前都跑)
+- 单元 **24/24**、API 契约 **40/40**、权限矩阵 **47/47**、备份回环 **25/25**、极端输入 **26/26**、P2 功能 **14/14**、规模 **10/10**。
+- `verify-experience` **38/38**、`verify-entry-fixes` **67/67**、交互探针 **17/17**。
+- 几何走查(1440+390、明暗两套):console 错误 0、失败请求 0、无裁切、无偏小控件、无横向溢出。
+- `npm run test:unit / test:api / test:auth / test:backup / test:edge / test:scale / test:ui` 均已加进 package.json。
+
 ## UI 评审(依据 ui-ux-pro-max 交付前检查清单)与修复
 
 用 `ui-ux-pro-max` 技能的 `references/pro-rules.md` 交付前清单与 `quick-reference.md` 的 §1/§2/§6/§8 做了一轮系统评审。插件市场里没有设计评审类插件(219 项全是 DSH 核心插件),所以评审完全走技能侧、结论全部来自浏览器实测。完整报告见 `output/findings/ui-review.md`。

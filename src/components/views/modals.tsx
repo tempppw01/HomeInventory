@@ -9,7 +9,7 @@ import { FormEvent, useEffect, useState } from "react";
 import type { Item, Location } from "@/types";
 import { isLiquidConsumable } from "@/lib/item-metrics";
 import { APP_VERSION } from "@/lib/version";
-import { Field } from "@/components/ui";
+import { Field } from "@/components/ui-kit";
 import { Empty, ListRow } from "@/components/ui-kit";
 import { useEscapeClose } from "@/lib/use-escape-close";
 import { units, request } from "../shared";
