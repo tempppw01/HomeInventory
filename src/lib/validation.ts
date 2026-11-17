@@ -57,6 +57,10 @@ export const bulkItemPatchSchema = z.object({
   restockPausedUntil: z.union([z.string().datetime(), z.null()]).optional().transform((value) => value ? new Date(value) : value),
   /** 撤销「批量移入回收站」:把这些物品从回收站恢复。 */
   restore: z.boolean().optional(),
+  /** 批量改数量(盘点后「这些都用掉一半」这类场景)。 */
+  quantity: z.coerce.number().min(0).max(999999).optional(),
+  /** 批量改剩余百分比(液体消耗品)。 */
+  remainingPercent: z.coerce.number().min(0).max(100).optional(),
 }).refine((value) => Object.keys(value).some((key) => key !== "ids" && value[key as keyof typeof value] !== undefined), { message: "没有可更新的内容" });
 
 /** 采购项的局部更新:状态、常买标记,以及「已购买后补货到原物品」。 */

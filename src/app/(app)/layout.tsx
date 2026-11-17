@@ -6,6 +6,7 @@ import { AuthGate } from "@/components/auth-gate";
 import { ConfirmProvider } from "@/components/confirm-dialog";
 import { AppProvider } from "@/components/app/app-provider";
 import { AppChrome } from "@/components/app/app-chrome";
+import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar";
 
 /**
  * 应用路由组:所有登录后的一级页面(概览 / 物品 / 空间 / 任务 / 盘点 / 设置 / 关于)
@@ -22,6 +23,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <MotionConfig reducedMotion="user">
         <ConfirmProvider>
           <AppProvider>
+            <ServiceWorkerRegistrar />
             <AppChrome>{children}</AppChrome>
           </AppProvider>
         </ConfirmProvider>

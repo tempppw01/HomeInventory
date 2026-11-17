@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
-import { Check, CheckSquare, ChevronDown, ImagePlus, Minus, MoreHorizontal, Pill, Printer, QrCode, Search, ShoppingBasket, Sparkles, Copy, Pencil, Trash2, X, Package } from "lucide-react";
+import { Check, CheckSquare, ChevronDown, Copy, Download, ImagePlus, Minus, MoreHorizontal, Package, Pencil, Pill, Printer, QrCode, Search, ShoppingBasket, Sparkles, Trash2, X } from "lucide-react";
 import { useContext, useEffect, useRef, useState } from "react";
 import { categoryIconMap } from "@/components/shared";
 import type { Item, Location, ShoppingItem } from "@/types";
@@ -74,6 +74,30 @@ export function ItemsView({ allItems, locations, items, shopping, search, setSea
   const categoryOptions = filter === "MEDICINE"
     ? ["MEDICINE", ...medicineCategories]
     : ["ALL", ...presentCategories.filter((category) => !isMedicineCategory(category))];
+  // 导出「当前筛选结果」为 CSV。纯前端生成:数据本来就在内存里,不必再多一个接口。
+  // 带 UTF-8 BOM,否则 Excel 打开中文会乱码。
+  const exportCsv = () => {
+    const header = ["名称", "数量", "单位", "分类", "类型", "存放位置", "剩余量(%)", "购入日期", "到期日期", "单价", "物品编号", "备注"];
+    const escape = (value: unknown) => {
+      const text = value === null || value === undefined ? "" : String(value);
+      return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
+    const rows = items.map((item) => [
+      item.name, item.quantity, item.unit, item.category, item.type === "CONSUMABLE" ? "消耗品" : "耐用品",
+      item.location?.name ?? "", item.remainingPercent, item.purchaseDate?.slice(0, 10) ?? "", item.expiryDate?.slice(0, 10) ?? "",
+      item.price ?? "", item.itemCode ?? "", item.notes ?? "",
+    ]);
+    const csv = [header, ...rows].map((row) => row.map(escape).join(",")).join("\r\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `归物-物品清单-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    onToast(`已导出 ${items.length} 件物品`);
+  };
+
   const exitSelectMode = () => { setSelected(new Set()); setSelectMode(false); };
   // 类型筛选:桌面在工具行,移动端并入分类轨道,让「搜索 / 类型 / 分类」只占两行。
   const typeChips = TYPE_FILTERS.map(([id, label]) => <Chip key={id} active={filter === id} onClick={() => setFilter(id)}>{label}</Chip>);
@@ -91,6 +115,7 @@ export function ItemsView({ allItems, locations, items, shopping, search, setSea
         <div className="min-w-0 flex-1 md:hidden"><SearchBox items={allItems} value={search} onChange={setSearch} onSelect={(item) => setSearch(item.name)} placeholder="搜索名称或物品编号..." /></div>
         <div className="hidden min-w-0 items-center gap-2 md:flex">{typeChips}</div>
         <span className="hidden shrink-0 text-xs tabular-nums muted md:inline">{items.length} 件</span>
+        <button onClick={exportCsv} disabled={items.length === 0} className="btn-ghost flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-xs disabled:opacity-40" aria-label="导出当前筛选为 CSV" title="把当前筛选出的物品导出成 CSV(Excel 可直接打开)"><Download size={15} /><span className="desktop-only">导出</span></button>
         <div className="flex shrink-0 items-center gap-2 md:ml-auto">
           {selectMode
             ? <button onClick={exitSelectMode} className="btn-ghost flex items-center gap-1.5 px-3 py-1.5 text-xs">完成</button>

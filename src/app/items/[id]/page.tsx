@@ -26,6 +26,13 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
   const useDays = estimatedUseDays(item);
   const showRemaining = isLiquidConsumable(item);
   const ai = itemAiHighlights(item);
+  // 这件物品的变更流水:谁在什么时候改过它。此前 ActivityLog 有 itemId 却没有任何界面用到。
+  const history = await prisma.activityLog.findMany({
+    where: { itemId: item.id },
+    include: { user: { select: { displayName: true, username: true } } },
+    orderBy: { createdAt: "desc" },
+    take: 12,
+  });
   const code = item.itemCode || item.id;
   const typeLabel = item.type === "CONSUMABLE" ? "消耗品" : "耐用品";
 
@@ -80,6 +87,19 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
           {item.notes && (
             <Panel title="备注">
               <p className="mb-0 whitespace-pre-wrap text-sm leading-6 muted">{item.notes}</p>
+            </Panel>
+          )}
+
+          {history.length > 0 && (
+            <Panel title="变更记录" description="最近 12 条,倒序">
+              <ul className="m-0 list-none space-y-2 p-0">
+                {history.map((entry) => (
+                  <li key={entry.id} className="flex items-start gap-3 border-t pt-2 text-xs first:border-t-0 first:pt-0" style={{ borderColor: "var(--hairline)" }}>
+                    <span className="w-32 shrink-0 tabular-nums muted">{entry.createdAt.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                    <span className="min-w-0 flex-1"><b className="font-bold">{entry.detail || entry.action}</b>{entry.user ? <span className="muted"> · {entry.user.displayName || entry.user.username}</span> : null}</span>
+                  </li>
+                ))}
+              </ul>
             </Panel>
           )}
 

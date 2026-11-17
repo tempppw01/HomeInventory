@@ -31,6 +31,8 @@ export function BatchEditModal({
     unit?: string;
     minQuantity?: number;
     locationId?: string | null;
+    quantity?: number;
+    remainingPercent?: number;
   }) => void;
 }) {
   const [category, setCategory] = useState(initialCategory);
@@ -38,6 +40,8 @@ export function BatchEditModal({
   const [unit, setUnit] = useState("");
   const [minQuantity, setMinQuantity] = useState<string>("");
   const [locationId, setLocationId] = useState<string | typeof CLEAR_LOCATION | "">("");
+  const [quantity, setQuantity] = useState("");
+  const [remainingPercent, setRemainingPercent] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,12 +51,16 @@ export function BatchEditModal({
       unit?: string;
       minQuantity?: number;
       locationId?: string | null;
+      quantity?: number;
+      remainingPercent?: number;
     } = {};
     
     if (category !== initialCategory) updates.category = category;
     if (type) updates.type = type;
     if (unit) updates.unit = unit;
     if (minQuantity !== "") updates.minQuantity = Number(minQuantity);
+    if (quantity !== "") updates.quantity = Number(quantity);
+    if (remainingPercent !== "") updates.remainingPercent = Number(remainingPercent);
     if (locationId === CLEAR_LOCATION) updates.locationId = null;
     else if (locationId !== "") updates.locationId = locationId;
     
@@ -151,6 +159,17 @@ export function BatchEditModal({
                 onChange={(e) => setMinQuantity(e.target.value)}
                 placeholder="不修改"
               />
+            </label>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <label>
+              <span className="mb-1.5 block text-xs font-bold muted">数量</span>
+              <input type="number" min="0" step="0.1" className="input" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="不修改" aria-label="批量数量" />
+            </label>
+            <label>
+              <span className="mb-1.5 block text-xs font-bold muted">剩余量(%)</span>
+              <input type="number" min="0" max="100" step="5" className="input" value={remainingPercent} onChange={(e) => setRemainingPercent(e.target.value)} placeholder="不修改" aria-label="批量剩余量" />
             </label>
           </div>
 

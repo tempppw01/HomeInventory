@@ -3,7 +3,7 @@
 import {
   AlertTriangle, Bot, Boxes, ChevronDown, ChevronRight, CircleAlert, LayoutGrid, List, QrCode, ShoppingBasket, Sparkles, WalletCards, Zap,
   Package,
-} from "lucide-react";
+  CalendarDays } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { DashboardData, Item, ShoppingItem } from "@/types";
 import { isLiquidConsumable } from "@/lib/item-metrics";
@@ -89,6 +89,17 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
           </summary>
           <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--hairline)" }}>
             <HomeInsightsCompact data={data} />
+          </div>
+        </details>
+        {/* 到期日历:按月看哪天有东西到期。此前只有「提醒中心」的列表,看不出时间分布。 */}
+        <details className="surface group p-4 sm:p-5">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 rounded-xl [&::-webkit-details-marker]:hidden md:min-h-10">
+            <span className="grid size-10 shrink-0 place-items-center rounded-2xl" style={{ background: "var(--warning-soft)", color: "var(--warning)" }}><CalendarDays size={18} /></span>
+            <span className="min-w-0 flex-1"><b className="block text-sm">到期日历</b><span className="mt-0.5 block text-xs muted">按月查看哪天有物品到期</span></span>
+            <ChevronDown size={17} className="shrink-0 transition group-open:rotate-180" style={{ color: "var(--muted)" }} />
+          </summary>
+          <div className="mt-3">
+            <ExpiryCalendar items={data.items} />
           </div>
         </details>
 
@@ -178,4 +189,71 @@ export function HomeInsightsCompact({ data }: { data: DashboardData }) {
       {data.finance.recent[0] && <div className="mt-3 truncate text-xs muted">最近记录:{data.finance.recent[0].itemName} · ¥{data.finance.recent[0].totalPrice.toFixed(2)}</div>}
     </details>}
   </>;
+}
+
+/**
+ * 到期日历:一个月网格,格子上标出当天到期的件数。
+ * 只做「看分布」这一件事 —— 点某天会列出物品名,不做编辑(编辑仍在物品页)。
+ */
+function ExpiryCalendar({ items }: { items: DashboardData["items"] }) {
+  const today = new Date();
+  const [monthOffset, setMonthOffset] = useState(0);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const base = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
+  const year = base.getFullYear();
+  const month = base.getMonth();
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  // 按本地日期分桶,避免时区把「今天到期」算到昨天。
+  const buckets = new Map<string, { name: string; expired: boolean }[]>();
+  for (const item of items) {
+    if (!item.expiryDate) continue;
+    const date = new Date(item.expiryDate);
+    if (Number.isNaN(date.getTime())) continue;
+    const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+    const list = buckets.get(key) ?? [];
+    list.push({ name: item.name, expired: date.getTime() < new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime() });
+    buckets.set(key, list);
+  }
+
+  const monthTotal = [...buckets.entries()]
+    .filter(([key]) => key.startsWith(`${year}-${month}-`))
+    .reduce((sum, [, list]) => sum + list.length, 0);
+  const cells: (number | null)[] = [...Array(firstWeekday).fill(null), ...Array.from({ length: daysInMonth }, (_, index) => index + 1)];
+  const todayKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
+
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <button type="button" onClick={() => { setMonthOffset((value) => value - 1); setSelectedDay(null); }} className="btn-ghost grid size-11 min-h-11 place-items-center p-0 md:size-10 md:min-h-10" aria-label="上个月"><ChevronDown size={17} className="rotate-90" /></button>
+        <div className="min-w-0 text-center"><b className="text-sm">{year} 年 {month + 1} 月</b><span className="ml-2 text-xs muted">{monthTotal > 0 ? `${monthTotal} 件到期` : "本月没有到期物品"}</span></div>
+        <button type="button" onClick={() => { setMonthOffset((value) => value + 1); setSelectedDay(null); }} className="btn-ghost grid size-11 min-h-11 place-items-center p-0 md:size-10 md:min-h-10" aria-label="下个月"><ChevronDown size={17} className="-rotate-90" /></button>
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center text-xs muted">
+        {["日", "一", "二", "三", "四", "五", "六"].map((label) => <span key={label} className="py-1 font-bold">{label}</span>)}
+      </div>
+      <div className="mt-1 grid grid-cols-7 gap-1">
+        {cells.map((day, index) => {
+          if (day === null) return <span key={`empty-${index}`} />;
+          const key = `${year}-${month}-${day}`;
+          const list = buckets.get(key) ?? [];
+          const hasExpired = list.some((entry) => entry.expired);
+          const isToday = key === todayKey;
+          return (
+            <button key={key} type="button" onClick={() => setSelectedDay(selectedDay === key ? null : key)} disabled={list.length === 0} className="grid min-h-11 place-items-center gap-0.5 rounded-xl px-1 py-1 text-xs disabled:opacity-45" style={{ background: selectedDay === key ? "var(--primary-soft)" : list.length ? (hasExpired ? "color-mix(in srgb, var(--danger) 12%, transparent)" : "color-mix(in srgb, var(--warning) 14%, transparent)") : "transparent", outline: isToday ? "2px solid var(--primary)" : "none", outlineOffset: "-2px" }} title={list.length ? list.map((entry) => entry.name).join("、") : undefined}>
+              <span className="font-bold tabular-nums">{day}</span>
+              {list.length > 0 && <span className="text-xs font-black" style={{ color: hasExpired ? "var(--danger)" : "var(--warning)" }}>{list.length}</span>}
+            </button>
+          );
+        })}
+      </div>
+      {selectedDay && (
+        <div className="mt-3 rounded-xl p-3 text-xs leading-6" style={{ background: "var(--surface-soft)" }}>
+          <b className="block">{(buckets.get(selectedDay) ?? []).length} 件到期</b>
+          <span className="muted">{(buckets.get(selectedDay) ?? []).map((entry) => entry.name).join("、")}</span>
+        </div>
+      )}
+    </div>
+  );
 }

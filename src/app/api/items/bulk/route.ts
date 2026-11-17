@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiError, requireWritableUser } from "@/lib/api";
 import { bulkItemPatchSchema } from "@/lib/validation";
+import { normalizeItemQuantity } from "@/lib/item-metrics";
 import { z } from "zod";
 
 export async function PATCH(request: NextRequest) {
@@ -24,8 +25,13 @@ export async function PATCH(request: NextRequest) {
       if (!location) return NextResponse.json({ error: "存放位置不存在" }, { status: 400 });
     }
     const result = await prisma.$transaction(async (tx) => {
-      const updated = await tx.item.findMany({ where: { id: { in: ids }, deletedAt: null }, select: { id: true, name: true } });
-      await tx.item.updateMany({ where: { id: { in: ids }, deletedAt: null }, data });
+      const updated = await tx.item.findMany({ where: { id: { in: ids }, deletedAt: null }, select: { id: true, name: true, unit: true } });
+      // 计数单位(件/瓶…)不能存小数,而每件物品的单位可能不同,所以数量要逐件归一化。
+      if (data.quantity !== undefined) {
+        await Promise.all(updated.map((item) => tx.item.update({ where: { id: item.id }, data: { ...data, quantity: normalizeItemQuantity(data.quantity as number, item.unit) } })));
+      } else {
+        await tx.item.updateMany({ where: { id: { in: ids }, deletedAt: null }, data });
+      }
       if (updated.length) await tx.activityLog.createMany({ data: updated.map((item) => ({ action: "UPDATE", itemId: item.id, itemName: item.name, userId: user.id, detail: "批量更新物品" })) });
       return updated.length;
     });

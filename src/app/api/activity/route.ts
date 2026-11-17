@@ -7,8 +7,15 @@ export async function GET(request: NextRequest) {
   try {
     await requireUser();
     const scanOnly = request.nextUrl.searchParams.get("scan") === "1";
+    // 详情页要「这件物品的变更记录」,此前只能一次拉 100 条全局记录再前端过滤。
+    const itemId = request.nextUrl.searchParams.get("itemId");
+    const where = itemId
+      ? { itemId }
+      : scanOnly
+        ? { action: { in: ["CONSUME", "CONSUME_UNDO"] } }
+        : undefined;
     return NextResponse.json(await prisma.activityLog.findMany({
-      where: scanOnly ? { action: { in: ["CONSUME", "CONSUME_UNDO"] } } : undefined,
+      where,
       include: { member: true, user: { select: { displayName: true, username: true } } },
       orderBy: { createdAt: "desc" },
       take: 100,
