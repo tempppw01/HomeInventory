@@ -59,7 +59,7 @@ const labels = await page.evaluate(() => {
   const quantity = document.querySelector('input[aria-describedby="quantity-hint"]');
   const name = document.querySelector("#item-name");
   const textOf = (element) => {
-    const field = element?.closest("label") || element?.parentElement;
+    const field = element?.closest("label") || element?.closest("[data-form-row]") || element?.parentElement;
     return field ? field.textContent.slice(0, 24) : "";
   };
   return {

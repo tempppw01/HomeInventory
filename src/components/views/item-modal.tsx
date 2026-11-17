@@ -1,10 +1,11 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { Bot, ChevronDown, CircleAlert, ImagePlus, MapPin, Package, Plus, Sparkles, X, Link2, Upload } from "lucide-react";
+import { Bot, ChevronDown, ImagePlus, MapPin, Package, Plus, Sparkles, X, Link2, Upload } from "lucide-react";
 import {
   FormEvent, useEffect, useRef, useState,
 } from "react";
+import type { ReactNode } from "react";
 import type { Item, ItemType, Location } from "@/types";
 import { analyzeItem, AiAnalysis } from "@/components/ai-assistant-modal";
 import {
@@ -189,22 +190,164 @@ export function ItemModal({ locations, allItems, item, onClose, onSaved }: { loc
   const addLocation = (location: Location) => { setAvailableLocations((current) => [...current, location]); set("locationId", location.id); setQuickLocationOpen(false); };
   return <><Modal title={item ? "编辑物品" : "录入新物品"} subtitle={item?.itemCode || "只填名称和数量也可以，其他信息稍后补充"} onClose={requestClose}><form onSubmit={submit} className="space-y-5">
     {!item && savedTemplates.length > 0 && <div className="-mt-1 overflow-x-auto pb-1"><div className="mb-1.5 flex items-center justify-between"><span className="text-xs font-bold muted">最近使用 / 我的模板</span><button type="button" onClick={() => { setSavedTemplates([]); localStorage.removeItem(itemTemplateStorageKey); }} className="text-xs muted hover:text-[var(--danger)]">清空</button></div><div className="flex min-w-max gap-2">{savedTemplates.slice().sort((a, b) => b.usedAt - a.usedAt).map((template) => <button key={template.id} type="button" onClick={() => applySavedTemplate(template)} className="rounded-xl border px-2.5 py-1.5 text-left text-xs font-bold transition hover:border-[var(--primary)] hover:bg-[var(--primary-soft)]" style={{ borderColor: "var(--border)" }}><span className="block max-w-32 truncate">{template.name}</span><span className="mt-0.5 block text-xs font-normal muted">{template.category} · {template.unit}</span></button>)}</div></div>}
-    <Panel><div className="flex gap-3">{draft.imageUrl ? <button type="button" onClick={() => setImagePreviewOpen(true)} className="group relative grid size-20 shrink-0 place-items-center overflow-hidden rounded-2xl border bg-cover bg-center transition hover:brightness-90 focus-visible:outline-offset-2" style={{ backgroundImage: `url(${draft.imageUrl})`, borderColor: "var(--primary)" }} aria-label="放大查看物品图片" title="点击放大查看"><span className="absolute inset-x-0 bottom-0 bg-black/55 py-1 text-xs font-bold text-white opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">放大</span></button> : <div className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-2xl border border-dashed" style={{ borderColor: "var(--border)", background: "var(--surface-soft)" }}>{uploading ? <Sparkles className="animate-pulse" size={22} /> : <ImagePlus className="muted" size={24} />}</div>}<div className="min-w-0 flex-1"><label htmlFor="item-name" className="mb-1.5 block text-xs font-bold muted">物品名称 *</label><input required id="item-name" maxLength={80} className="input" value={draft.name} onChange={(e) => set("name", e.target.value)} placeholder="拍照让 AI 识别，或直接输入名称" /><div className="mt-2 flex gap-2"><button type="button" disabled={aiLoading || (!draft.name && !draft.imageUrl)} onClick={() => runAi("identify")} className="btn-ghost flex min-h-10 items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-40"><Sparkles size={14} />{aiLoading ? "分析中…" : "AI 补全"}</button>{draft.type === "CONSUMABLE" && <button type="button" disabled={aiLoading || (!draft.name && !draft.imageUrl)} onClick={() => runAi("shelf_life")} className="btn-ghost flex min-h-10 items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-40"><Bot size={14} />分析保质期</button>}</div></div></div></Panel>
-    <div className="grid grid-cols-2 gap-3"><label className="cursor-pointer rounded-2xl border px-3 py-2.5 transition" style={draft.type === "DURABLE" ? { borderColor: "var(--primary)", background: "var(--primary-soft)" } : { borderColor: "var(--border)" }}><input type="radio" className="hidden" checked={draft.type === "DURABLE"} onChange={() => chooseItemType("DURABLE")} /><span className="flex items-center gap-2.5"><span className="grid size-8 shrink-0 place-items-center rounded-xl" style={{ background: draft.type === "DURABLE" ? "var(--surface-solid)" : "var(--surface-soft)", color: "var(--primary)" }}><Package size={16} /></span><span className="min-w-0"><span className="block text-sm font-bold">耐用品</span><span className="mt-0.5 block text-xs muted">长期使用、不常消耗</span></span></span></label><label className="cursor-pointer rounded-2xl border px-3 py-2.5 transition" style={draft.type === "CONSUMABLE" ? { borderColor: "var(--primary)", background: "var(--primary-soft)" } : { borderColor: "var(--border)" }}><input type="radio" className="hidden" checked={draft.type === "CONSUMABLE"} onChange={() => chooseItemType("CONSUMABLE")} /><span className="flex items-center gap-2.5"><span className="grid size-8 shrink-0 place-items-center rounded-xl" style={{ background: draft.type === "CONSUMABLE" ? "var(--surface-solid)" : "var(--surface-soft)", color: "var(--primary)" }}><Sparkles size={16} /></span><span className="min-w-0"><span className="block text-sm font-bold">消耗品</span><span className="mt-0.5 block text-xs muted">会慢慢用完、需要补货</span></span></span></label></div>{typeGuess && <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><Sparkles size={14} className="shrink-0" /><span className="min-w-0 flex-1">已按名称识别为{typeGuess.type === "CONSUMABLE" ? "消耗品" : "耐用品"}<span className="ml-1 font-normal">· {typeGuess.reason}</span></span><span className="shrink-0 text-xs font-bold opacity-75">点上方可改</span></div>}
-    {(duplicates.length > 0 || similarItems.length > 0 || commonTemplate) && <div className="space-y-1.5 rounded-xl px-3 py-2 text-xs" style={{ background: "var(--warning-soft, #fff4dc)", color: "#8a571c" }}>{duplicates.length > 0 && <div className="flex items-center gap-2"><CircleAlert size={15} className="shrink-0" /><span className="min-w-0 flex-1 truncate">已有同名物品：{duplicates.slice(0, 2).map((entry) => entry.location?.name || "未设置位置").join("、")}；仍可继续新增。</span></div>}{similarItems.length > 0 && <div className="flex items-center gap-2"><CircleAlert size={15} className="shrink-0 opacity-75" /><span className="min-w-0 flex-1 truncate">可能已有相似物品：{similarItems.map((entry) => entry.name).join("、")}</span></div>}{commonTemplate && <div className="flex items-center gap-2"><Sparkles size={15} className="shrink-0" /><span className="min-w-0 flex-1 truncate">识别为常见{commonTemplate.category}用品{suggestedLocation ? `，可放在 ${suggestedLocation.name}` : ""}</span><button type="button" onClick={applyTemplate} className="shrink-0 font-black underline underline-offset-2">一键采用</button></div>}</div>}
-    {draftAi.hasHighlights && <div className="rounded-2xl border p-3" style={{ borderColor: "color-mix(in srgb, var(--primary) 24%, var(--border))", background: "color-mix(in srgb, var(--primary) 5%, var(--surface-solid))" }}><div className="flex items-center gap-1.5 text-xs font-black" style={{ color: "var(--primary)" }}><Sparkles size={14} />AI 信息</div>{draftAi.summary && <p className="mb-0 mt-2 text-xs leading-5">{draftAi.summary}</p>}<div className="mt-2 grid gap-2 sm:grid-cols-2">{draftAi.storage && <div className="text-xs leading-5"><span className="font-bold">存储：</span>{draftAi.storage}</div>}{(draftAi.usage || draftAi.replenishment) && <div className="text-xs leading-5"><span className="font-bold">使用与补货：</span>{[draftAi.usage, draftAi.replenishment].filter(Boolean).join("；")}</div>}</div></div>}
-    <div className="grid grid-cols-2 gap-3"><Field label="分类"><select className="input" value={draft.category} onChange={(e) => set("category", e.target.value)}>{categories.map((c) => <option key={c}>{c}</option>)}</select></Field><div><div className="mb-1.5 flex items-center justify-between"><span className="text-xs font-bold muted">存放位置</span><button type="button" onClick={() => setQuickLocationOpen(true)} className="flex min-h-10 items-center gap-1 text-xs font-bold max-md:min-h-11" style={{ color: "var(--primary)" }}><Plus size={13} />新建</button></div><select className="input" value={draft.locationId} onChange={(e) => set("locationId", e.target.value)}><option value="">未设置</option>{availableLocations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select>{suggestedLocation && <button type="button" onClick={() => set("locationId", suggestedLocation.id)} className="mt-1.5 flex max-w-full items-center gap-1 text-xs font-bold" style={{ color: "var(--primary)" }}><MapPin size={12} /><span className="truncate">建议放在 {suggestedLocation.name}</span></button>}</div></div>
-    <div className="grid grid-cols-2 gap-3"><div><Field label="数量 *"><input required type="number" min="0" step={isCountUnit(draft.unit) ? "1" : "0.1"} inputMode={isCountUnit(draft.unit) ? "numeric" : "decimal"} className="input" value={qtyText} onChange={(event) => changeQuantityText(event.target.value)} onBlur={commitQuantityText} aria-describedby="quantity-hint" /></Field><p id="quantity-hint" className="mb-0 mt-1 text-xs muted">{isCountUnit(draft.unit) ? "只能填整数(件 / 盒 / 台按整个计数)" : "可以填小数,例如 2.5"}</p></div><Field label="单位"><select className="input" value={draft.unit} onChange={(event) => changeUnit(event.target.value)}>{units.map((u) => <option key={u}>{u}</option>)}</select></Field></div>
-    <div>
-      <button type="button" onClick={() => setImageOpen((open) => !open)} aria-expanded={imageOpen} className="flex w-full items-center justify-between rounded-2xl min-h-11 px-3 py-2.5 text-sm font-bold" style={{ background: "var(--surface-soft)" }}><span className="flex items-center gap-2"><ImagePlus size={16} style={{ color: "var(--primary)" }} />图片<span className="text-xs font-normal muted">可选</span></span><span className="flex items-center gap-1 text-xs font-normal muted">{draft.imageUrl ? "已添加" : "未添加"}<ChevronDown size={17} className={`transition ${imageOpen ? "rotate-180" : ""}`} /></span></button>
-      {imageOpen && <div className="mt-2"><div className="rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}><div className="mb-2 flex items-center gap-1 border-b" style={{ borderColor: "var(--border)" }}><button type="button" onClick={() => setImageMode("upload")} className="flex items-center gap-1.5 border-b-2 px-2 py-1.5 text-xs font-bold transition" style={{ borderColor: imageMode === "upload" ? "var(--primary)" : "transparent", color: imageMode === "upload" ? "var(--primary)" : "var(--muted)" }}><Upload size={14} />上传</button><button type="button" onClick={() => setImageMode("link")} className="flex items-center gap-1.5 border-b-2 px-2 py-1.5 text-xs font-bold transition" style={{ borderColor: imageMode === "link" ? "var(--primary)" : "transparent", color: imageMode === "link" ? "var(--primary)" : "var(--muted)" }}><Link2 size={14} />链接</button>{draft.imageUrl && <button type="button" onClick={() => { set("imageUrl", ""); setImageUrlDraft(""); }} className="ml-auto text-xs font-bold text-red-500">移除图片</button>}</div>{imageMode === "upload" ? <label className="flex cursor-pointer items-center gap-2 py-1 text-sm font-bold"><ImagePlus size={16} style={{ color: "var(--primary)" }} />{uploading ? "正在压缩并上传…" : "选择图片上传"}<span className="ml-auto text-xs font-normal muted">选图后自动压缩</span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" disabled={uploading} onChange={(e) => uploadImage(e.target.files?.[0])} /></label> : <div className="flex gap-2"><input className="input min-w-0 flex-1" value={imageUrlDraft} onChange={(event) => setImageUrlDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); applyImageUrl(); } }} onPaste={(event) => setImageUrlDraft(event.clipboardData.getData("text"))} placeholder="粘贴图片地址，例如 https://…" /><button type="button" onClick={applyImageUrl} className="btn-primary shrink-0 px-3 text-xs">应用</button></div>}<p className="mb-0 mt-2 text-xs muted">像 Notion 一样，可上传图片或直接粘贴网络图片地址。</p></div></div>}
+<div className="flex items-start gap-3">
+      {draft.imageUrl ? (
+        <button type="button" onClick={() => setImagePreviewOpen(true)} className="group relative grid size-20 shrink-0 place-items-center overflow-hidden rounded-2xl bg-cover bg-center" style={{ backgroundImage: "url(" + draft.imageUrl + ")" }} aria-label="放大查看物品图片" title="点击放大查看">
+          <span className="absolute inset-x-0 bottom-0 bg-black/55 py-1 text-xs font-bold text-white opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">放大</span>
+        </button>
+      ) : (
+        <div className="grid size-20 shrink-0 place-items-center rounded-2xl" style={{ background: "var(--surface-soft)" }}>
+          {uploading ? <Sparkles className="animate-pulse" size={22} /> : <ImagePlus className="muted" size={24} />}
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <label htmlFor="item-name" className="mb-1.5 block text-xs font-bold muted">物品名称 *</label>
+        <input required id="item-name" maxLength={80} className="input" value={draft.name} onChange={(e) => set("name", e.target.value)} placeholder="拍照让 AI 识别,或直接输入名称" />
+        <div className="mt-2 flex gap-2">
+          <button type="button" disabled={aiLoading || (!draft.name && !draft.imageUrl)} onClick={() => runAi("identify")} className="btn-ghost flex min-h-10 items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-40"><Sparkles size={14} />{aiLoading ? "分析中..." : "AI 补全"}</button>
+          {draft.type === "CONSUMABLE" && <button type="button" disabled={aiLoading || (!draft.name && !draft.imageUrl)} onClick={() => runAi("shelf_life")} className="btn-ghost flex min-h-10 items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-40"><Bot size={14} />分析保质期</button>}
+        </div>
+      </div>
     </div>
-    {isLiquidConsumable(draft) && <p className="-mt-2 text-xs muted">按整瓶记录库存；日常用量请通过下方“剩余量”调整。</p>}
-    {isLiquidConsumable(draft) && <div className="rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}><div className="mb-2 flex items-center justify-between text-xs"><span className="font-bold">剩余量</span><span className="font-black" style={{ color: draft.remainingPercent <= 20 ? "var(--danger)" : "var(--primary)" }}>{draft.remainingPercent}%</span></div><input aria-label="剩余量" type="range" min="0" max="100" step="5" className="w-full accent-[var(--primary)]" value={draft.remainingPercent} onChange={(e) => set("remainingPercent", Number(e.target.value))} /></div>}
-    <button type="button" onClick={() => setMoreOpen(!moreOpen)} className="flex w-full items-center justify-between rounded-2xl min-h-11 px-3 py-2.5 text-sm font-bold" style={{ background: "var(--surface-soft)" }}><span>更多信息 <span className="ml-1 text-xs font-normal muted">价格、日期、提醒、备注</span></span><ChevronDown size={17} className={`transition ${moreOpen ? "rotate-180" : ""}`} /></button>
-    {moreOpen && <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="space-y-3 overflow-hidden"><Panel><div className={`grid gap-3 ${draft.type === "CONSUMABLE" ? "grid-cols-2" : "grid-cols-1"}`}><Field label="购买单价"><input type="text" inputMode="decimal" autoComplete="off" className="input" value={draft.price} onChange={(event) => { const next = event.target.value; if (isMoneyInput(next)) set("price", next); }} onBlur={() => { const amount = moneyValue(draft.price); if (amount !== null) set("price", amount.toFixed(2)); }} placeholder="¥ 0.00" aria-describedby="price-hint" /></Field>{draft.type === "CONSUMABLE" && <Field label="低库存阈值"><input type="number" min="0" step="0.1" className="input" value={draft.minQuantity} onChange={(e) => set("minQuantity", Number(e.target.value))} /></Field>}</div><p id="price-hint" className="-mt-1 text-xs muted">支持键盘输入小数，例如 19.90</p>{dailyCostPreview && <div className="flex items-center justify-between rounded-2xl p-3 text-sm" style={{ background: "var(--primary-soft)" }}><span className="font-bold">当前日均成本</span><span><b>¥{dailyCostPreview.cost.toFixed(dailyCostPreview.cost >= 10 ? 0 : 2)}</b><span className="ml-1 text-xs muted">/ 天 · 已使用 {dailyCostPreview.days} 天</span></span></div>}{draft.price && <div className="rounded-2xl p-3" style={{ background: "var(--surface-soft)" }}><button type="button" onClick={() => setRecordPurchase(!recordPurchase)} className="flex w-full items-center justify-between text-sm"><span>记入本月消费记录</span><span className="font-bold" style={{ color: recordPurchase ? "var(--success)" : "var(--muted)" }}>{recordPurchase ? "是" : "否"}</span></button>{recordPurchase && <input className="input mt-3" value={purchaseStore} onChange={(e) => setPurchaseStore(e.target.value)} placeholder="购买商店（可选）" />}</div>}<div className={`grid gap-3 ${draft.type === "CONSUMABLE" ? "sm:grid-cols-2" : "grid-cols-1"}`}><DateField label="购入日期" value={draft.purchaseDate} onChange={(value) => set("purchaseDate", value)} presets={purchaseDatePresets()} max={dateInputValue()} relative={false} help={draft.purchaseDate ? `${purchaseAgeLabel(draft.purchaseDate)}(日均成本按它计算)` : "按实际购买那天填,日均成本会用它计算。"} />{draft.type === "CONSUMABLE" && <DateField label="到期日期" value={draft.expiryDate} onChange={(value) => set("expiryDate", value)} presets={expiryDatePresets()} min={draft.purchaseDate || dateInputValue()} help="留空表示不提醒保质期;过期后会出现在提醒中心。" />}</div>{draft.purchaseDate && draft.expiryDate && draft.expiryDate < draft.purchaseDate && <p className="mb-0 rounded-xl px-3 py-2 text-xs leading-5" style={{ background: "var(--warning-soft, #fff4dc)", color: "#8a571c" }}>{`到期日期(${draft.expiryDate})早于购入日期(${draft.purchaseDate}),保存后会立刻算作过期,建议改一下。`}</p>}<Field label="备注"><textarea className="input min-h-20 resize-none" value={draft.notes} onChange={(e) => set("notes", e.target.value)} placeholder="规格、保修、使用提示…" /></Field></Panel></motion.div>}
+
+    <div className="flex rounded-2xl p-1" role="radiogroup" aria-label="物品类型" style={{ background: "var(--surface-soft)" }}>
+      <label className="flex min-h-11 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-xl text-sm font-bold transition-colors" style={draft.type === "DURABLE" ? { background: "var(--surface-solid)", color: "var(--primary)", boxShadow: "var(--shadow-sm)" } : { color: "var(--muted)" }}>
+        <input type="radio" className="sr-only" checked={draft.type === "DURABLE"} onChange={() => chooseItemType("DURABLE")} />
+        <Package size={15} />耐用品
+      </label>
+      <label className="flex min-h-11 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-xl text-sm font-bold transition-colors" style={draft.type === "CONSUMABLE" ? { background: "var(--surface-solid)", color: "var(--primary)", boxShadow: "var(--shadow-sm)" } : { color: "var(--muted)" }}>
+        <input type="radio" className="sr-only" checked={draft.type === "CONSUMABLE"} onChange={() => chooseItemType("CONSUMABLE")} />
+        <Sparkles size={15} />消耗品
+      </label>
+    </div>
+
+    {typeGuess && <div className="flex items-center gap-1.5 text-xs leading-5 muted"><Sparkles size={13} className="shrink-0" style={{ color: "var(--primary)" }} /><span className="min-w-0 flex-1">已按名称识别为{typeGuess.type === "CONSUMABLE" ? "消耗品" : "耐用品"} · {typeGuess.reason}</span><span className="shrink-0 opacity-75">点上方可改</span></div>}
+
+    {(duplicates.length > 0 || similarItems.length > 0 || commonTemplate) && (
+      <div className="rounded-2xl px-3 py-2.5 text-xs leading-5" style={{ background: "var(--warning-soft, #fff4dc)", color: "#8a571c" }}>
+        {duplicates.length > 0 && <p className="m-0">已存在同名物品:{duplicates.slice(0, 2).map((dup) => dup.name).join("、")}{duplicates.length > 2 ? " 等" : ""}。保存后会合并数量。</p>}
+        {duplicates.length === 0 && similarItems.length > 0 && <p className="m-0">找到相似物品:{similarItems.slice(0, 2).map((similar) => similar.name).join("、")}。</p>}
+        {commonTemplate && <p className="m-0 mt-1">常用模板:{commonTemplate.category} · {commonTemplate.type === "CONSUMABLE" ? "消耗品" : "耐用品"}<button type="button" onClick={applyTemplate} className="ml-2 font-bold" style={{ color: "var(--primary)" }}>套用</button></p>}
+      </div>
+    )}
+    {draftAi.hasHighlights && (
+      <div className="rounded-2xl px-3 py-2.5 text-xs leading-5" style={{ background: "color-mix(in srgb, var(--primary) 6%, var(--surface-solid))", color: "var(--foreground)" }}>
+        {[draftAi.summary, draftAi.storage, draftAi.usage, draftAi.replenishment].filter(Boolean).map((line) => <p key={String(line)} className="m-0">{line}</p>)}
+      </div>
+    )}
+
+    <div className="overflow-hidden rounded-[20px] border" style={{ borderColor: "var(--hairline)", background: "var(--surface-solid)" }}>
+      <FormRow label="分类">
+        <select className="input" aria-label="分类" value={draft.category} onChange={(e) => set("category", e.target.value)}>{categories.map((c) => <option key={c}>{c}</option>)}</select>
+      </FormRow>
+      <FormRow label="存放位置">
+        <select className="input" aria-label="存放位置" value={draft.locationId} onChange={(e) => { if (e.target.value === "__new__") { setQuickLocationOpen(true); return; } set("locationId", e.target.value); }}>
+          <option value="">未设置</option>
+          {availableLocations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+          <option value="__new__">＋ 新建存放位置…</option>
+        </select>
+        {suggestedLocation && <button type="button" onClick={() => set("locationId", suggestedLocation.id)} className="mt-1.5 flex max-w-full items-center gap-1 text-xs font-bold" style={{ color: "var(--primary)" }}><MapPin size={12} /><span className="truncate">建议放在 {suggestedLocation.name}</span></button>}
+      </FormRow>
+      <FormRow label="数量 *">
+        <div className="flex gap-2">
+          <input required type="number" min="0" step={isCountUnit(draft.unit) ? "1" : "0.1"} inputMode={isCountUnit(draft.unit) ? "numeric" : "decimal"} className="input min-w-0 flex-1" aria-label="数量" value={qtyText} onChange={(event) => changeQuantityText(event.target.value)} onBlur={commitQuantityText} aria-describedby="quantity-hint" />
+          <select className="input w-24 shrink-0" aria-label="单位" value={draft.unit} onChange={(event) => changeUnit(event.target.value)}>{units.map((u) => <option key={u}>{u}</option>)}</select>
+        </div>
+        <p id="quantity-hint" className="mb-0 mt-1.5 text-xs muted">{isCountUnit(draft.unit) ? "只能填整数(件 / 盒 / 台按整个计数)" : "可以填小数,例如 2.5"}</p>
+      </FormRow>
+      {isLiquidConsumable(draft) && (
+        <FormRow label="剩余量">
+          <RemainingLevelInline value={draft.remainingPercent} onChange={(next) => set("remainingPercent", next)} />
+          <p className="mb-0 mt-1.5 text-xs muted">按整瓶记录库存;日常用量用这里的百分比表示。</p>
+        </FormRow>
+      )}
+      <AccordionRow label="图片" summary={draft.imageUrl ? "已添加" : "未添加"} open={imageOpen} onToggle={() => setImageOpen((open) => !open)}><div className="px-3">
+        <div className="mb-2 flex items-center gap-1">
+          <button type="button" onClick={() => setImageMode("upload")} className="flex min-h-10 items-center gap-1.5 border-b-2 px-2 text-xs font-bold transition" style={{ borderColor: imageMode === "upload" ? "var(--primary)" : "transparent", color: imageMode === "upload" ? "var(--primary)" : "var(--muted)" }}><Upload size={14} />上传</button>
+          <button type="button" onClick={() => setImageMode("link")} className="flex min-h-10 items-center gap-1.5 border-b-2 px-2 text-xs font-bold transition" style={{ borderColor: imageMode === "link" ? "var(--primary)" : "transparent", color: imageMode === "link" ? "var(--primary)" : "var(--muted)" }}><Link2 size={14} />链接</button>
+          {draft.imageUrl && <button type="button" onClick={() => { set("imageUrl", ""); setImageUrlDraft(""); }} className="ml-auto min-h-10 text-xs font-bold" style={{ color: "var(--danger)" }}>移除图片</button>}
+        </div>
+        {imageMode === "upload" ? (
+          <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl px-2 text-sm font-bold" style={{ background: "var(--surface-soft)" }}>
+            <ImagePlus size={16} style={{ color: "var(--primary)" }} />{uploading ? "正在压缩并上传..." : "选择图片上传"}
+            <span className="ml-auto text-xs font-normal muted">选图后自动压缩</span>
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" disabled={uploading} onChange={(e) => uploadImage(e.target.files?.[0])} />
+          </label>
+        ) : (
+          <div className="flex gap-2">
+            <input className="input min-w-0 flex-1" aria-label="图片地址" value={imageUrlDraft} onChange={(event) => setImageUrlDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); applyImageUrl(); } }} onPaste={(event) => setImageUrlDraft(event.clipboardData.getData("text"))} placeholder="粘贴图片地址,例如 https://..." />
+            <button type="button" onClick={applyImageUrl} className="btn-primary min-h-11 shrink-0 px-3 text-xs">应用</button>
+          </div>
+        )}
+        </div>
+      </AccordionRow>
+      <AccordionRow label="更多信息" summary="价格、日期、提醒、备注" open={moreOpen} onToggle={() => setMoreOpen(!moreOpen)}>
+        <FormRow label="购买单价">
+          <input type="text" inputMode="decimal" autoComplete="off" className="input" aria-label="购买单价" value={draft.price} onChange={(event) => { const next = event.target.value; if (isMoneyInput(next)) set("price", next); }} onBlur={() => { const amount = moneyValue(draft.price); if (amount !== null) set("price", amount.toFixed(2)); }} placeholder="¥ 0.00" aria-describedby="price-hint" />
+          <p id="price-hint" className="mb-0 mt-1.5 text-xs muted">支持键盘输入小数,例如 19.90{dailyCostPreview ? " · 当前日均成本 ¥" + dailyCostPreview.cost.toFixed(dailyCostPreview.cost >= 10 ? 0 : 2) + " / 天(已使用 " + dailyCostPreview.days + " 天)" : ""}</p>
+        </FormRow>
+        {draft.type === "CONSUMABLE" && (
+          <FormRow label="低库存阈值">
+            <input type="number" min="0" step="0.1" className="input" aria-label="低库存阈值" value={draft.minQuantity} onChange={(e) => set("minQuantity", Number(e.target.value))} />
+          </FormRow>
+        )}
+        {draft.price !== "" && (
+          <FormRow label="本月消费">
+            <button type="button" onClick={() => setRecordPurchase(!recordPurchase)} aria-pressed={recordPurchase} className="flex min-h-11 w-full items-center justify-between rounded-xl px-2 text-sm" style={{ background: "var(--surface-soft)" }}>
+              <span>记入本月消费记录</span>
+              <span className="font-bold" style={{ color: recordPurchase ? "var(--success)" : "var(--muted)" }}>{recordPurchase ? "是" : "否"}</span>
+            </button>
+            {recordPurchase && <input className="input mt-2" aria-label="购买商店" value={purchaseStore} onChange={(e) => setPurchaseStore(e.target.value)} placeholder="购买商店(可选)" />}
+          </FormRow>
+        )}
+        <DateField label="购入日期" value={draft.purchaseDate} onChange={(value) => set("purchaseDate", value)} presets={purchaseDatePresets()} max={dateInputValue()} relative={false} help={draft.purchaseDate ? purchaseAgeLabel(draft.purchaseDate) + "(日均成本按它计算)" : "按实际购买那天填,日均成本会用它计算。"} />
+        {draft.type === "CONSUMABLE" && <DateField label="到期日期" value={draft.expiryDate} onChange={(value) => set("expiryDate", value)} presets={expiryDatePresets()} min={draft.purchaseDate || dateInputValue()} help="留空表示不提醒保质期;过期后会出现在提醒中心。" />}
+        {draft.purchaseDate && draft.expiryDate && draft.expiryDate < draft.purchaseDate && (
+          <p className="m-0 px-3 py-2.5 text-xs leading-5" style={{ background: "var(--warning-soft, #fff4dc)", color: "#8a571c" }}>到期日期({draft.expiryDate})早于购入日期({draft.purchaseDate}),保存后会立刻算作过期,建议改一下。</p>
+        )}
+        <FormRow label="备注">
+          <textarea className="input min-h-20 resize-none" aria-label="备注" value={draft.notes} onChange={(e) => set("notes", e.target.value)} placeholder="规格、保修、使用提示..." />
+        </FormRow>
+      </AccordionRow>
+    </div>
     {error && <p className="m-0 rounded-xl p-2.5 text-sm text-red-500" style={{ background: "#ffe8eb" }}>{error}</p>}<div className="sticky bottom-0 -mx-5 flex gap-2.5 border-t bg-[var(--surface-solid)] px-5 pb-1 pt-3 sm:-mx-6 sm:px-6" style={{ borderColor: "var(--hairline)" }}><button type="button" onClick={requestClose} className="btn-ghost min-h-11 flex-1">取消</button>{!item && <button type="button" onClick={saveAsTemplate} className="btn-ghost min-h-11 shrink-0 px-3" title="保存名称、分类、单位和常用设置">存为模板</button>}<button disabled={saving || uploading || aiLoading} className="btn-primary min-h-11 flex-1 disabled:opacity-60">{saving ? "保存中…" : item ? "保存修改" : "快速保存"}</button></div>
   </form></Modal><AnimatePresence>{imagePreviewOpen && draft.imageUrl && <ImageLightbox src={draft.imageUrl} alt={draft.name || "物品图片"} onClose={() => setImagePreviewOpen(false)} />}</AnimatePresence><AnimatePresence>{quickLocationOpen && <QuickLocationDialog onClose={() => setQuickLocationOpen(false)} onCreated={addLocation} />}</AnimatePresence></>;
+}
+
+// 行式表单:标签在左、控件在右,行与行之间只用发丝线,不再给每个字段套框。
+function FormRow({ label, children, hint, action }: { label: string; children: ReactNode; hint?: ReactNode; action?: ReactNode }) {
+  return (
+    <div data-form-row className="flex items-start gap-3 border-t px-3 py-2.5 first:border-t-0" style={{ borderColor: "var(--hairline)" }}>
+      <span className="w-[4.5rem] shrink-0 pt-2.5 text-xs font-bold muted">{label}</span>
+      <div className="min-w-0 flex-1">{children}{hint && <span className="mt-1.5 block text-xs muted">{hint}</span>}</div>
+      {action && <span className="shrink-0 pt-2">{action}</span>}
+    </div>
+  );
+}
+
+// 折叠行:与 FormRow 共用同一列网格(标签 / 控件),展开内容不再单独套框。
+function AccordionRow({ label, summary, open, onToggle, children }: { label: string; summary?: string; open: boolean; onToggle: () => void; children: ReactNode }) {
+  return (
+    <div className="border-t" style={{ borderColor: "var(--hairline)" }}>
+      <button type="button" onClick={onToggle} aria-expanded={open} className="flex min-h-12 w-full items-center gap-3 px-3 text-sm font-bold">
+        <span className="w-[4.5rem] shrink-0 text-xs font-bold muted">{label}</span>
+        <span className="min-w-0 flex-1 truncate text-left">{summary}</span>
+        <ChevronDown size={17} className={"shrink-0 transition " + (open ? "rotate-180" : "")} style={{ color: "var(--muted)" }} />
+      </button>
+      {open && <div className="pb-3">{children}</div>}
+    </div>
+  );
+}
+
+function RemainingLevelInline({ value, onChange }: { value: number; onChange: (next: number) => void }) {
+  const level = Math.min(100, Math.max(0, Math.round(value)));
+  const color = level <= 20 ? "var(--danger)" : level <= 45 ? "var(--warning)" : "var(--primary)";
+  return (
+    <div className="flex items-center gap-3">
+      <input type="range" min={0} max={100} step={5} value={level} onChange={(event) => onChange(Number(event.target.value))} className="min-w-0 flex-1" aria-label="剩余量" style={{ accentColor: color }} />
+      <span className="w-10 shrink-0 text-right text-sm font-black tabular-nums" style={{ color }}>{level}%</span>
+    </div>
+  );
 }
 
 export function DateField({ label, value, onChange, presets, min, max, clearable = true, relative = true, help }: {
@@ -219,7 +362,7 @@ export function DateField({ label, value, onChange, presets, min, max, clearable
   relative?: boolean;
   help?: React.ReactNode;
 }) {
-  return <Field label={label} hint={help}><DatePicker value={value} onChange={onChange} label={label} presets={presets} min={min} max={max} clearable={clearable} hint={relative ? "relative" : "none"} /></Field>;
+  return <FormRow label={label} hint={help}><DatePicker value={value} onChange={onChange} label={label} presets={presets} min={min} max={max} clearable={clearable} hint={relative ? "relative" : "none"} /></FormRow>;
 }
 export function QuickLocationDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (location: Location) => void }) {
   const [name, setName] = useState("");
