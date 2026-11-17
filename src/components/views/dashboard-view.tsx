@@ -2,6 +2,7 @@
 
 import {
   AlertTriangle, Bot, Boxes, ChevronDown, ChevronRight, CircleAlert, LayoutGrid, List, QrCode, ShoppingBasket, Sparkles, WalletCards, Zap,
+  Package,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { DashboardData, Item, ShoppingItem } from "@/types";
@@ -9,6 +10,7 @@ import { isLiquidConsumable } from "@/lib/item-metrics";
 import { itemAiHighlights } from "@/lib/item-ai";
 import { Badge } from "@/components/ui";
 import { Empty, Hero, ListRow, Metric, Panel, Screen } from "@/components/ui-kit";
+import { categoryIconMap } from "@/components/shared";
 import { View, expiryDays, expiryDateLabel, expiryAdvice, expiryGroupLabel, SectionHead } from "../shared";
 import { ItemCard } from "./items-view";
 export function DashboardView({ data, now, lowStock, expiring, expired, pending, totalValue, onNavigate, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onDelete, onAddRestock, onQr, onAi, onAlerts, onCreate }: { data: DashboardData; now: number; lowStock: Item[]; expiring: Item[]; expired: Item[]; pending: ShoppingItem[]; totalValue: number; onNavigate: (v: View) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onDelete: (i: Item) => void; onAddRestock: (i: Item) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onAlerts: () => void; onCreate: () => void }) {
@@ -65,7 +67,7 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
       <Panel
         title="最近更新"
         actions={<>
-          <div className="flex rounded-xl p-1" style={{ background: "var(--surface-soft)" }}>
+          <div className="flex gap-1 rounded-xl p-1" style={{ background: "var(--surface-soft)" }}>
             <button data-testid="recent-view-cards" onClick={() => changeRecentView("cards")} className="grid size-11 place-items-center rounded-lg sm:size-10" style={recentView === "cards" ? { background: "var(--surface-solid)", color: "var(--primary)", boxShadow: "0 1px 4px rgba(0,0,0,.08)" } : { color: "var(--muted)" }} aria-label="卡片显示" title="卡片显示"><LayoutGrid size={15} /></button>
             <button data-testid="recent-view-list" onClick={() => changeRecentView("list")} className="grid size-11 place-items-center rounded-lg sm:size-10" style={recentView === "list" ? { background: "var(--surface-solid)", color: "var(--primary)", boxShadow: "0 1px 4px rgba(0,0,0,.08)" } : { color: "var(--muted)" }} aria-label="列表显示" title="列表显示"><List size={16} /></button>
           </div>
@@ -80,7 +82,7 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
       <div className="grid min-w-0 gap-4 sm:gap-5">
         {/* 默认折叠:辅助信息(消费 / 补货 / 到期 / 采购清单)不占首屏。 */}
         <details className="surface group p-4 sm:p-5">
-          <summary className="flex cursor-pointer list-none items-center gap-3 rounded-xl [&::-webkit-details-marker]:hidden">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 rounded-xl [&::-webkit-details-marker]:hidden md:min-h-10">
             <span className="grid size-10 shrink-0 place-items-center rounded-2xl" style={{ background: "var(--surface-soft)", color: "var(--muted)" }}><WalletCards size={18} /></span>
             <span className="min-w-0 flex-1"><b className="block text-sm">家庭消费</b><span className="mt-0.5 block text-xs muted">本月支出、分类与消耗趋势</span></span>
             <span className="grid size-8 shrink-0 place-items-center rounded-full muted transition-transform group-open:rotate-180"><ChevronDown size={17} /></span>
@@ -91,7 +93,7 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
         </details>
 
         <details className="surface group p-4 sm:p-5">
-          <summary className="flex cursor-pointer list-none items-center gap-3 rounded-xl [&::-webkit-details-marker]:hidden">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 rounded-xl [&::-webkit-details-marker]:hidden md:min-h-10">
             <span className="grid size-10 shrink-0 place-items-center rounded-2xl" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><Sparkles size={18} /></span>
             <span className="min-w-0 flex-1"><b className="block text-sm">更多待处理事项</b><span className="mt-0.5 block text-xs muted">补货、到期与采购清单</span></span>
             <span className="grid size-8 shrink-0 place-items-center rounded-full muted transition-transform group-open:rotate-180"><ChevronDown size={17} /></span>
@@ -145,12 +147,12 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
 
 export function RecentItemRow({ item, onEdit, onQr, onAi }: { item: Item; onEdit: () => void; onQr: () => void; onAi: () => void }) {
   const ai = itemAiHighlights(item);
-  const emoji = ({ 食品: "🍚", 饮品: "🥛", 清洁: "🧴", 家电: "📺", 数码: "💻", 衣物: "👕", 医药: "💊", 户外: "⛺" } as Record<string, string>)[item.category] || "📦";
+  const CategoryIcon = categoryIconMap[item.category] || Package;
   return <ListRow
     onClick={onEdit}
     title={<span className="flex min-w-0 items-center gap-1.5">{item.imageUrl
       ? <span className="size-5 shrink-0 rounded-md bg-cover bg-center" style={{ backgroundImage: `url(${item.imageUrl})` }} />
-      : <span className="shrink-0 text-base leading-none">{emoji}</span>}<span className="truncate">{item.name}</span>{ai.hasHighlights && <Sparkles size={12} className="shrink-0" style={{ color: "var(--primary)" }} />}</span>}
+      : <span className="grid size-5 shrink-0 place-items-center" style={{ color: "var(--muted)" }}><CategoryIcon size={15} /></span>}<span className="truncate">{item.name}</span>{ai.hasHighlights && <Sparkles size={12} className="shrink-0" style={{ color: "var(--primary)" }} />}</span>}
     meta={`${item.location?.name || "未设置位置"} · ${item.category}${ai.summary ? ` · ${ai.summary}` : ai.storage ? ` · ${ai.storage}` : ""}`}
     trailing={<span className="flex shrink-0 items-center gap-1.5">
       <span className="text-right text-sm font-black">{item.quantity}<span className="ml-1 text-xs font-normal muted">{item.unit}</span></span>

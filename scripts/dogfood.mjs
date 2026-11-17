@@ -76,6 +76,15 @@ const collect = () =>
         const r = el.getBoundingClientRect();
         const tag = el.tagName.toLowerCase();
         if (el.closest("nav") && tag !== "input") continue; // bottom bar is intentionally generous
+        // 视觉隐藏的原生控件(sr-only 的 radio/checkbox)本身只有 1x1px,真正可点的是包裹它的
+        // label,直接判定会造成误报 —— 改为测量宿主 label 的可点面积。
+        const host = el.closest("label");
+        if (host && host !== el) {
+          const hr = host.getBoundingClientRect();
+          if (hr.width < 28 || hr.height < 28) out.smallTargets.push({ detail: label(host), w: Math.round(hr.width), h: Math.round(hr.height), tag: "label" });
+          continue;
+        }
+        if (r.width <= 2 && r.height <= 2) continue; // 无宿主的纯装饰性隐藏控件
         if (r.width < 28 || r.height < 28) {
           out.smallTargets.push({ detail: label(el), w: Math.round(r.width), h: Math.round(r.height), tag });
         }

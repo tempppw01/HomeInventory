@@ -85,9 +85,9 @@ export function AppChrome({ children }: { children?: React.ReactNode }) {
           <div className="desktop-only max-w-md flex-1">
             <SearchBox items={data?.items ?? []} value={search} onChange={setSearch} onSelect={(item: Item) => { setSearch(item.name); openView("items"); }} onFocus={() => openView("items")} placeholder="搜索名称、编号、分类或位置..." />
           </div>
-          <button onClick={cycleTheme} className="btn-ghost grid size-10 min-h-10 place-items-center p-0 md:size-9 md:min-h-9" aria-label={`当前主题:${theme === "system" ? "跟随系统" : theme === "light" ? "浅色" : "深色"}`} title="切换主题">{theme === "system" ? <Monitor size={18} /> : theme === "light" ? <Sun size={18} /> : <Moon size={18} />}</button>
-          <button onClick={() => setModal("notifications")} className="btn-ghost relative grid size-10 min-h-10 place-items-center p-0 md:size-9 md:min-h-9" aria-label="查看提醒"><Bell size={18} />{lowStock.length + expiring.length + expired.length > 0 && <span className="absolute right-1.5 top-1.5 size-2 rounded-full" style={{ background: "var(--danger)" }} />}</button>
-          <button onClick={() => setChatOpen(true)} className="btn-ghost flex size-10 min-h-10 items-center justify-center gap-2 whitespace-nowrap p-0 md:h-9 md:w-auto md:px-3 md:min-h-9" aria-label="打开归物助手" title="归物助手"><Bot size={18} /><span className="hidden min-[1100px]:inline">AI 助手</span></button>{!readOnly && <button onClick={() => setModal("item")} aria-label="录入物品" title="录入物品" className="btn-primary flex h-10 min-h-10 items-center gap-1.5 whitespace-nowrap py-0 px-3 md:h-9 md:px-3 md:min-h-9"><Plus size={18} /><span className="hidden min-[1100px]:inline">录入物品</span></button>}
+          <button onClick={cycleTheme} className="btn-ghost grid size-11 min-h-11 place-items-center p-0 md:size-10 md:min-h-10" aria-label={`当前主题:${theme === "system" ? "跟随系统" : theme === "light" ? "浅色" : "深色"}`} title="切换主题">{theme === "system" ? <Monitor size={18} /> : theme === "light" ? <Sun size={18} /> : <Moon size={18} />}</button>
+          <button onClick={() => setModal("notifications")} className="btn-ghost relative grid size-11 min-h-11 place-items-center p-0 md:size-10 md:min-h-10" aria-label="查看提醒"><Bell size={18} />{lowStock.length + expiring.length + expired.length > 0 && <span className="absolute right-1.5 top-1.5 size-2 rounded-full" style={{ background: "var(--danger)" }} />}</button>
+          <button onClick={() => setChatOpen(true)} className="btn-ghost flex size-11 min-h-11 items-center justify-center gap-2 whitespace-nowrap p-0 md:h-10 md:w-auto md:min-h-10 md:px-3" aria-label="打开归物助手" title="归物助手"><Bot size={18} /><span className="hidden min-[1100px]:inline">AI 助手</span></button>{!readOnly && <button onClick={() => setModal("item")} aria-label="录入物品" title="录入物品" className="btn-primary flex h-11 min-h-11 items-center gap-1.5 whitespace-nowrap py-0 px-3 md:h-10 md:min-h-10 md:px-3"><Plus size={18} /><span className="hidden min-[1100px]:inline">录入物品</span></button>}
         </header>
 
         <AnimatePresence mode="wait">
@@ -109,7 +109,7 @@ export function AppChrome({ children }: { children?: React.ReactNode }) {
         </AnimatePresence>
       </PageShell>
 
-      <nav aria-label="移动端主导航" className="mobile-only mobile-bottom-nav fixed bottom-0 left-0 right-0 z-30 grid grid-cols-5 gap-1 border-t px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl" style={{ background: "color-mix(in srgb, var(--surface) 94%, transparent)", borderColor: "var(--border)" }}>
+      <nav aria-label="移动端主导航" className="mobile-only mobile-bottom-nav fixed bottom-0 left-0 right-0 z-30 grid grid-cols-5 gap-2 border-t px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl" style={{ background: "color-mix(in srgb, var(--surface) 94%, transparent)", borderColor: "var(--border)" }}>
         {mobileNavItems.map(({ id, label, icon: Icon }) => {
           const active = view === id;
           // 这里刻意保留 <button> + openView():验收套件用

@@ -2,7 +2,9 @@
 
 import {
   Archive, Bath, Boxes, ChevronRight, CookingPot, LayoutDashboard, MapPin, Package, Settings, Sofa, Warehouse, ClipboardCheck, ListTodo,
+  ShoppingBasket, Milk, SprayCan, Tv, Laptop, Shirt, Pill, Tent,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { createContext } from "react";
 import type { Item, ItemType, Location } from "@/types";
 import { usageDays } from "@/lib/item-metrics";
@@ -56,6 +58,21 @@ export const navItems = [
 export const mobileNavItems = [...navItems.filter((item) => item.id !== "audit"), { id: "settings" as View, label: "设置", icon: Settings }];
 
 export const iconMap = { Package, CookingPot, Sofa, Bath, Warehouse };
+
+// 分类图标:此前概览、物品卡、搜索浮层各自用 emoji 当缩略图,渲染尺寸和风格都不一致。
+// 统一交给 Lucide 图标(与全站图标语言一致),emoji 只保留给用户自定义内容。
+export const categoryIconMap: Record<string, LucideIcon> = {
+  日用: ShoppingBasket,
+  食品: CookingPot,
+  饮品: Milk,
+  清洁: SprayCan,
+  家电: Tv,
+  数码: Laptop,
+  衣物: Shirt,
+  医药: Pill,
+  户外: Tent,
+  其他: Package,
+};
 export const categories = ["日用", "食品", "饮品", "清洁", "家电", "数码", "衣物", "医药", ...MEDICINE_CATEGORIES, "户外", "其他"];
 export const units = ["件", "个", "盒", "瓶", "袋", "卷", "包", "台", "kg", "L", "ml"];
 export const commonItemTemplates = [

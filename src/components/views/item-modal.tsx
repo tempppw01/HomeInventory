@@ -204,8 +204,8 @@ export function ItemModal({ locations, allItems, item, onClose, onSaved }: { loc
         <label htmlFor="item-name" className="mb-1.5 block text-xs font-bold muted">物品名称 *</label>
         <input required id="item-name" maxLength={80} className="input" value={draft.name} onChange={(e) => set("name", e.target.value)} placeholder="拍照让 AI 识别,或直接输入名称" />
         <div className="mt-2 flex gap-2">
-          <button type="button" disabled={aiLoading || (!draft.name && !draft.imageUrl)} onClick={() => runAi("identify")} className="btn-ghost flex min-h-10 items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-40"><Sparkles size={14} />{aiLoading ? "分析中..." : "AI 补全"}</button>
-          {draft.type === "CONSUMABLE" && <button type="button" disabled={aiLoading || (!draft.name && !draft.imageUrl)} onClick={() => runAi("shelf_life")} className="btn-ghost flex min-h-10 items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-40"><Bot size={14} />分析保质期</button>}
+          <button type="button" disabled={aiLoading || (!draft.name && !draft.imageUrl)} onClick={() => runAi("identify")} className="btn-ghost flex min-h-11 items-center md:min-h-10 gap-1.5 px-3 py-1.5 text-xs disabled:opacity-40"><Sparkles size={14} />{aiLoading ? "分析中..." : "AI 补全"}</button>
+          {draft.type === "CONSUMABLE" && <button type="button" disabled={aiLoading || (!draft.name && !draft.imageUrl)} onClick={() => runAi("shelf_life")} className="btn-ghost flex min-h-11 items-center md:min-h-10 gap-1.5 px-3 py-1.5 text-xs disabled:opacity-40"><Bot size={14} />分析保质期</button>}
         </div>
       </div>
     </div>
@@ -263,9 +263,9 @@ export function ItemModal({ locations, allItems, item, onClose, onSaved }: { loc
       )}
       <AccordionRow label="图片" summary={draft.imageUrl ? "已添加" : "未添加"} open={imageOpen} onToggle={() => setImageOpen((open) => !open)}><div className="px-3">
         <div className="mb-2 flex items-center gap-1">
-          <button type="button" onClick={() => setImageMode("upload")} className="flex min-h-10 items-center gap-1.5 border-b-2 px-2 text-xs font-bold transition" style={{ borderColor: imageMode === "upload" ? "var(--primary)" : "transparent", color: imageMode === "upload" ? "var(--primary)" : "var(--muted)" }}><Upload size={14} />上传</button>
-          <button type="button" onClick={() => setImageMode("link")} className="flex min-h-10 items-center gap-1.5 border-b-2 px-2 text-xs font-bold transition" style={{ borderColor: imageMode === "link" ? "var(--primary)" : "transparent", color: imageMode === "link" ? "var(--primary)" : "var(--muted)" }}><Link2 size={14} />链接</button>
-          {draft.imageUrl && <button type="button" onClick={() => { set("imageUrl", ""); setImageUrlDraft(""); }} className="ml-auto min-h-10 text-xs font-bold" style={{ color: "var(--danger)" }}>移除图片</button>}
+          <button type="button" onClick={() => setImageMode("upload")} className="flex min-h-11 items-center md:min-h-10 gap-1.5 border-b-2 px-2 text-xs font-bold transition" style={{ borderColor: imageMode === "upload" ? "var(--primary)" : "transparent", color: imageMode === "upload" ? "var(--primary)" : "var(--muted)" }}><Upload size={14} />上传</button>
+          <button type="button" onClick={() => setImageMode("link")} className="flex min-h-11 items-center md:min-h-10 gap-1.5 border-b-2 px-2 text-xs font-bold transition" style={{ borderColor: imageMode === "link" ? "var(--primary)" : "transparent", color: imageMode === "link" ? "var(--primary)" : "var(--muted)" }}><Link2 size={14} />链接</button>
+          {draft.imageUrl && <button type="button" onClick={() => { set("imageUrl", ""); setImageUrlDraft(""); }} className="ml-auto min-h-11 text-xs font-bold" style={{ color: "var(--danger)" }}>移除图片</button>}
         </div>
         {imageMode === "upload" ? (
           <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl px-2 text-sm font-bold" style={{ background: "var(--surface-soft)" }}>

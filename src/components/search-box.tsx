@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { Search, ChevronRight } from "lucide-react";
+import { Search, ChevronRight, Package } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import type { Item } from "@/types";
 import { SearchHistory, saveSearchHistory, clearSearchHistory } from "./search-history";
@@ -151,7 +151,7 @@ export function SearchBox({
                         : { background: "var(--surface-soft)" }
                     }
                   >
-                    {!item.imageUrl && "📦"}
+                    {!item.imageUrl && <Package size={18} className="muted" />}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-bold">{item.name}</div>

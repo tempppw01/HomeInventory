@@ -134,15 +134,15 @@
   --surface-solid: #fffdf9;
   --surface-soft: #f1e9dd;
   --foreground: #2a231d;
-  --muted: #7c6f62;
+  --muted: #6f6255;
   --border: rgba(84, 62, 40, 0.13);
-  --primary: #b4552f;
+  --primary: #a44a26;
   --on-primary: #ffffff;
   --primary-strong: #8f3f21;
   --primary-soft: #f8e5d8;
-  --success: #3f7a5a;
+  --success: #3a7153;
   --success-soft: #e4efe7;
-  --warning: #a86f1e;
+  --warning: #8f5c14;
   --warning-soft: #f9eed9;
   --danger: #b4443f;
   --shadow: 0 14px 34px rgba(74, 50, 30, 0.07);
@@ -154,6 +154,8 @@
   --shadow-primary: 0 1px 2px color-mix(in srgb, var(--primary) 24%, transparent), 0 12px 24px -14px color-mix(in srgb, var(--primary) 58%, transparent);
   --shadow-primary-hover: 0 2px 5px color-mix(in srgb, var(--primary) 26%, transparent), 0 18px 30px -14px color-mix(in srgb, var(--primary) 70%, transparent);
   --hairline: color-mix(in srgb, var(--border) 78%, transparent);
+  /* 表单控件边界:与卡片面 ≥3:1,满足 WCAG 1.4.11;装饰性发丝线仍用 --hairline。 */
+  --control-border: color-mix(in srgb, var(--foreground) 50%, var(--surface-solid));
   --ring-color: color-mix(in srgb, var(--primary) 92%, transparent);
   --selection-bg: color-mix(in srgb, var(--primary) 22%, transparent);
   --brand-accent: #b5793a;
@@ -187,6 +189,7 @@
   --shadow-lg: 0 10px 26px rgba(0, 0, 0, 0.36);
   --shadow-lift-1: 0 1px 2px rgba(0, 0, 0, 0.36);
   --shadow-lift-2: 0 18px 32px -18px rgba(0, 0, 0, 0.66);
+  --control-border: color-mix(in srgb, var(--foreground) 42%, var(--surface-solid));
   --shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.07);
   --brand-accent: #e0a878;
   --brand-sage: #8fb9a3;
@@ -224,6 +227,7 @@
   --shadow-lg: 0 10px 26px rgba(0, 0, 0, 0.36);
   --shadow-lift-1: 0 1px 2px rgba(0, 0, 0, 0.36);
   --shadow-lift-2: 0 18px 32px -18px rgba(0, 0, 0, 0.66);
+  --control-border: color-mix(in srgb, var(--foreground) 42%, var(--surface-solid));
   --shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.07);
   --brand-accent: #e0a878;
   --brand-sage: #8fb9a3;
@@ -301,7 +305,7 @@ button:disabled, input:disabled, select:disabled, textarea:disabled, [aria-disab
 .ds-card-padding-comfortable { padding: var(--space-6); }
 .muted { color: var(--muted); }
 .input, .ds-field {
-  width: 100%; border: 1px solid var(--border); background: var(--surface-soft); color: var(--foreground);
+  width: 100%; border: 1px solid var(--control-border); background: var(--surface-soft); color: var(--foreground);
   min-height: var(--control-height); border-radius: var(--field-radius); padding: var(--field-padding-y) var(--field-padding-x); outline: none; line-height: var(--leading-control); transition: border-color var(--motion-base) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard), background-color var(--motion-base) var(--ease-standard);
 }
 code, pre, kbd, .font-mono, .font-code { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
@@ -558,9 +562,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     resize: none;
   }
   .browse-layout { display: block; }
-  .browse-rail { position: static; flex-direction: row; gap: .4rem; margin: 0 -1rem 1rem; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--hairline); padding: 0 1rem .7rem; scrollbar-width: none; }
+  .browse-rail { position: static; flex-direction: row; gap: .5rem; margin: 0 -1rem 1rem; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--hairline); padding: 0 1rem .7rem; scrollbar-width: none; }
   .browse-rail::-webkit-scrollbar { display: none; }
-  .browse-rail-item { flex: 0 0 auto; min-height: 2.25rem; padding: .45rem .7rem; border: 1px solid transparent; font-size: .8125rem; white-space: nowrap; }
+  .browse-rail-item { flex: 0 0 auto; min-height: 2.75rem; padding: .45rem .7rem; border: 1px solid transparent; font-size: .8125rem; white-space: nowrap; }
+  /* 移动端图标按钮抬到 44px 触控底线(桌面仍是 40px)。 */
+  .icon-action, .ds-icon-button { width: 2.75rem; height: 2.75rem; min-width: 2.75rem; min-height: 2.75rem; }
   .browse-rail-item[data-active="true"] { border-color: color-mix(in srgb, var(--primary) 22%, var(--border)); }
   }
 }

@@ -2,9 +2,11 @@
 
 import { motion } from "motion/react";
 import {
-  Check, CheckSquare, ChevronDown, ImagePlus, Minus, MoreHorizontal, Plus, Printer, QrCode, Search, ShoppingBasket, Sparkles, Copy, Pencil, Trash2, X,
+  Check, CheckSquare, ChevronDown, ImagePlus, Minus, MoreHorizontal, Pill, Plus, Printer, QrCode, Search, ShoppingBasket, Sparkles, Copy, Pencil, Trash2, X,
+  Package,
 } from "lucide-react";
 import { useContext, useState } from "react";
+import { categoryIconMap } from "@/components/shared";
 import type { Item, Location, ShoppingItem } from "@/types";
 import { SearchBox } from "@/components/search-box";
 import { BatchEditModal } from "@/components/batch-edit-modal";
@@ -65,7 +67,7 @@ export function ItemsView({ allItems, locations, items, shopping, search, setSea
     >
       <Toolbar>
         <div className="min-w-0 flex-1 md:hidden"><SearchBox items={allItems} value={search} onChange={setSearch} onSelect={(item) => setSearch(item.name)} placeholder="搜索名称或物品编号..." /></div>
-        <div className="hidden min-w-0 items-center gap-1.5 md:flex">{typeChips}</div>
+        <div className="hidden min-w-0 items-center gap-2 md:flex">{typeChips}</div>
         <span className="hidden shrink-0 text-xs tabular-nums muted md:inline">{items.length} 件</span>
         <div className="flex shrink-0 items-center gap-2 md:ml-auto">
           {selectMode
@@ -87,7 +89,7 @@ export function ItemsView({ allItems, locations, items, shopping, search, setSea
 
       <div className="browse-layout">
         <nav className="browse-rail" aria-label="物品分类">
-          <div className="flex shrink-0 items-center gap-1.5 md:hidden">{typeChips}</div>
+          <div className="flex shrink-0 items-center gap-2 md:hidden">{typeChips}</div>
           <span className="h-5 w-px shrink-0 md:hidden" style={{ background: "var(--border)" }} />
           {categoryButtons}
         </nav>
@@ -118,7 +120,7 @@ export function ItemsView({ allItems, locations, items, shopping, search, setSea
 
 export function ItemCard({ item, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onRemainingChange, onDelete, onQr, onAi, onCopy, onSelect, selected = false, showSelect = false, compact = false }: { item: Item; onEdit: () => void; onOpenDetail?: () => void; onImageUpload?: (file: File) => void; onDuplicate?: () => void; onConsume: () => void; onRemainingChange?: (remainingPercent: number) => void; onDelete?: () => void; onQr: () => void; onAi: () => void; onCopy?: () => void; onSelect?: () => void; selected?: boolean; showSelect?: boolean; compact?: boolean }) {
   const low = item.type === "CONSUMABLE" && ((item.minQuantity > 0 && item.quantity <= item.minQuantity) || (isLiquidConsumable(item) && item.remainingPercent <= 20));
-  const emoji = isMedicineCategory(item.category) ? "💊" : ({ 食品: "🍚", 饮品: "🥛", 清洁: "🧴", 家电: "📺", 数码: "💻", 衣物: "👕", 户外: "⛺" } as Record<string, string>)[item.category] || "📦";
+  const CategoryIcon = isMedicineCategory(item.category) ? Pill : (categoryIconMap[item.category] || Package);
   const readOnly = useContext(ReadOnlyContext);
   const ai = itemAiHighlights(item);
   const isMedicine = isMedicineCategory(item.category);
@@ -135,7 +137,7 @@ export function ItemCard({ item, onEdit, onOpenDetail, onImageUpload, onDuplicat
   return <><div onContextMenu={context.onContextMenu} className="h-full min-w-0">
     <Panel padded={false} className={`group relative flex h-full min-w-0 flex-col overflow-hidden transition-transform duration-200 active:scale-[.99] ${compact ? "p-3" : "p-3.5"} ${selected ? "shadow-[inset_0_0_0_2px_var(--primary)]" : "hover:-translate-y-0.5"}`}>
       <div className="flex min-w-0 flex-1 items-start gap-3">
-        <label className={`${compact ? "size-11 text-lg" : "size-12 text-xl"} relative grid shrink-0 cursor-pointer place-items-center rounded-2xl bg-cover bg-center`} style={item.imageUrl ? { backgroundImage: `url(${item.imageUrl})` } : { background: "var(--surface-soft)" }} title="点击上传物品照片">{!item.imageUrl && emoji}{onImageUpload && <><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) onImageUpload(file); event.currentTarget.value = ""; }} /><span className="pointer-events-none absolute inset-0 grid place-items-center rounded-2xl bg-black/35 text-white opacity-0 transition group-hover:opacity-100"><ImagePlus size={16} /></span></>}</label>
+        <label className={`${compact ? "size-11 text-lg" : "size-12 text-xl"} relative grid shrink-0 cursor-pointer place-items-center rounded-2xl bg-cover bg-center`} style={item.imageUrl ? { backgroundImage: `url(${item.imageUrl})` } : { background: "var(--surface-soft)", color: "var(--muted)" }} title="点击上传物品照片">{!item.imageUrl && <CategoryIcon size={compact ? 18 : 20} />}{onImageUpload && <><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) onImageUpload(file); event.currentTarget.value = ""; }} /><span className="pointer-events-none absolute inset-0 grid place-items-center rounded-2xl bg-black/35 text-white opacity-0 transition group-hover:opacity-100"><ImagePlus size={16} /></span></>}</label>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2 pr-8">
             <button type="button" onClick={onOpenDetail} className="flex min-h-11 min-w-0 flex-1 items-center text-left md:min-h-10"><span className="min-w-0 truncate text-sm font-extrabold hover:underline">{item.name}</span></button>
