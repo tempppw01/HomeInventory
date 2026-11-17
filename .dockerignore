@@ -10,3 +10,11 @@ data
 *.log
 .env*
 !.env.example
+output
+docs
+*.png
+scripts/*-test.mjs
+scripts/probe-*.mjs
+scripts/_*-probe.mjs
+IMPROVEMENTS.md
+*.bak

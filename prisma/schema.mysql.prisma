@@ -1,5 +1,7 @@
 generator client {
   provider = "prisma-client-js"
+  // 只生成构建机(容器内 alpine)对应的引擎,避免把全平台二进制打进镜像。
+  binaryTargets = ["native"]
 }
 
 datasource db {
