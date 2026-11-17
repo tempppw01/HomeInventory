@@ -23,6 +23,24 @@ const check = (name, ok, detail) => {
 };
 
 const PREFIX = "ENT2-";
+const settleDialogs = async (page, attempts = 12) => {
+  let calm = 0;
+  for (let index = 0; index < attempts; index += 1) {
+    const count = await page.locator('[role="dialog"][aria-modal="true"]:visible').count();
+    if (count === 0) {
+      calm += 1;
+      if (calm >= 2) return true;
+      await page.waitForTimeout(450);
+      continue;
+    }
+    calm = 0;
+    const skip = page.locator('[aria-label="暂时跳过欢迎引导"]:visible');
+    if (await skip.count()) await skip.first().click({ timeout: 3000 }).catch(() => {});
+    else await page.keyboard.press("Escape").catch(() => {});
+    await page.waitForTimeout(450);
+  }
+  return false;
+};
 const login = async (page) => {
   await page.goto(BASE, { waitUntil: "domcontentloaded" });
   await page.waitForSelector("#auth-username", { timeout: 20000 });
@@ -30,10 +48,9 @@ const login = async (page) => {
   await page.fill("#auth-password", PASS);
   await page.click('button[type="submit"]');
   await page.waitForSelector('[aria-label="概览"]', { timeout: 20000 });
-  const skip = page.locator('[aria-label="暂时跳过欢迎引导"]');
-  await skip.first().waitFor({ state: "visible", timeout: 3000 }).catch(() => {});
-  if (await skip.count()) { await skip.first().click().catch(() => {}); await page.waitForTimeout(700); }
-  await page.waitForFunction(() => document.querySelectorAll("[role=dialog][aria-modal=true]").length === 0, null, { timeout: 4000 }).catch(() => {});
+  // 欢迎引导与到期提醒都是「数据加载完」之后才弹的,所以要等它稳定下来。
+  await page.waitForTimeout(600);
+  await settleDialogs(page);
 };
 
 const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
@@ -498,7 +515,8 @@ await page.evaluate(() => { document.querySelectorAll("main details").forEach((n
 await page.waitForTimeout(700);
 const settingsExpanded = await page.evaluate(() => {
   const main = document.querySelector("main");
-  const rows = [...main.querySelectorAll("details > div > div")].filter((node) => node.getBoundingClientRect().height > 0);
+  // 用显式标记选中「设置行」,不再用 details > div > div(那会把内部包装层也算进来)。
+  const rows = [...main.querySelectorAll("[data-settings-row]")].filter((node) => node.getBoundingClientRect().height > 0);
   const controls = [...main.querySelectorAll("button, select, input, textarea, [role=switch]")].filter((node) => node.offsetParent !== null && !node.closest("header"));
   return {
     rowHeights: [...new Set(rows.map((node) => Math.round(node.getBoundingClientRect().height)))].sort((a, b) => a - b),

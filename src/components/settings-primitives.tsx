@@ -59,7 +59,8 @@ export function SettingsRow({ icon: Icon, title, description, control, stacked =
   return (
     <div
       onClick={onActivate ? activate : undefined}
-      className={`flex gap-3 border-t py-3 first:border-t-0 first:pt-0 ${stacked ? "flex-col items-stretch" : "min-h-14 items-center"} ${onActivate ? "cursor-pointer" : ""}`}
+      data-settings-row
+      className={`flex min-h-14 gap-3 border-t py-3 first:border-t-0 first:pt-0 ${stacked ? "flex-col items-stretch justify-center" : "items-center"} ${onActivate ? "cursor-pointer" : ""}`}
       style={{ borderColor: "var(--hairline)" }}
     >
       <div className={`flex min-w-0 flex-1 items-center gap-3 ${stacked ? "" : ""}`}>
