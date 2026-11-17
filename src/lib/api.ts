@@ -14,6 +14,17 @@ export async function requireAdminUser() {
   return user;
 }
 
+// Prisma 的错误码在这里统一翻译成 HTTP 语义。此前只映射了 401/403/400,
+// 于是「更新不存在的记录」「唯一约束冲突」「请求体不是合法 JSON」都落到 500,
+// 前端只能显示「服务器开小差了」,问题也被掩盖。
+function prismaCode(error: unknown): string | null {
+  if (typeof error === "object" && error !== null && "code" in error) {
+    const code = (error as { code?: unknown }).code;
+    if (typeof code === "string" && /^P\d{4}$/.test(code)) return code;
+  }
+  return null;
+}
+
 export function apiError(error: unknown) {
   console.error(error);
   if (error instanceof Error && error.message === "UNAUTHORIZED") {
@@ -28,5 +39,19 @@ export function apiError(error: unknown) {
       { status: 400 },
     );
   }
-  return NextResponse.json({ error: "服务器暂时开小差了，请稍后重试" }, { status: 500 });
+  // 请求体不是合法 JSON(客户端直接 fetch 半截字符串时会发生)。
+  if (error instanceof SyntaxError) {
+    return NextResponse.json({ error: "请求内容不是合法的 JSON" }, { status: 400 });
+  }
+  const code = prismaCode(error);
+  if (code === "P2025") {
+    return NextResponse.json({ error: "找不到这条记录,可能已被删除" }, { status: 404 });
+  }
+  if (code === "P2002") {
+    return NextResponse.json({ error: "已存在同名或重复的记录" }, { status: 409 });
+  }
+  if (code === "P2003" || code === "P2014") {
+    return NextResponse.json({ error: "这条记录还在被其它数据引用,请先解除关联" }, { status: 409 });
+  }
+  return NextResponse.json({ error: "服务器暂时开小差了,请稍后重试" }, { status: 500 });
 }
