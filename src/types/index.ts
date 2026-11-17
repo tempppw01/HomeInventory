@@ -88,4 +88,6 @@ export interface DashboardData {
   consumption: { itemName: string; count: number; lastUsedAt: string }[];
   preferences?: { expiryReminderDays: number; lowStockReminder: boolean; weeklyReviewEnabled: boolean; weeklyReviewDay: number };
   tasks: HouseholdTask[];
+  /** AI 未配置时前端把 AI 按钮换成「去设置」引导,而不是让用户点了才看到报错。 */
+  aiAvailable?: boolean;
 }

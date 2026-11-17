@@ -371,7 +371,7 @@ function useAppState() {
   }, []);
 
   return {
-    data, loading, refresh, ensureFresh,
+    data, loading, refresh, ensureFresh, aiAvailable: data?.aiAvailable ?? false,
     view, pathname, openView, beginNavigation,
     search, setSearch, typeFilter, categoryFilter, changeTypeFilter, changeCategoryFilter, filteredItems,
     readOnly, role, lowStock, pendingShopping, tasks, expiring, expired, totalValue, now,

@@ -40,7 +40,7 @@ export function AppChrome({ children }: { children?: React.ReactNode }) {
   const {
     data, loading, refresh, view, openView, beginNavigation, search, setSearch,
     typeFilter, categoryFilter, changeTypeFilter, changeCategoryFilter, filteredItems,
-    readOnly, lowStock, pendingShopping, tasks, expiring, expired, totalValue, now,
+    readOnly, role, aiAvailable, lowStock, pendingShopping, tasks, expiring, expired, totalValue, now,
     theme, cycleTheme, setThemeMode, density, motionMode, setDensity, setMotionMode,
     sidebarCollapsed, toggleSidebar, modal, setModal, editing, editingLocation, setEditingLocation, closeModal,
     qrItem, setQrItem, aiItem, setAiItem, printItems, setPrintItems, chatOpen, setChatOpen,
@@ -97,7 +97,7 @@ export function AppChrome({ children }: { children?: React.ReactNode }) {
             {loading ? <LoadingView /> : view === "dashboard" ? (
               <DashboardView data={{ ...data!, items: data!.items.filter((item) => item.quantity > 0) }} now={now} lowStock={lowStock} expiring={expiring} expired={expired} pending={pendingShopping} totalValue={totalValue} onNavigate={openView} onEdit={openEdit} onOpenDetail={openDetail} onImageUpload={uploadItemImage} onDuplicate={duplicateItem} onConsume={consume} onDelete={removeItem} onAddRestock={addRestockSuggestion} onQr={setQrItem} onAi={setAiItem} onAlerts={() => setModal("notifications")} onCreate={() => setModal("item")} />
             ) : view === "items" ? (
-              <ItemsView allItems={data!.items.filter((item) => item.quantity > 0)} locations={data!.locations} items={filteredItems} shopping={data!.shopping} search={search} setSearch={setSearch} filter={typeFilter} setFilter={changeTypeFilter} categoryFilter={categoryFilter} setCategoryFilter={changeCategoryFilter} onEdit={openEdit} onOpenDetail={openDetail} onImageUpload={uploadItemImage} onDuplicate={duplicateItem} onConsume={consume} onRemainingChange={updateRemaining} onDelete={removeItem} onQr={setQrItem} onAi={setAiItem} onPrint={setPrintItems} onToast={setToast} onCopy={(item) => copyText(item.itemCode || item.id, "物品编号已复制")} onToggleShopping={toggleShopping} onFavoriteShopping={toggleFavoriteShopping} onAddShopping={() => setModal("shopping")} onBatchAi={() => setModal("batch-ai")} onDeleteShopping={removeShopping} />
+              <ItemsView allItems={data!.items.filter((item) => item.quantity > 0)} locations={data!.locations} items={filteredItems} shopping={data!.shopping} search={search} setSearch={setSearch} filter={typeFilter} setFilter={changeTypeFilter} categoryFilter={categoryFilter} setCategoryFilter={changeCategoryFilter} onEdit={openEdit} onOpenDetail={openDetail} onImageUpload={uploadItemImage} onDuplicate={duplicateItem} onConsume={consume} onRemainingChange={updateRemaining} onDelete={removeItem} onQr={setQrItem} onAi={setAiItem} onPrint={setPrintItems} onToast={setToast} onCopy={(item) => copyText(item.itemCode || item.id, "物品编号已复制")} onToggleShopping={toggleShopping} onFavoriteShopping={toggleFavoriteShopping} onAddShopping={() => setModal("shopping")} onBatchAi={() => { if (!aiAvailable) { setToast(role === "ADMIN" ? "AI 还没配置,先到设置里填好 API Key 再批量识别" : "AI 还没配置,请联系管理员在设置里配置"); if (role === "ADMIN") openView("settings"); return; } setModal("batch-ai"); }} onDeleteShopping={removeShopping} />
             ) : view === "locations" ? (
               <LocationsView locations={data!.locations} items={data!.items} onAdd={() => { setEditingLocation(null); setModal("location"); }} onOpen={(name) => { setSearch(name); openView("items"); }} onEdit={(location) => { setEditingLocation(location); setModal("location"); }} onToast={setToast} onRefresh={refresh} />
             ) : view === "audit" ? (
@@ -122,7 +122,7 @@ export function AppChrome({ children }: { children?: React.ReactNode }) {
       </nav>
 
       <AnimatePresence>
-        {modal === "item" && <ItemModal locations={data?.locations ?? []} allItems={data?.items ?? []} item={editing} onClose={closeModal} onSaved={async () => { closeModal(); setToast(editing ? "物品已更新" : "物品已录入"); await refresh(); }} />}
+        {modal === "item" && <ItemModal locations={data?.locations ?? []} allItems={data?.items ?? []} item={editing} aiAvailable={aiAvailable} canConfigureAi={!readOnly && role === "ADMIN"} onConfigureAi={() => { closeModal(); openView("settings"); }} onClose={closeModal} onSaved={async () => { closeModal(); setToast(editing ? "物品已更新" : "物品已录入"); await refresh(); }} />}
         {modal === "shopping" && <ShoppingModal onClose={closeModal} onSaved={async () => { closeModal(); setToast("已加入采购清单"); await refresh(); }} />}
         {modal === "task" && <TaskModal onClose={closeModal} onSaved={async () => { closeModal(); setToast("任务已安排"); await refresh(); }} />}
         {modal === "location" && <LocationModal location={editingLocation} locations={data?.locations ?? []} onClose={closeModal} onSaved={async () => { const wasEditing = Boolean(editingLocation); closeModal(); setToast(wasEditing ? "空间已更新" : "新空间已创建"); await refresh(); }} />}

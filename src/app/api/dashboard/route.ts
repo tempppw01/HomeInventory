@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/api";
 import { requireUser } from "@/lib/account-auth";
+import { getAiConfig } from "@/lib/ai";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,8 @@ export async function GET() {
       shopping,
       finance: { currentMonthTotal, averageMonthly: sixMonthTotal / 6, recordCount: priceRecords.length, recent: priceRecords.slice(0, 5), byCategory: [...categoryTotals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([category, total]) => ({ category, total })) },
       consumption: [...consumption.values()].sort((a, b) => b.count - a.count).slice(0, 5),
+      // AI 未配置时前端把按钮换成「去设置」引导,而不是让用户点了才看到报错。
+      aiAvailable: Boolean(await getAiConfig()),
       preferences: { expiryReminderDays: preferences.expiryReminderDays, lowStockReminder: preferences.lowStockReminder, weeklyReviewEnabled: preferences.weeklyReviewEnabled, weeklyReviewDay: preferences.weeklyReviewDay },
       tasks,
     });

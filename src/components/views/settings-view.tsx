@@ -1,8 +1,6 @@
 "use client";
 
-import {
-  Cloud, Grid2X2, Info, Monitor, Trash2, ClipboardCheck,
-} from "lucide-react";
+import { Cloud, Grid2X2, Info, Monitor } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { AiSettings } from "@/components/ai-settings";
 import { DataTools } from "@/components/data-tools";
@@ -18,7 +16,8 @@ import { ThemeMode, request } from "../shared";
 export function SettingsView({ onToast, onAbout, onAudit, onRecycle, theme, onThemeChange, density, motionMode, onDensityChange, onMotionChange }: { onToast: (message: string) => void; onAbout: () => void; onAudit: () => void; onRecycle: () => void; theme: ThemeMode; onThemeChange: (value: ThemeMode) => void; density: "comfortable" | "compact"; motionMode: "standard" | "reduced"; onDensityChange: (value: "comfortable" | "compact") => void; onMotionChange: (value: "standard" | "reduced") => void }) {
   const [database, setDatabase] = useState<{ databaseLabel: string; storageMode: string } | null>(null);
   useEffect(() => { let active = true; request<{ databaseLabel: string; storageMode: string }>("/api/system/info").then((result) => { if (active) setDatabase(result); }).catch(() => undefined); return () => { active = false; }; }, []);
-  return <Screen title="设置" description="按类别展开需要修改的设置,不常用的选项默认收起。" actions={<div className="flex items-center gap-2"><button onClick={onAudit} className="btn-ghost grid size-11 min-h-11 shrink-0 place-items-center gap-2 p-0 px-0 sm:flex sm:w-auto sm:px-4" aria-label="进入家庭盘点" title="家庭盘点"><ClipboardCheck size={16} /><span className="hidden sm:inline">盘点</span></button><button onClick={onRecycle} className="btn-ghost grid size-11 min-h-11 shrink-0 place-items-center gap-2 p-0 px-0 sm:flex sm:w-auto sm:px-4" aria-label="打开回收站" title="回收站"><Trash2 size={16} /><span className="hidden sm:inline">回收站</span></button></div>}><div className="grid max-w-6xl items-start gap-4 sm:gap-5 lg:grid-cols-2 xl:gap-6">
+  return <Screen title="设置" description="按类别展开需要修改的设置,不常用的选项默认收起。">
+    <div className="grid max-w-6xl items-start gap-4 sm:gap-5 lg:grid-cols-2 xl:gap-6">
     <AccountSettings onToast={onToast} />
     <AiSettings onToast={onToast} />
     <SettingsSection icon={Monitor} title="显示偏好" summary={[theme === "system" ? "跟随系统" : theme === "light" ? "日间模式" : "夜间模式", density === "compact" ? "紧凑" : "舒适", motionMode === "reduced" ? "减少动效" : "标准动效"].join(" · ")}>

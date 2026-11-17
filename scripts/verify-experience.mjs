@@ -267,17 +267,24 @@ const openDialog = () => document.querySelectorAll('[role="dialog"][aria-modal="
   check("采购项删除使用应用内确认框", confirms.every((entry) => entry.includes("in-app")), confirms.join(", "));
   check("不再弹出浏览器原生 confirm", nativeCount() === 0, `nativeDialogs=${nativeCount()}`);
 
-  // 7. batch AI import must have an entry point (desktop P2-15)
+  // 7. 批量 AI 导入入口必须可达;AI 未配置时应给引导而不是打开空弹窗(新的门控语义)
   const batchButton = page.locator('button[aria-label="AI 批量识别物品"]:visible').first();
+  const batchEntry = await batchButton.count();
   let batchDialog = 0;
-  if (await batchButton.count()) {
+  let batchHint = "";
+  if (batchEntry) {
     await batchButton.click();
     await page.waitForTimeout(1000);
     batchDialog = await page.locator('[role="dialog"][aria-label="AI 批量识别物品"]:visible').count();
+    // 未配置 AI 时点它会给出提示文案(「AI 还没配置…」),这是预期行为。
+    batchHint = await page.evaluate(() => document.body.innerText.includes("AI 还没配置") ? "hint" : "");
     await page.keyboard.press("Escape");
     await page.waitForTimeout(600);
   }
-  check("「批量识别」入口可达并打开弹窗", batchDialog === 1, `entry=${await batchButton.count()} dialog=${batchDialog}`);
+  check("「批量识别」入口可达", batchEntry === 1, `entry=${batchEntry}`);
+  check("批量识别入口:已配置 AI 时开弹窗,未配置时给提示",
+    batchDialog === 1 || batchHint === "hint",
+    `dialog=${batchDialog} hint=${batchHint || "(无)"} —— 两种都不满足说明按钮点了没反应`);
 
   // 8. batch edit clear-location sentinel (desktop P2-3)
   const selects = page.locator('[aria-label="选择物品"]:visible');

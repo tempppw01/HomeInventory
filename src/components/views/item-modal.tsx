@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { Bot, ChevronDown, ImagePlus, MapPin, Package, Plus, Sparkles, X, Link2, Upload } from "lucide-react";
+import { Bot, ChevronDown, ImagePlus, MapPin, Package, Sparkles, X, Link2, Upload } from "lucide-react";
 import {
   FormEvent, useEffect, useRef, useState,
 } from "react";
@@ -14,14 +14,14 @@ import {
 import { itemAiHighlights } from "@/lib/item-ai";
 import { isMedicineCategory, suggestMedicineCategory } from "@/lib/categories";
 import { Field } from "@/components/ui";
-import { Panel } from "@/components/ui-kit";
+
 import { useEscapeClose } from "@/lib/use-escape-close";
 import { useConfirm } from "@/components/confirm-dialog";
 import { DatePicker, DatePickerPreset } from "@/components/date-picker";
 import { guessItemType, ItemTypeGuess } from "@/lib/item-type-guess";
 import { ItemDraft, SavedItemTemplate, emptyDraft, compressImage, categories, units, itemTemplateStorageKey, dateInputValue, purchaseDatePresets, expiryDatePresets, purchaseAgeLabel, isMoneyInput, moneyValue, normalizedItemName, findCommonItemTemplate, request } from "../shared";
 import { Modal, ImageLightbox } from "./modals";
-export function ItemModal({ locations, allItems, item, onClose, onSaved }: { locations: Location[]; allItems: Item[]; item: Item | null; onClose: () => void; onSaved: () => void }) {
+export function ItemModal({ locations, allItems, item, onClose, onSaved, aiAvailable = true, canConfigureAi = false, onConfigureAi }: { locations: Location[]; allItems: Item[]; item: Item | null; onClose: () => void; onSaved: () => void; aiAvailable?: boolean; canConfigureAi?: boolean; onConfigureAi?: () => void }) {
   // A second click could still fire before the `saving` state renders, so the
   // guard is a ref: the first call wins and the duplicate returns immediately.
   const submittingRef = useRef(false);
@@ -204,8 +204,8 @@ export function ItemModal({ locations, allItems, item, onClose, onSaved }: { loc
         <label htmlFor="item-name" className="mb-1.5 block text-xs font-bold muted">物品名称 *</label>
         <input required id="item-name" maxLength={80} className="input" value={draft.name} onChange={(e) => set("name", e.target.value)} placeholder="拍照让 AI 识别,或直接输入名称" />
         <div className="mt-2 flex gap-2">
-          <button type="button" disabled={aiLoading || (!draft.name && !draft.imageUrl)} onClick={() => runAi("identify")} className="btn-ghost flex min-h-11 items-center md:min-h-10 gap-1.5 px-3 py-1.5 text-xs disabled:opacity-40"><Sparkles size={14} />{aiLoading ? "分析中..." : "AI 补全"}</button>
-          {draft.type === "CONSUMABLE" && <button type="button" disabled={aiLoading || (!draft.name && !draft.imageUrl)} onClick={() => runAi("shelf_life")} className="btn-ghost flex min-h-11 items-center md:min-h-10 gap-1.5 px-3 py-1.5 text-xs disabled:opacity-40"><Bot size={14} />分析保质期</button>}
+          {aiAvailable ? <><button type="button" disabled={aiLoading || (!draft.name && !draft.imageUrl)} onClick={() => runAi("identify")} className="btn-ghost flex min-h-11 items-center md:min-h-10 gap-1.5 px-3 py-1.5 text-xs disabled:opacity-40"><Sparkles size={14} />{aiLoading ? "分析中..." : "AI 补全"}</button>
+          {draft.type === "CONSUMABLE" && <button type="button" disabled={aiLoading || (!draft.name && !draft.imageUrl)} onClick={() => runAi("shelf_life")} className="btn-ghost flex min-h-11 items-center md:min-h-10 gap-1.5 px-3 py-1.5 text-xs disabled:opacity-40"><Bot size={14} />分析保质期</button>}</> : <button type="button" onClick={() => canConfigureAi && onConfigureAi?.()} className="btn-ghost flex min-h-11 items-center gap-1.5 px-3 py-1.5 text-xs md:min-h-10"><Sparkles size={14} />{canConfigureAi ? "配置 AI 后可用" : "AI 未配置"}</button>}
         </div>
       </div>
     </div>

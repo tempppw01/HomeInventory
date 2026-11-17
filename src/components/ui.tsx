@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, LabelHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, HTMLAttributes, LabelHTMLAttributes, ReactNode } from "react";
 
 type ButtonVariant = "primary" | "secondary" | "quiet";
 type ButtonSize = "default" | "sm" | "icon";
@@ -15,10 +15,6 @@ export function Button({ variant = "secondary", size = "default", danger = false
   return <button {...props} className={`${variantClass} ${sizeClass} ${danger ? "ds-button-danger" : ""} ${className}`.trim()} />;
 }
 
-export function Card({ as: Element = "section", padding = "default", className = "", ...props }: Omit<HTMLAttributes<HTMLElement>, "color"> & { as?: "section" | "article" | "div"; padding?: "none" | "compact" | "default" | "comfortable" }) {
-  return <Element {...props} className={`ds-card ds-card-padding-${padding} ${className}`.trim()} />;
-}
-
 type FieldProps = LabelHTMLAttributes<HTMLLabelElement> & {
   label: ReactNode;
   hint?: ReactNode;
@@ -28,11 +24,6 @@ type FieldProps = LabelHTMLAttributes<HTMLLabelElement> & {
 export function Field({ label, hint, children, className = "", ...props }: FieldProps) {
   return <label {...props} className={`ds-form-field ${className}`.trim()}><span className="ds-field-label">{label}</span>{children}{hint && <span className="ds-field-hint">{hint}</span>}</label>;
 }
-
-export function TextField(props: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={`ds-field ${props.className || ""}`.trim()} />;
-}
-
 export function Badge({ tone = "neutral", className = "", ...props }: HTMLAttributes<HTMLSpanElement> & { tone?: "neutral" | "primary" | "success" | "warning" | "danger" }) {
   return <span {...props} className={`ui-badge ${className}`.trim()} data-tone={tone} />;
 }

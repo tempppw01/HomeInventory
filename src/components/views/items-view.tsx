@@ -1,10 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
-import {
-  Check, CheckSquare, ChevronDown, ImagePlus, Minus, MoreHorizontal, Pill, Plus, Printer, QrCode, Search, ShoppingBasket, Sparkles, Copy, Pencil, Trash2, X,
-  Package,
-} from "lucide-react";
+import { Check, CheckSquare, ChevronDown, ImagePlus, Minus, MoreHorizontal, Pill, Printer, QrCode, Search, ShoppingBasket, Sparkles, Copy, Pencil, Trash2, X, Package } from "lucide-react";
 import { useContext, useState } from "react";
 import { categoryIconMap } from "@/components/shared";
 import type { Item, Location, ShoppingItem } from "@/types";
@@ -16,7 +13,7 @@ import { ContextMenu, useContextMenu, ContextMenuItem } from "@/components/conte
 import { isMedicineCategory, medicineCategoryLabel } from "@/lib/categories";
 import { Field } from "@/components/ui";
 import { useConfirm } from "@/components/confirm-dialog";
-import { Chip, Empty, ListRow, Metric, Panel, Screen, Toolbar } from "@/components/ui-kit";
+import { Chip, Empty, ListRow, Panel, Screen, Toolbar } from "@/components/ui-kit";
 import { ReadOnlyContext, ItemQuickFilter, expiryDays, expiryDateLabel, request } from "../shared";
 import { Modal } from "./modals";
 
@@ -132,7 +129,6 @@ export function ItemCard({ item, onEdit, onOpenDetail, onImageUpload, onDuplicat
   const expiring = expiry !== null && expiry > 0 && expiry <= 30;
   const context = useContextMenu();
   const contextItems: ContextMenuItem[] = [{ label: "编辑物品", icon: Pencil, onClick: onEdit, disabled: readOnly }, ...(onDuplicate ? [{ label: "复制为新物品", icon: Copy, onClick: onDuplicate, disabled: readOnly }] : []), ...(onCopy ? [{ label: "复制物品编号", icon: Copy, onClick: onCopy }] : []), { label: "显示二维码", icon: QrCode, onClick: onQr }, { label: isMedicine ? "AI 补全药品说明" : "AI 识别与建议", icon: Sparkles, onClick: onAi }];
-  if (!compact && item.type === "CONSUMABLE" && !isLiquidConsumable(item)) contextItems.push({ label: "用掉 1 个单位", icon: Minus, onClick: onConsume, disabled: readOnly, separatorBefore: true });
   if (onDelete) contextItems.push({ label: "移入回收站", icon: Trash2, onClick: onDelete, disabled: readOnly, danger: true, separatorBefore: true });
   return <><div onContextMenu={context.onContextMenu} className="h-full min-w-0">
     <Panel padded={false} className={`group relative flex h-full min-w-0 flex-col overflow-hidden transition-transform duration-200 active:scale-[.99] ${compact ? "p-3" : "p-3.5"} ${selected ? "shadow-[inset_0_0_0_2px_var(--primary)]" : "hover:-translate-y-0.5"}`}>
@@ -197,29 +193,6 @@ export function RemainingLevel({ value, onChange }: { value: number; onChange: (
   </div>;
 }
 
-export function ShoppingView({ items, onToggle, onAdd, onDelete }: { items: ShoppingItem[]; onToggle: (i: ShoppingItem) => void; onAdd: () => void; onDelete: (id: string) => void }) {
-  const pending = items.filter((i) => i.status === "PENDING"), done = items.filter((i) => i.status === "PURCHASED");
-  return <Screen
-    title="采购清单"
-    description="低库存自动提醒,也可以随手记一笔。"
-    actions={<button onClick={onAdd} className="btn-primary flex items-center gap-2" aria-label="添加采购项"><Plus size={18} /><span className="desktop-only">添加采购项</span></button>}
-  >
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <Panel title="待采购" actions={<TagBadge tone="muted">{pending.length} 项</TagBadge>}>
-        {pending.length
-          ? <div>{pending.map((item) => <ShoppingRow key={item.id} item={item} onToggle={() => onToggle(item)} onDelete={() => onDelete(item.id)} />)}</div>
-          : <Empty icon={Check} title="全部买齐啦" text="新的低库存物品会自动出现在这里" />}
-      </Panel>
-      {(pending.length > 0 || done.length > 0) && <Panel title="本次采购概览">
-        <div className="my-4 grid grid-cols-2 gap-3">
-          <Metric label="待采购" value={pending.length} tone="accent" />
-          <Metric label="已完成" value={done.length} tone="success" />
-        </div>
-        {done.length > 0 && <><div className="mb-1 text-xs font-bold muted">最近完成</div>{done.slice(0, 4).map((item) => <ShoppingRow key={item.id} item={item} onToggle={() => onToggle(item)} onDelete={() => onDelete(item.id)} compact />)}</>}
-      </Panel>}
-    </div>
-  </Screen>;
-}
 
 export function ShoppingRow({ item, onToggle, onFavorite, onDelete, compact = false }: { item: ShoppingItem; onToggle: () => void; onFavorite?: () => void; onDelete: () => void; compact?: boolean }) {
   const done = item.status === "PURCHASED";
