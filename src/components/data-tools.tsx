@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Download, Upload, Users, UserPlus, History, ShieldCheck } from "lucide-react";
 import { ScanActivityPanel } from "@/components/scan-activity-panel";
 import { activityLabel } from "@/lib/activity-label";
+import { csvToItems, importResultText } from "@/lib/csv-import";
 import { SettingsBadge, SettingsRow, SettingsSection } from "@/components/settings-primitives";
 import { ListRow } from "@/components/ui-kit";
 import { useConfirm } from "@/components/confirm-dialog";
@@ -16,7 +17,29 @@ export function DataTools({ onToast }: { onToast: (message: string) => void }) {
   const load = () => { fetch("/api/members").then((r) => r.json()).then(setMembers).catch(() => undefined); fetch("/api/activity").then((r) => r.json()).then(setActivity).catch(() => undefined); };
   useEffect(load, []);
   const addMember = async () => { if (!name.trim()) return; const response = await fetch("/api/members", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) }); if (response.ok) { setName(""); load(); onToast("成员已添加"); } };
-  const importFile = async (file?: File) => { if (!file) return; try { let rows; try { rows = JSON.parse(await file.text()); } catch { onToast("这个文件不是有效的物品 JSON,请选择「导出物品 JSON」生成的文件"); return; } const response = await fetch("/api/items/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(rows) }); const result = await response.json(); if (!response.ok) throw new Error(result.error); onToast(`已导入 ${result.count} 件物品`); } catch (error) { onToast(error instanceof Error ? error.message : "导入失败"); } };
+  const importFile = async (file?: File) => {
+    if (!file) return;
+    const text = await file.text();
+    const isCsv = /\.csv$/i.test(file.name) || (!text.trimStart().startsWith("[") && !text.trimStart().startsWith("{") && text.includes(","));
+    let payload: unknown = null;
+    let issues: { row: number; error: string }[] = [];
+    if (isCsv) {
+      // CSV 走本地解析:表头与「导出当前筛选为 CSV」一致,导出的表格改完可以再导回来。
+      const parsed = csvToItems(text);
+      if (!parsed.items.length && parsed.issues.length) { onToast(parsed.issues[0].error); return; }
+      payload = parsed.items;
+      issues = parsed.issues;
+    } else {
+      try { payload = JSON.parse(text); } catch { onToast("这个文件既不是有效的物品 JSON,也不是 CSV"); return; }
+    }
+    try {
+      const response = await fetch("/api/items/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const result = await response.json();
+      if (!response.ok && !result?.count) throw new Error(result.error || "导入失败");
+      onToast(importResultText(Number(result.count ?? 0), result.errors, issues));
+    } catch (error) { onToast(error instanceof Error ? error.message : "导入失败"); }
+  };
+
   const restoreBackup = async (file?: File) => { if (!file) return; try { let backup; try { backup = JSON.parse(await file.text()); } catch { onToast("这个文件不是有效的完整备份 JSON,请选择「导出完整备份」生成的文件"); return; } const counts = { items: Array.isArray(backup.items) ? backup.items.length : 0, locations: Array.isArray(backup.locations) ? backup.locations.length : 0, shopping: Array.isArray(backup.shopping) ? backup.shopping.length : 0, priceRecords: Array.isArray(backup.priceRecords) ? backup.priceRecords.length : 0, members: Array.isArray(backup.members) ? backup.members.length : 0 }; if (!counts.items && !counts.locations && !counts.shopping) throw new Error("备份文件中没有可恢复的数据"); const summary = `将检查 ${counts.items} 件物品、${counts.locations} 个空间、${counts.shopping} 条采购${counts.priceRecords ? `、${counts.priceRecords} 条价格记录` : ""}${counts.members ? `、${counts.members} 位成员` : ""}，重复数据会自动跳过。继续吗？`; if (!(await askConfirm(summary, { title: "恢复完整备份", confirmLabel: "开始恢复" }))) return; const response = await fetch("/api/backup/restore", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(backup) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || "恢复失败"); onToast(`已合并恢复 ${result.items} 件物品、${result.locations} 个空间、${result.priceRecords || 0} 条价格记录`); } catch (error) { onToast(error instanceof Error ? error.message : "恢复失败"); } };
 
   return <SettingsSection
@@ -33,7 +56,7 @@ export function DataTools({ onToast }: { onToast: (message: string) => void }) {
       control={<div className="flex w-full flex-wrap gap-2 sm:justify-end">{/* 备份动作按「按钮组右对齐」统一 */}
         <a className="btn-primary flex items-center gap-2 text-xs" href="/api/backup"><Download size={14} />导出完整备份</a>
         <a className="btn-ghost flex items-center gap-2 text-xs" href="/api/items?export=1"><Download size={14} />导出物品 JSON</a>
-        <label className="btn-ghost flex cursor-pointer items-center gap-2 text-xs"><Upload size={14} />导入物品<input type="file" accept="application/json,.json" className="hidden" onChange={(e) => importFile(e.target.files?.[0])} /></label>
+        <label className="btn-ghost flex cursor-pointer items-center gap-2 text-xs"><Upload size={14} />导入物品<input type="file" accept="application/json,.json,text/csv,.csv" className="hidden" onChange={(e) => importFile(e.target.files?.[0])} /></label>
         <label className="btn-ghost flex cursor-pointer items-center gap-2 text-xs"><History size={14} />合并恢复备份<input type="file" accept="application/json,.json" className="hidden" onChange={(e) => restoreBackup(e.target.files?.[0])} /></label>
       </div>}
     />
