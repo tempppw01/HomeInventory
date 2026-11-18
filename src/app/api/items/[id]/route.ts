@@ -4,6 +4,7 @@ import { itemPatchSchema } from "@/lib/validation";
 import { apiError, requireWritableUser } from "@/lib/api";
 import { requireUser } from "@/lib/account-auth";
 import { needsRestock, normalizeItemQuantity, restockQuantity } from "@/lib/item-metrics";
+import { itemInsight } from "@/lib/item-insight";
 import { deleteStoredImage } from "@/lib/oss";
 
 type Context = { params: Promise<{ id: string }> };
@@ -34,7 +35,10 @@ export async function PATCH(request: NextRequest, { params }: Context) {
       const nextUnit = parsed.unit ?? existing.unit;
       const normalized = parsed.quantity === undefined ? parsed : { ...parsed, quantity: normalizeItemQuantity(parsed.quantity, nextUnit) };
       const data = nextType === "DURABLE" ? { ...normalized, expiryDate: null } : normalized;
-      const updated = await tx.item.update({ where: { id }, data, include: { location: true } });
+      // 后台自动重算:名称/分类/单位/类型任一变化都可能改变「该不该冷藏」与标签。
+      const insight = itemInsight({ name: data.name ?? existing.name, category: data.category ?? existing.category, unit: (data.unit ?? existing.unit), type: (data.type ?? existing.type) as unknown as "DURABLE" | "CONSUMABLE" });
+      const withInsight = { ...data, storage: insight.storage, storageReason: insight.storageReason, autoTags: insight.tags.join(",") };
+      const updated = await tx.item.update({ where: { id }, data: withInsight, include: { location: true } });
       await tx.activityLog.create({ data: { action: "UPDATE", itemId: updated.id, itemName: updated.name, userId: user.id, detail: "更新物品信息" } });
       if (recordPurchase && updated.price != null) {
         const quantity = Math.max(data.quantity ?? updated.quantity, 1);

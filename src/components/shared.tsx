@@ -71,7 +71,7 @@ export const categoryIconMap: Record<string, LucideIcon> = {
   其他: Package,
 };
 export const categories = ["日用", "食品", "饮品", "清洁", "家电", "数码", "衣物", "医药", ...MEDICINE_CATEGORIES, "户外", "其他"];
-export const units = ["件", "个", "盒", "瓶", "袋", "卷", "包", "台", "kg", "L", "ml"];
+export const units = ["件", "个", "盒", "瓶", "罐", "袋", "卷", "包", "台", "kg", "L", "ml"];
 export const commonItemTemplates = [
   { keywords: ["冷冻", "虾", "饺子", "雪糕", "冰淇淋"], category: "食品", type: "CONSUMABLE" as ItemType, locationKeywords: ["冷冻", "冰箱"] },
   { keywords: ["牛奶", "酸奶", "鸡蛋", "蔬菜", "水果", "豆腐"], category: "食品", type: "CONSUMABLE" as ItemType, locationKeywords: ["冷藏", "冰箱"] },

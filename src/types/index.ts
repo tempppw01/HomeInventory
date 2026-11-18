@@ -44,6 +44,11 @@ export interface Item {
   aiStorageAdvice: string | null;
   aiUsageAdvice: string | null;
   aiReplenishmentAdvice: string | null;
+  /** 后台规则引擎写入的存放建议:COLD / COLD_AFTER_OPEN / ROOM */
+  storage: string | null;
+  storageReason: string | null;
+  /** 后台自动标签,逗号分隔,参与搜索 */
+  autoTags: string | null;
   imageUrl: string | null;
   locationId: string | null;
   location: Location | null;

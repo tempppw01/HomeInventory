@@ -52,20 +52,23 @@ export function ItemsView({ allItems, locations, items, shopping, search, setSea
   // 而不是在 effect 里同步 setState(那会触发级联渲染,React 19 的 lint 也会报错)。
   const queryKey = `${search}|${filter}|${categoryFilter}`;
   const [page, setPage] = useState({ key: queryKey, count: PAGE_SIZE });
+  const [coldOnly, setColdOnly] = useState(false);
   if (page.key !== queryKey) setPage({ key: queryKey, count: PAGE_SIZE });
-  const visibleCount = Math.min(page.count, Math.max(items.length, PAGE_SIZE));
-  const visibleItems = items.slice(0, visibleCount);
+  // 「只看需冷藏」叠加在类型/分类之上,不影响原有筛选状态。
+  const shownItems = coldOnly ? items.filter((item) => item.storage === "COLD" || item.storage === "COLD_AFTER_OPEN") : items;
+  const visibleCount = Math.min(page.count, Math.max(shownItems.length, PAGE_SIZE));
+  const visibleItems = shownItems.slice(0, visibleCount);
   const loadMoreRef = useRef<HTMLButtonElement | null>(null);
   const loadMore = () => setPage((current) => ({ ...current, count: current.count + PAGE_SIZE }));
   useEffect(() => {
     const target = loadMoreRef.current;
-    if (!target || visibleCount >= items.length) return;
+    if (!target || visibleCount >= shownItems.length) return;
     const observer = new IntersectionObserver((entries) => {
       if (entries.some((entry) => entry.isIntersecting)) loadMore();
     }, { rootMargin: "600px 0px" });
     observer.observe(target);
     return () => observer.disconnect();
-  }, [visibleCount, items.length]);
+  }, [visibleCount, shownItems.length]);
   const bulk = async (body: Record<string, unknown>, successMessage = "批量更新完成") => { try { await request("/api/items/bulk", { method: "PATCH", body: JSON.stringify({ ...body, ids: [...selected] }) }); setSelected(new Set()); setBulkLocationOpen(false); onToast(successMessage); } catch (error) { onToast(error instanceof Error ? error.message : "批量更新失败"); } };
   const bulkDelete = async () => { if (!(await askConfirm(`确定将选中的 ${selected.size} 件物品移入回收站吗?可以稍后在回收站恢复。`, { title: "移入回收站", confirmLabel: "移入回收站" }))) return; try { await request("/api/items/bulk", { method: "DELETE", body: JSON.stringify({ ids: [...selected] }) }); const ids = [...selected]; setSelected(new Set()); onToastWithUndo(ids.length + " 件已移入回收站", async () => { await request("/api/items/bulk", { method: "PATCH", body: JSON.stringify({ ids, restore: true }) }); }); } catch (error) { onToast(error instanceof Error ? error.message : "批量删除失败"); } };
   const pendingShopping = shopping.filter((item) => item.status === "PENDING");
@@ -101,6 +104,9 @@ export function ItemsView({ allItems, locations, items, shopping, search, setSea
   const exitSelectMode = () => { setSelected(new Set()); setSelectMode(false); };
   // 类型筛选:桌面在工具行,移动端并入分类轨道,让「搜索 / 类型 / 分类」只占两行。
   const typeChips = TYPE_FILTERS.map(([id, label]) => <Chip key={id} active={filter === id} onClick={() => setFilter(id)}>{label}</Chip>);
+  // 一键筛出该放冰箱的物品;数量来自后台规则引擎写入的 storage。
+  const coldCount = allItems.filter((item) => item.storage === "COLD" || item.storage === "COLD_AFTER_OPEN").length;
+  const coldChip = coldCount > 0 ? <Chip active={coldOnly} onClick={() => setColdOnly(!coldOnly)} ariaLabel={`只看需冷藏的物品,共 ${coldCount} 件`}>需冷藏 {coldCount}</Chip> : null;
   const categoryButtons = categoryOptions.map((category) => {
     const count = category === "ALL" ? allItems.length : category === "MEDICINE" ? allItems.filter((item) => isMedicineCategory(item.category)).length : allItems.filter((item) => item.category === category).length;
     return <button key={category} type="button" className="browse-rail-item" data-active={categoryFilter === category} onClick={() => setCategoryFilter(category)}><span>{category === "ALL" ? "全部分类" : category === "MEDICINE" ? "医药(按用途)" : isMedicineCategory(category) ? medicineCategoryLabel(category) : category}</span><span className="browse-rail-count">{count}</span></button>;
@@ -113,8 +119,8 @@ export function ItemsView({ allItems, locations, items, shopping, search, setSea
     >
       <Toolbar>
         <div className="min-w-0 flex-1 md:hidden"><SearchBox items={allItems} value={search} onChange={setSearch} onSelect={(item) => setSearch(item.name)} placeholder="搜索名称或物品编号..." /></div>
-        <div className="hidden min-w-0 items-center gap-2 md:flex">{typeChips}</div>
-        <span className="hidden shrink-0 text-xs tabular-nums muted md:inline">{items.length} 件</span>
+        <div className="hidden min-w-0 items-center gap-2 md:flex">{typeChips}{coldChip}</div>
+        <span className="hidden shrink-0 text-xs tabular-nums muted md:inline">{shownItems.length} 件</span>
         <button onClick={exportCsv} disabled={items.length === 0} className="btn-ghost flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-xs disabled:opacity-40" aria-label="导出当前筛选为 CSV" title="把当前筛选出的物品导出成 CSV(Excel 可直接打开)"><Download size={15} /><span className="desktop-only">导出</span></button>
         <div className="flex shrink-0 items-center gap-2 md:ml-auto">
           {selectMode
@@ -141,20 +147,22 @@ export function ItemsView({ allItems, locations, items, shopping, search, setSea
           {categoryButtons}
         </nav>
         <div className="min-w-0">
-          {items.length
+          {shownItems.length
             ? <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {visibleItems.map((item, index) => <motion.div className="h-full min-w-0" key={item.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index * 0.05, 0.2) }}><ItemCard item={item} selected={selected.has(item.id)} showSelect={selectMode} onSelect={() => toggle(item.id)} onEdit={() => onEdit(item)} onOpenDetail={() => onOpenDetail(item)} onImageUpload={(file) => onImageUpload(item, file)} onDuplicate={() => void onDuplicate(item)} onConsume={() => onConsume(item)} onRemainingChange={(remainingPercent) => onRemainingChange(item, remainingPercent)} onDelete={() => onDelete(item)} onQr={() => onQr(item)} onAi={() => onAi(item)} onCopy={() => onCopy(item)} /></motion.div>)}
-              {visibleItems.length < items.length && (
+              {visibleItems.length < shownItems.length && (
                 <div className="col-span-full flex justify-center py-4">
                   <button ref={(node) => { loadMoreRef.current = node; }} type="button" onClick={loadMore} className="btn-ghost min-h-11 px-4 text-xs">
-                    还有 {items.length - visibleItems.length} 件,加载更多
+                    还有 {shownItems.length - visibleItems.length} 件,加载更多
                   </button>
                 </div>
               )}
             </div>
             : allItems.length === 0
               ? <Panel><Empty icon={Package} title="还没有录入物品" text="从眼前的一件东西开始:名称和数量就够,其他信息之后补。" action={<button onClick={onCreate} className="btn-primary min-h-11 px-4 text-sm">录入第一件物品</button>} /></Panel>
-              : <Panel><Empty icon={Search} title="没有找到物品" text="换个关键词或筛选条件试试" /></Panel>}
+              : coldOnly
+                ? <Panel><Empty icon={Search} title="没有需要冷藏的物品" text="录入饮料、乳制品或生鲜后会自动标注" action={<button onClick={() => setColdOnly(false)} className="btn-ghost min-h-11 px-4 text-sm">看全部物品</button>} /></Panel>
+                : <Panel><Empty icon={Search} title="没有找到物品" text="换个关键词或筛选条件试试" /></Panel>}
         </div>
       </div>
 
@@ -205,6 +213,8 @@ export function ItemCard({ item, onEdit, onOpenDetail, onImageUpload, onDuplicat
             <span className="min-w-0 flex-1 truncate">{[item.location?.name || "未设置位置", item.category.replace(/^医药·/, ""), item.type === "CONSUMABLE" ? "消耗品" : "耐用品"].join(" · ")}</span>
             {expired || expiring ? <TagBadge tone={expired ? "danger" : "warning"}>{expiryDateLabel(item)}</TagBadge> : null}
             {low && <TagBadge tone="warning">需补货</TagBadge>}
+            {item.storage === "COLD" && <TagBadge tone="muted">需冷藏</TagBadge>}
+            {item.storage === "COLD_AFTER_OPEN" && <TagBadge tone="muted">开封后冷藏</TagBadge>}
           </div>
           {canConsumeOne && <button type="button" onClick={onConsume} className="mt-2 inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full px-2.5 text-xs font-bold transition-colors md:min-h-10" style={{ background: "var(--primary-soft)", color: "var(--primary-strong)" }} title={`消耗 1 ${item.unit}`} aria-label={`用掉 1 ${item.unit}`}><Minus size={13} />用掉 1 {item.unit}</button>}
         </div>

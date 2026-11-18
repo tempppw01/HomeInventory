@@ -99,6 +99,9 @@ const statements = [
     "aiStorageAdvice" TEXT,
     "aiUsageAdvice" TEXT,
     "aiReplenishmentAdvice" TEXT,
+    "storage" TEXT,
+    "storageReason" TEXT,
+    "autoTags" TEXT,
     "locationId" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
@@ -274,6 +277,15 @@ async function main() {
     await prisma.$executeRawUnsafe(`ALTER TABLE "OssSetting" ADD COLUMN "directory" TEXT NOT NULL DEFAULT 'home-inventory'`);
   }
   await prisma.$executeRawUnsafe(`UPDATE "Item" SET "expiryDate" = NULL WHERE "type" = 'DURABLE' AND "expiryDate" IS NOT NULL`);
+  // 存放建议与自动标签(后台规则引擎写入)
+  for (const statement of [
+    `ALTER TABLE "Item" ADD COLUMN "storage" TEXT`,
+    `ALTER TABLE "Item" ADD COLUMN "storageReason" TEXT`,
+    `ALTER TABLE "Item" ADD COLUMN "autoTags" TEXT`,
+  ]) {
+    try { await prisma.$executeRawUnsafe(statement); } catch { /* 列已存在 */ }
+  }
+
   await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Item_itemCode_key" ON "Item"("itemCode")`);
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ActivityLog_undoOfId_idx" ON "ActivityLog"("undoOfId")`);
   await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "ActivityLog_scanRequestId_key" ON "ActivityLog"("scanRequestId")`);

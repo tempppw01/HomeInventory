@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { Bot, ChevronDown, CircleAlert, ImagePlus, Link2, MapPin, Package, Sparkles, Upload, X } from "lucide-react";
+import { Bot, ChevronDown, CircleAlert, ImagePlus, Link2, MapPin, Package, Sparkles, Upload, Warehouse, X } from "lucide-react";
 import {
   FormEvent, useEffect, useRef, useState,
 } from "react";
@@ -13,6 +13,7 @@ import {
 } from "@/lib/item-metrics";
 import { itemAiHighlights } from "@/lib/item-ai";
 import { isMedicineCategory, suggestMedicineCategory } from "@/lib/categories";
+import { itemInsight, STORAGE_LABEL } from "@/lib/item-insight";
 import { Field } from "@/components/ui-kit";
 
 import { useEscapeClose } from "@/lib/use-escape-close";
@@ -109,7 +110,8 @@ export function ItemModal({ locations, allItems, item, onClose, onSaved, aiAvail
   const commitQuantityText = () => { const normalized = normalizeItemQuantity(draft.quantity, draft.unit); set("quantity", normalized); setQtyText(String(normalized)); };
   // 用户手动选过单位之后,分类切换就不再自动改单位。
   const [unitTouched, setUnitTouched] = useState(false);
-  const changeUnit = (unit: string) => { setUnitTouched(true); const quantity = normalizeItemQuantity(draft.quantity, unit); setDraft((current) => ({ ...current, unit, quantity })); setQtyText(String(quantity)); };
+  // auto=true 表示这是「按建议自动套用」,不算用户手动改过 —— 否则第一条建议会把后续建议全锁死。
+  const changeUnit = (unit: string, auto = false) => { if (!auto) setUnitTouched(true); const quantity = normalizeItemQuantity(draft.quantity, unit); setDraft((current) => ({ ...current, unit, quantity })); setQtyText(String(quantity)); };
   // 手动点类型 = 关掉自动识别,后续不再覆盖用户的选择。
   const chooseItemType = (type: ItemType) => {
     setTypeTouched(true);
@@ -191,6 +193,18 @@ export function ItemModal({ locations, allItems, item, onClose, onSaved, aiAvail
   const draftAi = itemAiHighlights(draft);
   // 药品的有效期是最关键的一项,但「快速保存」路径会跳过它。这里在保存前给出就地引导。
   const isMedicine = isMedicineCategory(draft.category);
+  // 后台规则引擎的即时预览:用户一边输入,界面一边给出「该不该冷藏 / 建议保质期」。
+  const insight = itemInsight({ name: draft.name, category: draft.category, unit: draft.unit, type: draft.type });
+  const applyShelfLife = () => {
+    const days = insight.suggestedShelfLifeDays;
+    if (!days) return;
+    const base = draft.purchaseDate ? new Date(draft.purchaseDate) : new Date();
+    const target = new Date(base.getTime() + days * 86400000);
+    const iso = target.toISOString().slice(0, 10);
+    set("expiryDate", iso);
+    if (!draft.purchaseDate) set("purchaseDate", new Date().toISOString().slice(0, 10));
+    setMoreOpen(true);
+  };
   const missingExpiry = isMedicine && draft.type === "CONSUMABLE" && !draft.expiryDate;
   const focusExpiry = () => {
     setMoreOpen(true);
@@ -216,7 +230,7 @@ export function ItemModal({ locations, allItems, item, onClose, onSaved, aiAvail
       )}
       <div className="min-w-0 flex-1">
         <label htmlFor="item-name" className="mb-1.5 block text-xs font-bold muted">物品名称 *</label>
-        <input required id="item-name" maxLength={80} className="input" value={draft.name} onChange={(e) => set("name", e.target.value)} placeholder="拍照让 AI 识别,或直接输入名称" />
+        <input required id="item-name" maxLength={80} className="input" value={draft.name} onChange={(e) => { const next = e.target.value; set("name", next); if (!unitTouched) { const guess = itemInsight({ name: next, category: draft.category, unit: draft.unit, type: draft.type }); if (guess.suggestedUnit && guess.suggestedUnit !== draft.unit) changeUnit(guess.suggestedUnit, true); } }} placeholder="拍照让 AI 识别,或直接输入名称" />
         <div className="mt-2 flex gap-2">
           {aiAvailable ? <><button type="button" disabled={aiLoading || (!draft.name && !draft.imageUrl)} onClick={() => runAi("identify")} className="btn-ghost flex min-h-11 items-center md:min-h-10 gap-1.5 px-3 py-1.5 text-xs disabled:opacity-40"><Sparkles size={14} />{aiLoading ? "分析中..." : "AI 补全"}</button>
           {draft.type === "CONSUMABLE" && <button type="button" disabled={aiLoading || (!draft.name && !draft.imageUrl)} onClick={() => runAi("shelf_life")} className="btn-ghost flex min-h-11 items-center md:min-h-10 gap-1.5 px-3 py-1.5 text-xs disabled:opacity-40"><Bot size={14} />分析保质期</button>}</> : <button type="button" onClick={() => canConfigureAi && onConfigureAi?.()} className="btn-ghost flex min-h-11 items-center gap-1.5 px-3 py-1.5 text-xs md:min-h-10"><Sparkles size={14} />{canConfigureAi ? "配置 AI 后可用" : "AI 未配置"}</button>}
@@ -233,6 +247,20 @@ export function ItemModal({ locations, allItems, item, onClose, onSaved, aiAvail
         <input type="radio" className="sr-only" checked={draft.type === "CONSUMABLE"} onChange={() => chooseItemType("CONSUMABLE")} />
         <Sparkles size={15} />消耗品
       </label>
+    </div>
+
+    {/* 后台自动判定:不需要用户点任何按钮,输入过程中就给出存放建议与建议保质期 */}
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl px-3 py-2 text-xs leading-5" style={{ background: "var(--surface-soft)" }}>
+      <span className="flex items-center gap-1.5 font-bold">
+        <Warehouse size={14} style={{ color: insight.storage === "ROOM" ? "var(--muted)" : "var(--primary)" }} />
+        {STORAGE_LABEL[insight.storage]}
+      </span>
+      <span className="min-w-0 flex-1 muted">{insight.storageReason}</span>
+      {insight.suggestedShelfLifeDays && !draft.expiryDate && (
+        <button type="button" onClick={applyShelfLife} className="shrink-0 font-bold" style={{ color: "var(--primary)" }}>
+          一键填有效期(约 {insight.suggestedShelfLifeDays} 天)
+        </button>
+      )}
     </div>
 
     {typeGuess && <div className="flex items-center gap-1.5 text-xs leading-5 muted"><Sparkles size={13} className="shrink-0" style={{ color: "var(--primary)" }} /><span className="min-w-0 flex-1">已按名称识别为{typeGuess.type === "CONSUMABLE" ? "消耗品" : "耐用品"} · {typeGuess.reason}</span><span className="shrink-0 opacity-75">点上方可改</span></div>}
@@ -252,7 +280,7 @@ export function ItemModal({ locations, allItems, item, onClose, onSaved, aiAvail
 
     <div className="overflow-hidden rounded-[20px] border" style={{ borderColor: "var(--hairline)", background: "var(--surface-solid)" }}>
       <FormRow label="分类">
-        <select className="input" aria-label="分类" value={draft.category} onChange={(e) => { const next = e.target.value; set("category", next); if (!unitTouched && draft.unit === "件" && isMedicineCategory(next)) changeUnit("盒"); }}>{categories.map((c) => <option key={c}>{c}</option>)}</select>
+        <select className="input" aria-label="分类" value={draft.category} onChange={(e) => { const next = e.target.value; set("category", next); if (unitTouched) return; const guess = itemInsight({ name: draft.name, category: next, unit: draft.unit, type: draft.type }); if (draft.unit === "件" && guess.suggestedUnit) changeUnit(guess.suggestedUnit, true); }}>{categories.map((c) => <option key={c}>{c}</option>)}</select>
       </FormRow>
       <FormRow label="存放位置">
         <select className="input" aria-label="存放位置" value={draft.locationId} onChange={(e) => { if (e.target.value === "__new__") { setQuickLocationOpen(true); return; } set("locationId", e.target.value); }}>

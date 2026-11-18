@@ -42,7 +42,7 @@ export function estimatedUseDays(item: Pick<ItemMetricsInput, "type" | "name" | 
  * remainingPercent instead of quantity.
  */
 export function isCountUnit(unit: string) {
-  return ["件", "个", "盒", "瓶", "袋", "卷", "包", "台"].includes(unit);
+  return ["件", "个", "盒", "瓶", "罐", "袋", "卷", "包", "台"].includes(unit);
 }
 
 export function normalizeItemQuantity(quantity: number, unit: string) {

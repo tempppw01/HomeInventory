@@ -5,6 +5,7 @@ import { apiError, requireWritableUser } from "@/lib/api";
 import { requireUser } from "@/lib/account-auth";
 import { createItemCode } from "@/lib/item-code";
 import { needsRestock, normalizeItemQuantity, restockQuantity } from "@/lib/item-metrics";
+import { itemInsight } from "@/lib/item-insight";
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,7 +15,8 @@ export async function GET(request: NextRequest) {
     const exportData = request.nextUrl.searchParams.get("export") === "1";
     const includeDeleted = request.nextUrl.searchParams.get("includeDeleted") === "1";
     const items = await prisma.item.findMany({
-      where: { deletedAt: deleted ? { not: null } : includeDeleted ? undefined : null, ...(search ? { OR: [{ name: { contains: search } }, { category: { contains: search } }, { notes: { contains: search } }] } : {}) },
+      // 搜索也覆盖后台自动标签:搜「冷藏」「饮料」这类词也能命中。
+      where: { deletedAt: deleted ? { not: null } : includeDeleted ? undefined : null, ...(search ? { OR: [{ name: { contains: search } }, { category: { contains: search } }, { notes: { contains: search } }, { autoTags: { contains: search } }] } : {}) },
       include: { location: true },
       orderBy: { updatedAt: "desc" },
     });
@@ -32,7 +34,9 @@ export async function POST(request: NextRequest) {
     const normalized = { ...parsed, quantity: normalizeItemQuantity(parsed.quantity, parsed.unit) };
     const data = normalized.type === "DURABLE" ? { ...normalized, expiryDate: null } : normalized;
     const item = await prisma.$transaction(async (tx) => {
-      const created = await tx.item.create({ data: { ...data, itemCode: createItemCode() }, include: { location: true } });
+      // 后台自动洞察:不依赖任何用户操作,保存时就把存放建议与标签算好。
+      const insight = itemInsight({ name: data.name, category: data.category, unit: data.unit, type: data.type as unknown as "DURABLE" | "CONSUMABLE" });
+      const created = await tx.item.create({ data: { ...data, itemCode: createItemCode(), storage: insight.storage, storageReason: insight.storageReason, autoTags: insight.tags.join(",") }, include: { location: true } });
       if (recordPurchase && data.price != null) {
         await tx.priceRecord.create({ data: { itemId: created.id, itemName: created.name, category: created.category, unitPrice: data.price, quantity: Math.max(data.quantity, 1), totalPrice: data.price * Math.max(data.quantity, 1), purchasedAt: data.purchaseDate || new Date(), store: purchaseStore } });
       }

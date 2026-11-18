@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { currentUser } from "@/lib/account-auth";
 import { dailyUsageCost, estimatedUseDays, isLiquidConsumable } from "@/lib/item-metrics";
 import { itemAiHighlights } from "@/lib/item-ai";
+import { STORAGE_LABEL } from "@/lib/item-insight";
 import { Panel } from "@/components/ui-kit";
 import { CopyCodeButton } from "@/components/copy-code-button";
 
@@ -82,6 +83,7 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
           <Panel title="位置与数量">
             <div className="space-y-0">
               <KeyValue icon={<MapPin size={18} />} label="存放位置" value={item.location?.name || "未设置"} />
+              {item.storage && <KeyValue icon={<Warehouse size={18} />} label="存放建议" value={`${STORAGE_LABEL[item.storage as keyof typeof STORAGE_LABEL] ?? item.storage}${item.storageReason ? ` · ${item.storageReason}` : ""}`} />}
             </div>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <Stat icon={<Package size={14} />} label="当前数量" value={`${item.quantity} ${item.unit}`} />

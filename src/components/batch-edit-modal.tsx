@@ -6,7 +6,7 @@ import { X } from "lucide-react";
 import type { ItemType, Location } from "@/types";
 import { useEscapeClose } from "@/lib/use-escape-close";
 
-const units = ["件", "个", "盒", "瓶", "袋", "卷", "包", "台", "kg", "L", "ml"];
+const units = ["件", "个", "盒", "瓶", "罐", "袋", "卷", "包", "台", "kg", "L", "ml"];
 const categories = ["日用", "食品", "饮品", "清洁", "家电", "数码", "衣物", "医药", "户外", "其他"];
 // "不修改" and "清除位置" both used to be value="": the controlled <select>
 // snapped straight back to "不修改" and the submit body only ever carried ids.

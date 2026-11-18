@@ -128,6 +128,12 @@ model Item {
   aiStorageAdvice       String?
   aiUsageAdvice         String?
   aiReplenishmentAdvice String?
+  /** 后台自动判定的存放建议:COLD=需冷藏 / COLD_AFTER_OPEN=开封后冷藏 / ROOM=常温即可 */
+  storage       String?
+  /** 上述判定的依据,给用户看的一句话 */
+  storageReason String?
+  /** 后台自动打的标签(逗号分隔),参与搜索 */
+  autoTags      String?
   locationId            String?
   location              Location?     @relation(fields: [locationId], references: [id], onDelete: SetNull)
   priceRecords          PriceRecord[]

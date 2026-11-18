@@ -235,7 +235,7 @@ function useAppState() {
       item.quantity > 0 &&
       (typeFilter === "ALL" || (typeFilter === "MEDICINE" ? isMedicineCategory(item.category) : item.type === typeFilter)) &&
       (categoryFilter === "ALL" || (categoryFilter === "MEDICINE" ? isMedicineCategory(item.category) : item.category === categoryFilter)) &&
-      (!term || [item.name, item.itemCode, item.category, item.location?.name].some((value) => value?.toLowerCase().includes(term))),
+      (!term || [item.name, item.itemCode, item.category, item.location?.name, item.autoTags].some((value) => value ? value.toLowerCase().includes(term) : false)),
     );
   }, [categoryFilter, data, search, typeFilter]);
 
