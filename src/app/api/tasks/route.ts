@@ -3,15 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { apiError, requireWritableUser } from "@/lib/api";
 import { requireUser } from "@/lib/account-auth";
 import { taskCreateSchema, taskPatchSchema } from "@/lib/validation";
+import { isTaskRecurrence, nextDueDate } from "@/lib/task-recurrence";
 
-function nextDate(date: Date, recurrence: string) {
-  const next = new Date(date);
-  if (recurrence === "DAILY") next.setDate(next.getDate() + 1);
-  else if (recurrence === "WEEKLY") next.setDate(next.getDate() + 7);
-  else if (recurrence === "MONTHLY") next.setMonth(next.getMonth() + 1);
-  else if (recurrence === "YEARLY") next.setFullYear(next.getFullYear() + 1);
-  return next;
-}
+
 
 export async function GET() {
   try {
@@ -26,7 +20,7 @@ export async function POST(request: NextRequest) {
     await requireWritableUser();
     const body = taskCreateSchema.parse(await request.json());
     const title = body.title;
-    const recurrence = ["NONE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"].includes(body.recurrence ?? "") ? (body.recurrence as string) : "NONE";
+    const recurrence = isTaskRecurrence(body.recurrence) ? body.recurrence : "NONE";
     const dueAt = new Date(body.dueAt);
     if (!Number.isFinite(dueAt.getTime())) return NextResponse.json({ error: "请选择有效日期" }, { status: 400 });
     const task = await prisma.householdTask.create({ data: { title, description: body.description ? String(body.description).trim() : null, dueAt, recurrence } });
@@ -45,7 +39,7 @@ export async function PATCH(request: NextRequest) {
     if (body.action === "toggle") {
       if (existing.status === "OPEN") {
         if (existing.recurrence !== "NONE") {
-          const nextDueAt = nextDate(existing.dueAt, existing.recurrence);
+          const nextDueAt = nextDueDate(existing.dueAt, existing.recurrence);
           const task = await prisma.householdTask.update({ where: { id }, data: { dueAt: nextDueAt, nextDueAt, completedAt: new Date() } });
           return NextResponse.json(task);
         }

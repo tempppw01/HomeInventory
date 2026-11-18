@@ -1,7 +1,7 @@
 export type ItemType = "DURABLE" | "CONSUMABLE";
 export type ShoppingStatus = "PENDING" | "PURCHASED";
 export type TaskStatus = "OPEN" | "DONE";
-export type TaskRecurrence = "NONE" | "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY";
+export type TaskRecurrence = "NONE" | "DAILY" | "WEEKLY" | "MONTHLY" | "QUARTERLY" | "HALF_YEARLY" | "YEARLY";
 
 export interface HouseholdTask {
   id: string;
