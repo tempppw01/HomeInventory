@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/account-auth";
 import { createItemCode } from "@/lib/item-code";
 import { needsRestock, normalizeItemQuantity, restockQuantity } from "@/lib/item-metrics";
 import { itemInsight } from "@/lib/item-insight";
+import { enqueueItemAnalysis } from "@/lib/ai-queue";
 
 export async function GET(request: NextRequest) {
   try {
@@ -50,6 +51,8 @@ export async function POST(request: NextRequest) {
         data: { name: item.name, quantity: restockQuantity(item), unit: item.unit, category: item.category, priority: 2, source: "low-stock" },
       });
     }
+    // 后台自动分析:不 await,保存立刻返回;结果稍后写回 aiSummary 等字段。
+    enqueueItemAnalysis(item.id);
     return NextResponse.json(item, { status: 201 });
   } catch (error) {
     return apiError(error);

@@ -6,97 +6,9 @@ import { aiAnalyzeSchema } from "@/lib/validation";
 import { localUploadDataUrl } from "@/lib/oss";
 import { AiImageError, compressAiImageDataUrl } from "@/lib/ai-image";
 import { rateLimit } from "@/lib/rate-limit";
+import { AiRequestError, asRecord, connectionError, extractAnalysis, providerErrorDetail, providerFailure, type JsonRecord } from "@/lib/ai-analyze";
 
 export const runtime = "nodejs";
-
-type JsonRecord = Record<string, unknown>;
-
-class AiRequestError extends Error {
-  constructor(message: string, readonly status = 502) {
-    super(message);
-  }
-}
-
-function asRecord(value: unknown): JsonRecord | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : null;
-}
-
-function extractJson(content: string): JsonRecord {
-  const cleaned = content
-    .replace(/<think>[\s\S]*?<\/think>/gi, "")
-    .replace(/^[\s\S]*?<\/think>\s*/i, "")
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/, "")
-    .trim();
-  const start = cleaned.indexOf("{");
-  const end = cleaned.lastIndexOf("}");
-  try {
-    const parsed = JSON.parse(start >= 0 && end > start ? cleaned.slice(start, end + 1) : cleaned);
-    const record = asRecord(parsed);
-    if (!record) throw new Error("not an object");
-    return record;
-  } catch {
-    throw new AiRequestError("AI 返回的内容不是有效 JSON，请确认模型支持 Chat Completions，或换一个兼容模型重试");
-  }
-}
-
-function contentText(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) return content.map(contentText).filter(Boolean).join("\n");
-  const record = asRecord(content);
-  if (!record) return "";
-  if (typeof record.text === "string") return record.text;
-  if (record.content !== undefined) return contentText(record.content);
-  return "";
-}
-
-function extractAnalysis(result: unknown) {
-  const root = asRecord(result);
-  const choices = Array.isArray(root?.choices) ? root.choices : [];
-  const choice = asRecord(choices[0]);
-  const message = asRecord(choice?.message);
-  const parsed = asRecord(message?.parsed);
-  if (parsed) return parsed;
-  const directContent = asRecord(message?.content);
-  if (directContent) return directContent;
-  const text = contentText(message?.content) || contentText(choice?.text) || contentText(root?.content) || contentText(root?.output_text) || contentText(root?.output);
-  if (!text) throw new AiRequestError("AI 接口未返回可解析内容，请确认该渠道支持 Chat Completions 格式");
-  return extractJson(text);
-}
-
-function providerErrorDetail(raw: string) {
-  try {
-    const parsed = asRecord(JSON.parse(raw));
-    const error = asRecord(parsed?.error);
-    const detail = error?.message ?? parsed?.message ?? parsed?.error;
-    if (typeof detail === "string") return detail.slice(0, 400);
-  } catch {
-    // Fall back to the raw provider response below.
-  }
-  return raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 400) || "上游接口未提供错误详情";
-}
-
-function providerFailure(status: number, raw: string) {
-  const detail = providerErrorDetail(raw);
-  if (status === 401) return `API Key 无效或已过期，请在设置中重新填写后再试。上游返回：${detail}`;
-  if (status === 403) return `API Key 没有访问当前模型的权限。上游返回：${detail}`;
-  return `AI 接口请求失败（${status}）：${detail}`;
-}
-
-function connectionError(error: unknown, baseUrl: string) {
-  const name = error instanceof Error ? error.name : "";
-  if (name === "TimeoutError" || name === "AbortError") return "AI 接口连接超时，请检查接口地址、网络和渠道状态";
-  let localAddress = false;
-  try {
-    localAddress = ["localhost", "127.0.0.1", "::1"].includes(new URL(baseUrl).hostname);
-  } catch {
-    // The settings validator already rejects malformed URLs.
-  }
-  const cause = asRecord(asRecord(error)?.cause);
-  const code = typeof cause?.code === "string" ? `（${cause.code}）` : "";
-  if (localAddress) return `无法连接 AI 接口${code}。如果应用运行在 Docker 中，localhost 指向容器自身，请改用 host.docker.internal 或容器可访问的地址`;
-  return `无法连接 AI 接口${code}，请检查接口地址、证书、网络和渠道状态`;
-}
 
 export async function POST(request: NextRequest) {
   try {

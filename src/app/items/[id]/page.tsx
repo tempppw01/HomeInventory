@@ -103,6 +103,18 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
           </Panel>
           )}
 
+          {/* 后台自动分析的结果:保存物品时在后台生成,用户不需要点任何按钮 */}
+          {item.aiSummary && (
+          <Panel title="AI 说">
+            <p className="mb-0 text-sm leading-6">{item.aiSummary}</p>
+            <div className="mt-3 grid gap-2">
+              {item.aiStorageAdvice && <AiRow label="怎么存放" text={item.aiStorageAdvice} />}
+              {item.aiUsageAdvice && <AiRow label="怎么用" text={item.aiUsageAdvice} />}
+              {item.aiReplenishmentAdvice && <AiRow label="什么时候补货" text={item.aiReplenishmentAdvice} />}
+            </div>
+          </Panel>
+          )}
+
           {item.notes && (
             <Panel title="备注">
               <p className="mb-0 whitespace-pre-wrap text-sm leading-6 muted">{item.notes}</p>
@@ -160,6 +172,14 @@ function KeyValue({ icon, label, value, mono = false }: { icon: ReactNode; label
 }
 
 /** 与 ui-kit 的 Metric 同排版的数值块。 */
+function AiRow({ label, text }: { label: string; text: string }) {
+  return (
+    <div className="rounded-2xl px-3 py-2.5" style={{ background: "var(--surface-soft)" }}>
+      <span className="block text-[11px] font-bold muted">{label}</span>
+      <span className="mt-0.5 block text-xs leading-5">{text}</span>
+    </div>
+  );
+}
 function Stat({ icon, label, value, hint, tone }: { icon: ReactNode; label: string; value: string; hint?: string; tone?: string }) {
   return (
     <div className="min-w-0">
