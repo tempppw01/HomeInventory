@@ -10,8 +10,9 @@ import { isLiquidConsumable } from "@/lib/item-metrics";
 import { itemAiHighlights } from "@/lib/item-ai";
 import { Badge, SectionHead } from "@/components/ui-kit";
 import { Empty, Hero, ListRow, Metric, Panel, Screen } from "@/components/ui-kit";
-import { duplicateGroups, restockForecast } from "@/lib/item-forecast";
+import { daysLeftFor, duplicateGroups, restockForecast } from "@/lib/item-forecast";
 import { fridgePlan, fridgeSummary } from "@/lib/fridge";
+import { spendForecast, spendSummary } from "@/lib/spend-forecast";
 import { AiInsightsCard } from "@/components/ai-insights-card";
 import { categoryIconMap } from "@/components/shared";
 import { View, expiryDays, expiryDateLabel, expiryAdvice, expiryGroupLabel } from "../shared";
@@ -243,12 +244,32 @@ export function RecentItemRow({ item, onEdit, onQr, onAi }: { item: Item; onEdit
 }
 
 export function HomeInsightsCompact({ data }: { data: DashboardData }) {
-  if (data.finance.currentMonthTotal <= 0 && data.finance.averageMonthly <= 0 && !data.finance.recent[0] && data.finance.byCategory.length === 0 && data.consumption.length === 0) return null;
+  // 支出预测:消耗速度 × 单价 → 每月大概花多少、最近该买什么。天数用 item-forecast 的口径。
+  const spend = spendForecast(data.items.map((item) => ({
+    id: item.id, name: item.name, category: item.category, type: item.type, unit: item.unit,
+    quantity: item.quantity, remainingPercent: item.remainingPercent, consumeRate: item.consumeRate ?? null,
+    expiryDate: item.expiryDate, restockPausedUntil: item.restockPausedUntil, price: item.price, minQuantity: item.minQuantity,
+  })), (item) => daysLeftFor({
+    id: item.id, name: item.name, category: item.category, type: item.type, unit: item.unit,
+    quantity: item.quantity, remainingPercent: item.remainingPercent, consumeRate: item.consumeRate,
+  }));
+  const spendText = spendSummary(spend);
+  // 没有历史消费数据时,只要还能算出支出预测,这一块就该照常显示。
+  const hasFinance = data.finance.currentMonthTotal > 0 || data.finance.averageMonthly > 0 || Boolean(data.finance.recent[0]) || data.finance.byCategory.length > 0 || data.consumption.length > 0;
+  if (!hasFinance && !spendText) return null;
   return <>
     <div className="grid grid-cols-2 gap-4 sm:gap-6">
       <Metric label="本月" value={`¥${data.finance.currentMonthTotal.toFixed(0)}`} />
       <Metric label="近 6 月均值" value={`¥${data.finance.averageMonthly.toFixed(0)}`} />
     </div>
+
+    {spendText && <div className="mt-3 rounded-2xl px-3 py-2.5" style={{ background: "var(--surface-soft)" }}>
+      <div className="text-xs font-bold muted">按当前用量预计</div>
+      <div className="mt-0.5 text-sm leading-6">{spendText}</div>
+      {spend.nextPurchases.length > 1 && <div className="mt-1.5 space-y-0.5">
+        {spend.nextPurchases.slice(1, 4).map((row) => <div key={row.id} className="text-xs muted">{row.name} · 约 {Math.max(0, row.daysLeft)} 天后{row.estimatedCost > 0 ? ` · 预计 ¥${Math.round(row.estimatedCost)}` : ""}</div>)}
+      </div>}
+    </div>}
     {(data.finance.byCategory.length > 0 || data.consumption.length > 0 || data.finance.recent[0]) && <details className="group mt-3 border-t pt-2" style={{ borderColor: "var(--hairline)" }}>
       <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between text-xs font-semibold muted [&::-webkit-details-marker]:hidden">查看消费详情<ChevronDown size={15} className="transition-transform group-open:rotate-180" /></summary>
       {data.finance.byCategory.length > 0 && <div className="mt-3"><div className="mb-2 text-xs font-bold muted">本月消费分类</div><div className="flex flex-wrap gap-2">{data.finance.byCategory.map((entry) => <Badge key={entry.category} tone="primary">{entry.category} ¥{entry.total.toFixed(0)}</Badge>)}</div></div>}
