@@ -119,7 +119,10 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
             <span className="grid size-8 shrink-0 place-items-center rounded-full muted transition-transform group-open:rotate-180"><ChevronDown size={17} /></span>
           </summary>
           <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--hairline)" }}>
-            <HomeInsightsCompact data={data} />
+            <HomeInsightsCompact
+              data={data}
+              onRestock={(itemId) => { const target = data.items.find((item) => item.id === itemId); if (target) onAddRestock(target); }}
+            />
           </div>
         </details>
         {/* 到期日历:按月看哪天有东西到期。此前只有「提醒中心」的列表,看不出时间分布。 */}
@@ -243,7 +246,7 @@ export function RecentItemRow({ item, onEdit, onQr, onAi }: { item: Item; onEdit
   />;
 }
 
-export function HomeInsightsCompact({ data }: { data: DashboardData }) {
+export function HomeInsightsCompact({ data, onRestock }: { data: DashboardData; onRestock?: (itemId: string) => void }) {
   // 支出预测:消耗速度 × 单价 → 每月大概花多少、最近该买什么。天数用 item-forecast 的口径。
   const spend = spendForecast(data.items.map((item) => ({
     id: item.id, name: item.name, category: item.category, type: item.type, unit: item.unit,
@@ -266,9 +269,16 @@ export function HomeInsightsCompact({ data }: { data: DashboardData }) {
     {spendText && <div className="mt-3 rounded-2xl px-3 py-2.5" style={{ background: "var(--surface-soft)" }}>
       <div className="text-xs font-bold muted">按当前用量预计</div>
       <div className="mt-0.5 text-sm leading-6">{spendText}</div>
-      {spend.nextPurchases.length > 1 && <div className="mt-1.5 space-y-0.5">
-        {spend.nextPurchases.slice(1, 4).map((row) => <div key={row.id} className="text-xs muted">{row.name} · 约 {Math.max(0, row.daysLeft)} 天后{row.estimatedCost > 0 ? ` · 预计 ¥${Math.round(row.estimatedCost)}` : ""}</div>)}
-      </div>}
+      {onRestock && spend.nextPurchases.length > 0 && (
+        <div className="mt-2 space-y-1">
+          {spend.nextPurchases.slice(0, 4).map((row) => (
+            <div key={row.id} className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate text-xs muted">{row.name} · 约 {Math.max(0, row.daysLeft)} 天后{row.estimatedCost > 0 ? ` · 预计 ¥${Math.round(row.estimatedCost)}` : ""}</span>
+              <button type="button" onClick={() => onRestock(row.id)} className="btn-ghost min-h-9 shrink-0 rounded-full px-2.5 text-xs font-bold" style={{ color: "var(--primary)" }} aria-label={`把${row.name}加到采购清单`}>加到清单</button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>}
     {(data.finance.byCategory.length > 0 || data.consumption.length > 0 || data.finance.recent[0]) && <details className="group mt-3 border-t pt-2" style={{ borderColor: "var(--hairline)" }}>
       <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between text-xs font-semibold muted [&::-webkit-details-marker]:hidden">查看消费详情<ChevronDown size={15} className="transition-transform group-open:rotate-180" /></summary>
