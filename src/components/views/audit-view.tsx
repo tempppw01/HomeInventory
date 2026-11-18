@@ -4,11 +4,39 @@ import { Check, ClipboardCheck, Package, QrCode } from "lucide-react";
 import { useContext, useState } from "react";
 import type { Item, Location } from "@/types";
 import { useConfirm } from "@/components/confirm-dialog";
+import { ContextMenu, useContextMenu, type ContextMenuItem } from "@/components/context-menu";
+import { copyToClipboard } from "@/lib/clipboard";
+import { CheckCircle2, ClipboardCopy, Undo2 } from "lucide-react";
 import { QrScannerModal, normalizeScannedCode } from "@/components/qr-scanner";
 import { Empty, ListRow, Metric, Panel, Screen, Toolbar } from "@/components/ui-kit";
 import { csvStringify, withBom } from "@/lib/csv";
 import { AUDIT_HEADER, auditCsvRows, auditRows, auditSummaryText } from "@/lib/audit-export";
 import { ReadOnlyContext, request } from "../shared";
+/** 核对表的一行:右键给出「确认 / 取消确认 / 复制编号」,与物品卡片的交互保持一致。 */
+function AuditRow({ item, checked, onToggle, trailing }: { item: Item; checked: boolean; onToggle: () => void; trailing: React.ReactNode }) {
+  const context = useContextMenu();
+  const copyCode = () => { void copyToClipboard(item.itemCode || item.id); };
+  const contextItems: ContextMenuItem[] = [
+    checked ? { label: "取消确认", icon: Undo2, onClick: onToggle } : { label: "确认这件", icon: CheckCircle2, onClick: onToggle },
+    { label: "复制物品编号", icon: ClipboardCopy, onClick: copyCode },
+  ];
+  return (
+    <>
+      <div onContextMenu={context.onContextMenu}>
+        <ListRow
+          icon={checked ? Check : Package}
+          active={checked}
+          onClick={onToggle}
+          title={item.name}
+          meta={`${item.itemCode || item.id} · ${item.location?.name || "未设置位置"}`}
+          trailing={trailing}
+        />
+      </div>
+      <ContextMenu menu={context.menu} items={contextItems} onClose={context.close} />
+    </>
+  );
+}
+
 export function AuditView({ items, locations, onRefresh, onToast }: { items: Item[]; locations: Location[]; onRefresh: () => Promise<void>; onToast: (message: string) => void }) {
   const readOnly = useContext(ReadOnlyContext);
   const askConfirm = useConfirm();
@@ -180,13 +208,11 @@ export function AuditView({ items, locations, onRefresh, onToast }: { items: Ite
         {scopedItems.length ? scopedItems.map((item) => {
           const checked = confirmed.has(item.id);
           return (
-            <ListRow
+            <AuditRow
               key={item.id}
-              icon={checked ? Check : Package}
-              active={checked}
-              onClick={() => toggle(item.id)}
-              title={item.name}
-              meta={`${item.itemCode || item.id} · ${item.location?.name || "未设置位置"}`}
+              item={item}
+              checked={checked}
+              onToggle={() => toggle(item.id)}
               trailing={<span className="flex shrink-0 items-center gap-2"><span className="text-xs font-bold muted">{item.quantity}{item.unit}</span>{checked && <Check size={15} strokeWidth={3} style={{ color: "var(--primary)" }} />}</span>}
             />
           );
