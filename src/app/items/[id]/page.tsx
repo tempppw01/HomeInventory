@@ -9,6 +9,7 @@ import { itemAiHighlights } from "@/lib/item-ai";
 import { STORAGE_LABEL } from "@/lib/item-insight";
 import { Panel } from "@/components/ui-kit";
 import { CopyCodeButton } from "@/components/copy-code-button";
+import { ItemQuickActions } from "@/components/item-quick-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,8 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
   // members without publishing the household inventory to anyone with the link.
   const user = await currentUser();
   if (!user) redirect("/");
+  // 只读角色不显示操作入口:接口本身也会拦,但界面上不该出现点了会被拒的按钮。
+  const canEdit = user.role !== "VIEWER" && user.active !== false;
   const item = await prisma.item.findFirst({
     where: { deletedAt: null, OR: [{ id }, { itemCode: id }] },
     include: { location: true },
@@ -87,6 +90,17 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
             </div>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <Stat icon={<Package size={14} />} label="当前数量" value={`${item.quantity} ${item.unit}`} />
+              {canEdit && (
+                <div className="sm:col-span-2">
+                  <ItemQuickActions
+                    itemId={item.id}
+                    unit={item.unit}
+                    type={item.type}
+                    remainingPercent={item.remainingPercent}
+                    isLiquid={showRemaining}
+                  />
+                </div>
+              )}
               {showRemaining && <Stat icon={<Droplets size={14} />} label="当前剩余量" value={`${Math.round(item.remainingPercent)}%`} tone={item.remainingPercent <= 20 ? "var(--danger)" : undefined} />}
             </div>
           </Panel>
