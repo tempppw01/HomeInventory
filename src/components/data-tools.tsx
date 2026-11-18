@@ -56,7 +56,10 @@ export function DataTools({ onToast }: { onToast: (message: string) => void }) {
       control={<div className="flex w-full flex-wrap gap-2 sm:justify-end">{/* 备份动作按「按钮组右对齐」统一 */}
         <a className="btn-primary flex items-center gap-2 text-xs" href="/api/backup"><Download size={14} />导出完整备份</a>
         <a className="btn-ghost flex items-center gap-2 text-xs" href="/api/items?export=1"><Download size={14} />导出物品 JSON</a>
-        <label className="btn-ghost flex cursor-pointer items-center gap-2 text-xs"><Upload size={14} />导入物品<input type="file" accept="application/json,.json,text/csv,.csv" className="hidden" onChange={(e) => importFile(e.target.files?.[0])} /></label>
+        <a href="/report" target="_blank" rel="noreferrer" className="btn-ghost flex items-center gap-2 text-xs" aria-label="打开家庭月报">
+          <History size={14} />家庭月报
+        </a>
+<label className="btn-ghost flex cursor-pointer items-center gap-2 text-xs"><Upload size={14} />导入物品<input type="file" accept="application/json,.json,text/csv,.csv" className="hidden" onChange={(e) => importFile(e.target.files?.[0])} /></label>
         <label className="btn-ghost flex cursor-pointer items-center gap-2 text-xs"><History size={14} />合并恢复备份<input type="file" accept="application/json,.json" className="hidden" onChange={(e) => restoreBackup(e.target.files?.[0])} /></label>
       </div>}
     />
