@@ -3,7 +3,7 @@
 import {
   AlertTriangle, Bot, Boxes, ChevronDown, ChevronRight, CircleAlert, LayoutGrid, List, QrCode, ShoppingBasket, Sparkles, WalletCards, Zap,
   Package,
-  CalendarDays } from "lucide-react";
+  CalendarDays, Warehouse } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { DashboardData, Item, ShoppingItem } from "@/types";
 import { isLiquidConsumable } from "@/lib/item-metrics";
@@ -11,6 +11,7 @@ import { itemAiHighlights } from "@/lib/item-ai";
 import { Badge, SectionHead } from "@/components/ui-kit";
 import { Empty, Hero, ListRow, Metric, Panel, Screen } from "@/components/ui-kit";
 import { duplicateGroups, restockForecast } from "@/lib/item-forecast";
+import { fridgePlan, fridgeSummary } from "@/lib/fridge";
 import { AiInsightsCard } from "@/components/ai-insights-card";
 import { categoryIconMap } from "@/components/shared";
 import { View, expiryDays, expiryDateLabel, expiryAdvice, expiryGroupLabel } from "../shared";
@@ -21,6 +22,13 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
   // 后台自动预测:按近期消耗速度算「还能用几天」,并找出可能重复录入的物品。
   // 全部是纯函数计算,不需要用户点按钮,也不需要额外的网络请求。
   const askConfirm = useConfirm();
+  // 冰箱清单:需冷藏的物品里,哪些还没放好(没设位置或位置不像冰箱)。
+  const fridge = fridgePlan(data.items.map((item) => ({
+    id: item.id, name: item.name, unit: item.unit, quantity: item.quantity,
+    storage: item.storage ?? null, locationName: item.location?.name ?? null,
+  })));
+  const fridgeText = fridgeSummary(fridge);
+
   const forecast = restockForecast(data.items.map((item) => ({
     id: item.id, name: item.name, category: item.category, type: item.type, unit: item.unit,
     quantity: item.quantity, remainingPercent: item.remainingPercent,
@@ -142,6 +150,21 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
                 meta={isLiquidConsumable(item) ? `余量 ${Math.round(item.remainingPercent)}%` : `建议补 ${Math.max(item.minQuantity - item.quantity, 1)} ${item.unit}`}
                 trailing={<button type="button" onClick={() => onAddRestock(item)} className="btn-ghost min-h-11 shrink-0 px-3 text-xs sm:min-h-10" style={{ color: "var(--primary)" }}>加入</button>}
               />)}</div>
+            </section>}
+
+            {fridgeText && <section>
+              <SectionHead title="冰箱清单" action="查看物品" onClick={() => onNavigate("items")} />
+              <p className="mb-1 mt-1 text-xs muted">{fridgeText}。</p>
+              <div>
+                {fridge.unplaced.slice(0, 5).map((row) => <ListRow
+                  key={row.id}
+                  icon={Warehouse}
+                  title={row.name}
+                  meta={`${row.quantity} ${row.unit} · ${row.locationName ? `现在放在「${row.locationName}」` : "还没设位置"}`}
+                  trailing={<button type="button" onClick={() => { const target = data.items.find((entry) => entry.id === row.id); if (target) onEdit(target); }} className="btn-ghost min-h-11 shrink-0 px-3 text-xs sm:min-h-10" style={{ color: "var(--primary)" }}>设位置</button>}
+                />)}
+                {fridge.placed.slice(0, 3).map((row) => <ListRow key={row.id} icon={Warehouse} title={row.name} meta={`${row.quantity} ${row.unit} · ${row.locationName ?? '冰箱'}`} />)}
+              </div>
             </section>}
 
             {forecast.length > 0 && <section>
