@@ -12,6 +12,7 @@ import { itemAiHighlights } from "@/lib/item-ai";
 import { ContextMenu, useContextMenu, ContextMenuItem } from "@/components/context-menu";
 import { isMedicineCategory, medicineCategoryLabel } from "@/lib/categories";
 import { Field } from "@/components/ui-kit";
+import { formatLocationPath, locationSegmentsById } from "@/lib/location-path";
 import { useConfirm } from "@/components/confirm-dialog";
 import { Chip, Empty, ListRow, Panel, Screen, Toolbar } from "@/components/ui-kit";
 import { ReadOnlyContext, ItemQuickFilter, expiryDays, expiryDateLabel, request } from "../shared";
@@ -80,6 +81,9 @@ export function ItemsView({ allItems, locations, items, shopping, search, setSea
   // 导出「当前筛选结果」为 CSV。纯前端生成:数据本来就在内存里,不必再多一个接口。
   // 带 UTF-8 BOM,否则 Excel 打开中文会乱码。
   const exportCsv = () => {
+    // 导出写「厨房/吊柜」这样的完整路径,导入时才能还原层级。
+    const segments = locationSegmentsById(locations.map((row) => ({ id: row.id, name: row.name, parentId: row.parentId ?? null })));
+    const pathById = new Map([...segments.entries()].map(([id, list]) => [id, formatLocationPath(list)]));
     const header = ["名称", "数量", "单位", "分类", "类型", "存放位置", "剩余量(%)", "购入日期", "到期日期", "单价", "物品编号", "备注"];
     const escape = (value: unknown) => {
       const text = value === null || value === undefined ? "" : String(value);
@@ -87,7 +91,7 @@ export function ItemsView({ allItems, locations, items, shopping, search, setSea
     };
     const rows = items.map((item) => [
       item.name, item.quantity, item.unit, item.category, item.type === "CONSUMABLE" ? "消耗品" : "耐用品",
-      item.location?.name ?? "", item.remainingPercent, item.purchaseDate?.slice(0, 10) ?? "", item.expiryDate?.slice(0, 10) ?? "",
+      pathById.get(item.locationId ?? "") ?? "", item.remainingPercent, item.purchaseDate?.slice(0, 10) ?? "", item.expiryDate?.slice(0, 10) ?? "",
       item.price ?? "", item.itemCode ?? "", item.notes ?? "",
     ]);
     const csv = [header, ...rows].map((row) => row.map(escape).join(",")).join("\r\n");

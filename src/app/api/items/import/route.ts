@@ -5,6 +5,7 @@ import { createItemCode } from "@/lib/item-code";
 import { itemSchema } from "@/lib/validation";
 import { normalizeItemQuantity } from "@/lib/item-metrics";
 import { itemInsight } from "@/lib/item-insight";
+import { resolveLocationPaths } from "@/lib/location-path";
 
 export async function POST(request: NextRequest) {
   try {
@@ -56,17 +57,18 @@ export async function POST(request: NextRequest) {
     const wantedNames = [...new Set(parsedRows
       .map((row) => String((row as Record<string, unknown>).locationName ?? "").trim())
       .filter(Boolean))];
-    const existingLocations = wantedNames.length
-      ? await prisma.location.findMany({ where: { name: { in: wantedNames } }, select: { id: true, name: true } })
-      : [];
-    const locationIdByName = new Map(existingLocations.map((row) => [row.name, row.id]));
-    const missingNames = wantedNames.filter((name) => !locationIdByName.has(name));
+    // 位置可能是「厨房/吊柜」这样的路径:规划出已有空间的 id 与需要新建的层级(父在前)。
+    const allLocations = await prisma.location.findMany({ select: { id: true, name: true, parentId: true } });
+    const plan = resolveLocationPaths(allLocations, wantedNames);
+    const locationIdByName = new Map(plan.pathToId);
     const count = await prisma.$transaction(async (tx) => {
       let createdCount = 0;
       // 表格里出现、但系统里还没有的空间:直接建出来,并在响应里回报,避免用户以为位置丢了。
-      for (const name of missingNames) {
-        const created = await tx.location.create({ data: { name, icon: "Package", color: "#7c3aed" } });
-        locationIdByName.set(name, created.id);
+      // 按「父在前」的顺序创建,parentPath 此时应该已经能解析成 id。
+      for (const row of plan.creations) {
+        const parentId = row.parentPath ? (locationIdByName.get(row.parentPath) ?? null) : null;
+        const created = await tx.location.create({ data: { name: row.name, parentId, icon: "Package", color: "#7c3aed" } });
+        locationIdByName.set(row.path, created.id);
       }
       for (const data of parsedRows) {
         const { recordPurchase, purchaseStore, locationName, ...itemData } = data as typeof data & { locationName?: string };
@@ -85,6 +87,6 @@ export async function POST(request: NextRequest) {
       }
       return createdCount;
     });
-    return NextResponse.json({ count, errors, truncated: rows.length > 1000, createdLocations: missingNames }, { status: 201 });
+    return NextResponse.json({ count, errors, truncated: rows.length > 1000, createdLocations: plan.creations.map((row) => row.path) }, { status: 201 });
   } catch (error) { return apiError(error); }
 }
