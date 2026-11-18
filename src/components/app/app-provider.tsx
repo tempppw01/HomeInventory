@@ -331,6 +331,19 @@ function useAppState() {
     }
   };
 
+  // 合并重复物品:后端会算好合计数量/最早保质期并做软删除,前端只负责确认与刷新。
+  const mergeItems = async (keepId: string, mergeIds: string[]) => {
+    try {
+      const result = await request<{ merged: string }>("/api/items/merge", { method: "POST", body: JSON.stringify({ keepId, mergeIds }) });
+      await refresh();
+      setToast(result?.merged ?? "已合并");
+      return true;
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "合并失败");
+      return false;
+    }
+  };
+
   const removeItem = async (item: Item) => {
     if (!(await askConfirm(`确定将“${item.name}”移入回收站吗?`, { title: "移入回收站", confirmLabel: "移入回收站" }))) return;
     await request(`/api/items/${item.id}`, { method: "DELETE", body: JSON.stringify({ memberId }) });
@@ -387,7 +400,7 @@ function useAppState() {
     chatOpen, setChatOpen, showWelcome, dismissWelcome,
     toast, toastAction, setToast,
     openEdit, openDetail, uploadItemImage, duplicateItem, copyText, removeShopping, consume,
-    updateRemaining, removeItem, addRestockSuggestion, toggleShopping, toggleFavoriteShopping,
+    updateRemaining, removeItem, mergeItems, addRestockSuggestion, toggleShopping, toggleFavoriteShopping,
     toggleTask, deleteTask,
   };
 }

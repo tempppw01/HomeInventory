@@ -46,7 +46,7 @@ export function AppChrome({ children }: { children?: React.ReactNode }) {
     qrItem, setQrItem, aiItem, setAiItem, printItems, setPrintItems, chatOpen, setChatOpen,
     showWelcome, dismissWelcome, toast, toastAction, setToast, setToastAction,
     openEdit, openDetail, uploadItemImage, duplicateItem, copyText, removeShopping, consume,
-    updateRemaining, removeItem, addRestockSuggestion, toggleShopping, toggleFavoriteShopping,
+    updateRemaining, removeItem, mergeItems, addRestockSuggestion, toggleShopping, toggleFavoriteShopping,
     toggleTask, deleteTask,
   } = app;
 
@@ -95,7 +95,7 @@ export function AppChrome({ children }: { children?: React.ReactNode }) {
             {children}
             {readOnly && <div className="mb-4 rounded-2xl px-3 py-2 text-xs font-bold" style={{ background: "var(--surface-soft)", color: "var(--muted)" }}>只读账号:可以查看和搜索,不能新增或修改数据。</div>}
             {loading ? <LoadingView /> : view === "dashboard" ? (
-              <DashboardView data={{ ...data!, items: data!.items.filter((item) => item.quantity > 0) }} now={now} lowStock={lowStock} expiring={expiring} expired={expired} pending={pendingShopping} totalValue={totalValue} onNavigate={openView} onEdit={openEdit} onOpenDetail={openDetail} onImageUpload={uploadItemImage} onDuplicate={duplicateItem} onConsume={consume} onDelete={removeItem} onAddRestock={addRestockSuggestion} onQr={setQrItem} onAi={setAiItem} onAlerts={() => setModal("notifications")} onCreate={() => setModal("item")} />
+              <DashboardView data={{ ...data!, items: data!.items.filter((item) => item.quantity > 0) }} now={now} lowStock={lowStock} expiring={expiring} expired={expired} pending={pendingShopping} totalValue={totalValue} onNavigate={openView} onEdit={openEdit} onOpenDetail={openDetail} onImageUpload={uploadItemImage} onDuplicate={duplicateItem} onConsume={consume} onDelete={removeItem} onAddRestock={addRestockSuggestion} onQr={setQrItem} onAi={setAiItem} onAlerts={() => setModal("notifications")} onCreate={() => setModal("item")} onMerge={mergeItems} />
             ) : view === "items" ? (
               <ItemsView allItems={data!.items.filter((item) => item.quantity > 0)} locations={data!.locations} items={filteredItems} shopping={data!.shopping} search={search} setSearch={setSearch} filter={typeFilter} setFilter={changeTypeFilter} categoryFilter={categoryFilter} setCategoryFilter={changeCategoryFilter} onEdit={openEdit} onOpenDetail={openDetail} onImageUpload={uploadItemImage} onDuplicate={duplicateItem} onConsume={consume} onRemainingChange={updateRemaining} onDelete={removeItem} onQr={setQrItem} onAi={setAiItem} onPrint={setPrintItems} onToast={setToast} onCopy={(item) => copyText(item.itemCode || item.id, "物品编号已复制")} onToggleShopping={toggleShopping} onFavoriteShopping={toggleFavoriteShopping} onAddShopping={() => setModal("shopping")} onCreate={() => setModal("item")} onToastWithUndo={(message, undo) => { setToast(message); setToastAction({ label: "撤销", onClick: async () => { try { await undo(); setToastAction(null); setToast("已恢复"); await refresh(); } catch (error) { setToast(error instanceof Error ? error.message : "撤销失败"); } } }); }} onBatchAi={() => { if (!aiAvailable) { setToast(role === "ADMIN" ? "AI 还没配置,先到设置里填好 API Key 再批量识别" : "AI 还没配置,请联系管理员在设置里配置"); if (role === "ADMIN") openView("settings"); return; } setModal("batch-ai"); }} onDeleteShopping={removeShopping} />
             ) : view === "locations" ? (

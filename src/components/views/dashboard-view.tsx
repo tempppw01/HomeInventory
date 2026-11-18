@@ -13,11 +13,13 @@ import { Empty, Hero, ListRow, Metric, Panel, Screen } from "@/components/ui-kit
 import { duplicateGroups, restockForecast } from "@/lib/item-forecast";
 import { categoryIconMap } from "@/components/shared";
 import { View, expiryDays, expiryDateLabel, expiryAdvice, expiryGroupLabel } from "../shared";
+import { useConfirm } from "@/components/confirm-dialog";
 import { ItemCard } from "./items-view";
-export function DashboardView({ data, now, lowStock, expiring, expired, pending, totalValue, onNavigate, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onDelete, onAddRestock, onQr, onAi, onAlerts, onCreate }: { data: DashboardData; now: number; lowStock: Item[]; expiring: Item[]; expired: Item[]; pending: ShoppingItem[]; totalValue: number; onNavigate: (v: View) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onDelete: (i: Item) => void; onAddRestock: (i: Item) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onAlerts: () => void; onCreate: () => void }) {
+export function DashboardView({ data, now, lowStock, expiring, expired, pending, totalValue, onNavigate, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onDelete, onAddRestock, onQr, onAi, onAlerts, onCreate, onMerge }: { data: DashboardData; now: number; lowStock: Item[]; expiring: Item[]; expired: Item[]; pending: ShoppingItem[]; totalValue: number; onNavigate: (v: View) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onDelete: (i: Item) => void; onAddRestock: (i: Item) => void; onMerge: (keepId: string, mergeIds: string[]) => Promise<unknown> | void; onQr: (i: Item) => void; onAi: (i: Item) => void; onAlerts: () => void; onCreate: () => void }) {
 
   // 后台自动预测:按近期消耗速度算「还能用几天」,并找出可能重复录入的物品。
   // 全部是纯函数计算,不需要用户点按钮,也不需要额外的网络请求。
+  const askConfirm = useConfirm();
   const forecast = restockForecast(data.items.map((item) => ({
     id: item.id, name: item.name, category: item.category, type: item.type, unit: item.unit,
     quantity: item.quantity, remainingPercent: item.remainingPercent,
@@ -152,6 +154,7 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
                 key={group.key}
                 icon={CircleAlert}
                 title={group.items.map((item) => item.name).join(" / ")}
+                trailing={<button type="button" onClick={async () => {                  const keepName = group.items.find((item) => item.id === group.keepId)?.name ?? "";                  const label = group.items.map((item) => item.name).join(" / ");                  const total = group.items.reduce((sum, item) => sum + item.quantity, 0);                  const unit = group.items[0]?.unit ?? "";                  const ok = await askConfirm(`确定合并「${label}」吗?会以「${keepName}」为准,合计 ${total} ${unit};其余移入回收站,可从回收站恢复。`, { title: "合并重复物品" });                  if (!ok) return;                  await onMerge(group.keepId, group.items.filter((item) => item.id !== group.keepId).map((item) => item.id));                }} className="btn-ghost min-h-11 shrink-0 px-3 text-xs sm:min-h-10" style={{ color: "var(--primary)" }}>合并</button>}
                 meta={`共 ${group.items.length} 条,建议保留「${group.items.find((item) => item.id === group.keepId)?.name ?? ''}」`}
               />)}</div>
             </section>}
