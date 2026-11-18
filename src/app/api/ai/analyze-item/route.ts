@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiError } from "@/lib/api";
 import { requireUser } from "@/lib/account-auth";
-import { anthropicMessagesUrl, chatCompletionsUrl, getAiConfig } from "@/lib/ai";
+import { aiFetch, anthropicMessagesUrl, chatCompletionsUrl, getAiConfig } from "@/lib/ai";
 import { aiAnalyzeSchema } from "@/lib/validation";
 import { localUploadDataUrl } from "@/lib/oss";
 import { AiImageError, compressAiImageDataUrl } from "@/lib/ai-image";
@@ -151,14 +151,13 @@ export async function POST(request: NextRequest) {
       response_format: { type: "json_object" },
     };
 
-    const call = (payload: Record<string, unknown>) => fetch(config.protocol === "anthropic" ? anthropicMessagesUrl(config.baseUrl) : chatCompletionsUrl(config.baseUrl), {
+    const call = (payload: Record<string, unknown>) => aiFetch(config.protocol === "anthropic" ? anthropicMessagesUrl(config.baseUrl) : chatCompletionsUrl(config.baseUrl), {
       method: "POST",
       headers: config.protocol === "anthropic"
         ? { "Content-Type": "application/json", "x-api-key": config.apiKey, "anthropic-version": "2023-06-01" }
         : { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(60000),
-    });
+      body: JSON.stringify(payload),
+    }, { attempts: 2, timeoutMs: 45000 });
     let response: Response;
     try {
       response = await call(body);
