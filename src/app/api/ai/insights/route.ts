@@ -17,7 +17,17 @@ export const dynamic = "force-dynamic";
 
 const querySchema = z.object({ force: z.coerce.boolean().optional() });
 
-type Insight = { title: string; detail: string; action?: string };
+type Insight = {
+  title: string;
+  detail: string;
+  /** 模型给的动作短语(仅展示用,不参与逻辑) */
+  action?: string;
+  /** 绑定到具体物品:让建议可以直接执行,而不是只读一句话 */
+  itemId?: string;
+  itemName?: string;
+  /** restock=加入采购清单 / open=查看这件 */
+  kind?: "restock" | "open";
+};
 type Payload = { headline: string; insights: Insight[]; generatedAt: string; model: string; cached: boolean };
 
 // 单进程内的简易缓存(Next standalone 常驻进程,够用;多副本部署时各实例各自缓存也安全)。
@@ -120,9 +130,23 @@ export async function GET(request: Request) {
     const parsedInsight = parseInsights(content);
     if (!parsedInsight) return NextResponse.json({ error: "AI 没给出可用建议,稍后再试" }, { status: 502 });
 
+    // 把每条建议绑到具体物品上,并按库存状态给出可执行动作。
+    // 名称匹配用「包含」+ 取最长,避免「奶」把「巴氏鲜奶」和「酸奶」都匹配掉。
+    const byName = [...items].sort((left, right) => right.name.length - left.name.length);
+    const forecastIds = new Set(forecast.map((row) => row.id));
+    const bound = parsedInsight.insights.map((insight) => {
+      const haystack = `${insight.title}${insight.detail}`;
+      const hit = byName.find((item) => haystack.includes(item.name));
+      if (!hit) return insight;
+      const canRestock = hit.type === "CONSUMABLE";
+      const urgent = forecastIds.has(hit.id) || (hit.minQuantity > 0 && hit.quantity <= hit.minQuantity);
+      return { ...insight, itemId: hit.id, itemName: hit.name, kind: (canRestock && urgent ? "restock" : "open") as "restock" | "open" };
+    });
+    if (!parsedInsight) return NextResponse.json({ error: "AI 没给出可用建议,稍后再试" }, { status: 502 });
+
     const payload: Payload = {
       headline: parsedInsight.headline,
-      insights: parsedInsight.insights,
+      insights: bound,
       generatedAt: new Date().toISOString(),
       model: config.model,
       cached: false,

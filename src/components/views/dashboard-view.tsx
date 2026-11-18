@@ -95,7 +95,11 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
           : <div data-testid="recent-list" className="min-w-0">{data.items.slice(0, 6).map((item) => <RecentItemRow key={item.id} item={item} onEdit={() => onEdit(item)} onQr={() => onQr(item)} onAi={() => onAi(item)} />)}{data.items.length === 0 && <Empty icon={Boxes} title="还没有物品" text="录入第一件物品后,这里会按更新时间列出最近变动的物品。" action={<button type="button" className="btn-ghost" onClick={onCreate}>录入第一件物品</button>} />}</div>}
       </Panel>
 
-      {aiAvailable && <AiInsightsCard aiAvailable={aiAvailable} />}
+      {aiAvailable && <AiInsightsCard
+        aiAvailable={aiAvailable}
+        onRestock={(itemId) => { const target = data.items.find((item) => item.id === itemId); if (target) onAddRestock(target); }}
+        onOpenItem={(itemId) => { const target = data.items.find((item) => item.id === itemId); if (target) onOpenDetail(target); }}
+      />}
 
       <div className="grid min-w-0 gap-4 sm:gap-5">
         {/* 默认折叠:辅助信息(消费 / 补货 / 到期 / 采购清单)不占首屏。 */}

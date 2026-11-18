@@ -12,14 +12,21 @@ async function jsonRequest<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 
-type Insight = { title: string; detail: string; action?: string };
+type Insight = {
+  title: string;
+  detail: string;
+  action?: string;
+  itemId?: string;
+  itemName?: string;
+  kind?: "restock" | "open";
+};
 type Payload = { headline: string; insights: Insight[]; generatedAt: string; model: string; cached: boolean };
 
 /**
  * 概览页的「AI 本周建议」。
  * 打开页面就自动请求一次,不需要用户点任何按钮;失败时整块自己消失,不打扰主流程。
  */
-export function AiInsightsCard({ aiAvailable }: { aiAvailable: boolean }) {
+export function AiInsightsCard({ aiAvailable, onRestock, onOpenItem }: { aiAvailable: boolean; onRestock: (itemId: string) => void; onOpenItem: (itemId: string) => void }) {
   const [payload, setPayload] = useState<Payload | null>(null);
   const [failed, setFailed] = useState(false);
   const started = useRef(false);
@@ -71,9 +78,19 @@ export function AiInsightsCard({ aiAvailable }: { aiAvailable: boolean }) {
             {payload.insights.map((insight, index) => (
               <li key={`${insight.title}-${index}`} className="flex gap-2.5">
                 <span className="mt-1 size-1.5 shrink-0 rounded-full" style={{ background: "var(--primary)" }} />
-                <span className="min-w-0">
+                <span className="min-w-0 flex-1">
                   <b className="text-sm">{insight.title}</b>
                   <span className="block text-xs leading-5 muted">{insight.detail}</span>
+                  {insight.itemId && (
+                    <button
+                      type="button"
+                      onClick={() => (insight.kind === "restock" ? onRestock(insight.itemId!) : onOpenItem(insight.itemId!))}
+                      className="mt-1.5 inline-flex min-h-9 items-center rounded-full px-2.5 text-xs font-bold"
+                      style={{ background: "var(--primary-soft)", color: "var(--primary)" }}
+                    >
+                      {insight.kind === "restock" ? "加到采购清单" : "看看这件"}
+                    </button>
+                  )}
                 </span>
               </li>
             ))}
