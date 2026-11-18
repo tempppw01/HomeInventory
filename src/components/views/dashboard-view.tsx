@@ -11,11 +11,12 @@ import { itemAiHighlights } from "@/lib/item-ai";
 import { Badge, SectionHead } from "@/components/ui-kit";
 import { Empty, Hero, ListRow, Metric, Panel, Screen } from "@/components/ui-kit";
 import { duplicateGroups, restockForecast } from "@/lib/item-forecast";
+import { AiInsightsCard } from "@/components/ai-insights-card";
 import { categoryIconMap } from "@/components/shared";
 import { View, expiryDays, expiryDateLabel, expiryAdvice, expiryGroupLabel } from "../shared";
 import { useConfirm } from "@/components/confirm-dialog";
 import { ItemCard } from "./items-view";
-export function DashboardView({ data, now, lowStock, expiring, expired, pending, totalValue, onNavigate, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onDelete, onAddRestock, onQr, onAi, onAlerts, onCreate, onMerge }: { data: DashboardData; now: number; lowStock: Item[]; expiring: Item[]; expired: Item[]; pending: ShoppingItem[]; totalValue: number; onNavigate: (v: View) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onDelete: (i: Item) => void; onAddRestock: (i: Item) => void; onMerge: (keepId: string, mergeIds: string[]) => Promise<unknown> | void; onQr: (i: Item) => void; onAi: (i: Item) => void; onAlerts: () => void; onCreate: () => void }) {
+export function DashboardView({ data, now, lowStock, expiring, expired, pending, totalValue, onNavigate, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onDelete, onAddRestock, onQr, onAi, onAlerts, onCreate, onMerge, aiAvailable = false }: { data: DashboardData; now: number; lowStock: Item[]; expiring: Item[]; expired: Item[]; pending: ShoppingItem[]; totalValue: number; onNavigate: (v: View) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onDelete: (i: Item) => void; onAddRestock: (i: Item) => void; onMerge: (keepId: string, mergeIds: string[]) => Promise<unknown> | void; aiAvailable?: boolean; onQr: (i: Item) => void; onAi: (i: Item) => void; onAlerts: () => void; onCreate: () => void }) {
 
   // 后台自动预测:按近期消耗速度算「还能用几天」,并找出可能重复录入的物品。
   // 全部是纯函数计算,不需要用户点按钮,也不需要额外的网络请求。
@@ -93,6 +94,8 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
           ? <div data-testid="recent-cards" className="grid gap-3 sm:grid-cols-2">{data.items.slice(0, 6).map((item) => <ItemCard key={item.id} item={item} onEdit={() => onEdit(item)} onOpenDetail={() => onOpenDetail(item)} onImageUpload={(file) => onImageUpload(item, file)} onDuplicate={() => onDuplicate(item)} onConsume={() => onConsume(item)} onQr={() => onQr(item)} onAi={() => onAi(item)} compact />)}{data.items.length === 0 && <div className="sm:col-span-2"><Empty icon={Boxes} title="还没有物品" text="录入第一件物品后,这里会按更新时间列出最近变动的物品。" action={undefined} /></div>}</div>
           : <div data-testid="recent-list" className="min-w-0">{data.items.slice(0, 6).map((item) => <RecentItemRow key={item.id} item={item} onEdit={() => onEdit(item)} onQr={() => onQr(item)} onAi={() => onAi(item)} />)}{data.items.length === 0 && <Empty icon={Boxes} title="还没有物品" text="录入第一件物品后,这里会按更新时间列出最近变动的物品。" action={<button type="button" className="btn-ghost" onClick={onCreate}>录入第一件物品</button>} />}</div>}
       </Panel>
+
+      {aiAvailable && <AiInsightsCard aiAvailable={aiAvailable} />}
 
       <div className="grid min-w-0 gap-4 sm:gap-5">
         {/* 默认折叠:辅助信息(消费 / 补货 / 到期 / 采购清单)不占首屏。 */}

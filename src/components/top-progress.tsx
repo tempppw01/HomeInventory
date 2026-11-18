@@ -88,6 +88,12 @@ export function TopProgressBar() {
     const original = window.fetch;
     const activeSources = sources.current;
     const wrapped: typeof window.fetch = (...args) => {
+      // 后台预取/自动生成类请求(例如概览的 AI 建议)不该点亮全局进度条:
+      // 它们可能跑十几秒,会让整个应用看起来一直在忙。请求方带 x-background: 1 表示自己不计入。
+      const init = (args as unknown[])[1] as RequestInit | undefined;
+      const headers = new Headers(init?.headers ?? undefined);
+      if (headers.get("x-background") === "1") return original(...args);
+
       fetchDepth.current += 1;
       if (fetchDepth.current === 1) begin("fetch");
       const settle = () => {
