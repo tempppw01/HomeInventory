@@ -6,6 +6,8 @@ import type { Item, Location } from "@/types";
 import { useConfirm } from "@/components/confirm-dialog";
 import { QrScannerModal, normalizeScannedCode } from "@/components/qr-scanner";
 import { Empty, ListRow, Metric, Panel, Screen, Toolbar } from "@/components/ui-kit";
+import { csvStringify, withBom } from "@/lib/csv";
+import { AUDIT_HEADER, auditCsvRows, auditRows, auditSummaryText } from "@/lib/audit-export";
 import { ReadOnlyContext, request } from "../shared";
 export function AuditView({ items, locations, onRefresh, onToast }: { items: Item[]; locations: Location[]; onRefresh: () => Promise<void>; onToast: (message: string) => void }) {
   const readOnly = useContext(ReadOnlyContext);
@@ -42,6 +44,26 @@ export function AuditView({ items, locations, onRefresh, onToast }: { items: Ite
   const unconfirmed = scopedItems.filter((item) => !confirmed.has(item.id));
   const confirmedCount = scopedItems.filter((item) => confirmed.has(item.id)).length;
   const progressPercent = scopedItems.length ? (confirmedCount / scopedItems.length) * 100 : 0;
+  // 导出本次盘点结果:盘完想留个记录、或把「哪些没找到」发给家人,都需要一个出口。
+  const exportAudit = () => {
+    const rows = auditRows(scopedItems.map((item) => ({
+      id: item.id, itemCode: item.itemCode, name: item.name, category: item.category,
+      type: item.type, quantity: item.quantity, unit: item.unit,
+      expiryDate: item.expiryDate, locationPath: item.location?.name ?? null,
+    })), confirmed);
+    const csv = withBom(csvStringify(AUDIT_HEADER, auditCsvRows(rows)));
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `归物-盘点结果-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    onToast(auditSummaryText(rows.length, confirmed.size) + ",已导出");
+  };
+
   const restart = () => { void askConfirm("重新开始本次盘点?当前确认记录会清空。", { title: "重新开始盘点", confirmLabel: "重新开始", tone: "danger" }).then((ok) => { if (ok) updateConfirmed(new Set()); }); };
   const handleScan = (raw = scanValue): "matched" | "duplicate" | "unknown" => {
     const value = normalizeScannedCode(raw);
@@ -111,7 +133,7 @@ export function AuditView({ items, locations, onRefresh, onToast }: { items: Ite
       <Panel
         title="盘点总览"
         description={history[0] ? `最近盘点:${new Date(history[0].at).toLocaleDateString("zh-CN")} · ${history[0].confirmed}/${history[0].total} 件 · ${history[0].locationName}` : "第一次盘点?先扫一个二维码试试。"}
-        actions={<button onClick={restart} className="inline-flex min-h-11 items-center px-2 text-xs font-bold muted transition-colors hover:text-[var(--foreground)] sm:min-h-10">重新开始</button>}
+        actions={<><button onClick={exportAudit} className="inline-flex min-h-11 items-center px-2 text-xs font-bold" style={{ color: "var(--primary)" }} aria-label="导出盘点结果">导出结果</button><button onClick={restart} className="inline-flex min-h-11 items-center px-2 text-xs font-bold muted transition-colors hover:text-[var(--foreground)] sm:min-h-10">重新开始</button></>}
       >
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
           {/* 「进度 X / Y」必须是一段完整文本(验收套件按文案断言,innerText/textContent 都要能命中),
