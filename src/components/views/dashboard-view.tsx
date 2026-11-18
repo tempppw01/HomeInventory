@@ -10,10 +10,23 @@ import { isLiquidConsumable } from "@/lib/item-metrics";
 import { itemAiHighlights } from "@/lib/item-ai";
 import { Badge, SectionHead } from "@/components/ui-kit";
 import { Empty, Hero, ListRow, Metric, Panel, Screen } from "@/components/ui-kit";
+import { duplicateGroups, restockForecast } from "@/lib/item-forecast";
 import { categoryIconMap } from "@/components/shared";
 import { View, expiryDays, expiryDateLabel, expiryAdvice, expiryGroupLabel } from "../shared";
 import { ItemCard } from "./items-view";
 export function DashboardView({ data, now, lowStock, expiring, expired, pending, totalValue, onNavigate, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onDelete, onAddRestock, onQr, onAi, onAlerts, onCreate }: { data: DashboardData; now: number; lowStock: Item[]; expiring: Item[]; expired: Item[]; pending: ShoppingItem[]; totalValue: number; onNavigate: (v: View) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onDelete: (i: Item) => void; onAddRestock: (i: Item) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onAlerts: () => void; onCreate: () => void }) {
+
+  // 后台自动预测:按近期消耗速度算「还能用几天」,并找出可能重复录入的物品。
+  // 全部是纯函数计算,不需要用户点按钮,也不需要额外的网络请求。
+  const forecast = restockForecast(data.items.map((item) => ({
+    id: item.id, name: item.name, category: item.category, type: item.type, unit: item.unit,
+    quantity: item.quantity, remainingPercent: item.remainingPercent,
+    consumeRate: item.consumeRate ?? null, expiryDate: item.expiryDate, restockPausedUntil: item.restockPausedUntil,
+  })));
+  const duplicates = duplicateGroups(data.items.map((item) => ({
+    id: item.id, name: item.name, category: item.category, type: item.type, unit: item.unit,
+    quantity: item.quantity, remainingPercent: item.remainingPercent, consumeRate: item.consumeRate ?? null,
+  })));
   const [recentView, setRecentView] = useState<"cards" | "list">("list");
   useEffect(() => {
     const saved = localStorage.getItem("home-inventory-recent-view-v2");
@@ -119,6 +132,27 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
                 title={item.name}
                 meta={isLiquidConsumable(item) ? `余量 ${Math.round(item.remainingPercent)}%` : `建议补 ${Math.max(item.minQuantity - item.quantity, 1)} ${item.unit}`}
                 trailing={<button type="button" onClick={() => onAddRestock(item)} className="btn-ghost min-h-11 shrink-0 px-3 text-xs sm:min-h-10" style={{ color: "var(--primary)" }}>加入</button>}
+              />)}</div>
+            </section>}
+
+            {forecast.length > 0 && <section>
+              <SectionHead title="快用完了(按近期用量估算)" action="查看物品" onClick={() => onNavigate("items")} />
+              <div>{forecast.slice(0, 5).map((row) => <ListRow
+                key={row.id}
+                icon={CircleAlert}
+                title={row.name}
+                meta={row.reason}
+              />)}</div>
+            </section>}
+
+            {duplicates.length > 0 && <section>
+              <SectionHead title="可能有重复录入" action="查看物品" onClick={() => onNavigate("items")} />
+              <p className="mb-1 mt-1 text-xs muted">名字高度相似,可能是同一件东西录了两次。</p>
+              <div>{duplicates.slice(0, 3).map((group) => <ListRow
+                key={group.key}
+                icon={CircleAlert}
+                title={group.items.map((item) => item.name).join(" / ")}
+                meta={`共 ${group.items.length} 条,建议保留「${group.items.find((item) => item.id === group.keepId)?.name ?? ''}」`}
               />)}</div>
             </section>}
 
