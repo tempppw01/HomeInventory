@@ -81,13 +81,15 @@ export function Chip({ children, active = false, tone = "neutral", onClick, titl
   );
 }
 
-export function ListRow({ icon: Icon, title, meta, trailing, onClick, active = false }: {
+export function ListRow({ icon: Icon, title, meta, trailing, onClick, active = false, onContextMenu }: {
   icon?: LucideIcon;
   title: ReactNode;
   meta?: ReactNode;
   trailing?: ReactNode;
   onClick?: () => void;
   active?: boolean;
+  /** 右键菜单:行内容与按钮/div 两种形态都要能挂上 */
+  onContextMenu?: (event: React.MouseEvent<HTMLElement>) => void;
 }) {
   const content = (
     <>
@@ -105,8 +107,8 @@ export function ListRow({ icon: Icon, title, meta, trailing, onClick, active = f
   );
   const className = "flex w-full min-w-0 items-center gap-3 border-t px-1 py-3 text-left transition-colors first:border-t-0 first:pt-0 first:pb-3";
   const style = { borderColor: "var(--hairline)" };
-  if (onClick) return <button type="button" onClick={onClick} className={`${className} rounded-2xl`} style={style}>{content}</button>;
-  return <div className={className} style={style}>{content}</div>;
+  if (onClick) return <button type="button" onClick={onClick} onContextMenu={onContextMenu} className={`${className} rounded-2xl`} style={style}>{content}</button>;
+  return <div className={className} style={style} onContextMenu={onContextMenu}>{content}</div>;
 }
 
 export function Metric({ label, value, hint, tone = "neutral", icon: Icon }: {

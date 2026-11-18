@@ -3,8 +3,7 @@
 import { motion } from "motion/react";
 import { QRCodeSVG } from "qrcode.react";
 import {
-  Check, ChevronRight, MapPin, Package, Printer, ShoppingBasket, X,
-} from "lucide-react";
+  Check, ChevronRight, MapPin, Package, Pencil, Printer, ShoppingBasket, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import type { Item, Location } from "@/types";
 import { isLiquidConsumable } from "@/lib/item-metrics";
@@ -13,6 +12,9 @@ import { Field } from "@/components/ui-kit";
 import { Empty, ListRow } from "@/components/ui-kit";
 import { useEscapeClose } from "@/lib/use-escape-close";
 import { units, request } from "../shared";
+import { ContextMenu, useContextMenu, type ContextMenuItem } from "@/components/context-menu";
+import { copyToClipboard } from "@/lib/clipboard";
+import { ClipboardCopy, ExternalLink } from "lucide-react";
 
 // 弹窗统一语言:28px 圆角 + 暖面(--surface-solid)+ 柔和 scrim。
 // 面板样式集中在这里,避免各个弹窗各写一套背景与圆角造成割裂。
@@ -36,13 +38,48 @@ export function Modal({ title, subtitle, onClose, children }: { title: string; s
   return <motion.div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 p-0 backdrop-blur-sm sm:items-center sm:p-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(e) => e.target === e.currentTarget && onClose()} onFocusCapture={(event) => { if (window.innerWidth >= 768) return; const target = event.target as HTMLElement; window.setTimeout(() => target.scrollIntoView({ block: "nearest" }), 220); }}><motion.div role="dialog" aria-modal="true" aria-label={title} initial={{ y: 12, opacity: 0, scale: .98 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: 12, opacity: 0, scale: .98, transition: { duration: .18, ease: [0.23, 1, 0.32, 1] } }} transition={{ type: "spring", damping: 28, stiffness: 340 }} className="max-h-[min(92vh,88dvh)] w-full max-w-lg overflow-y-auto rounded-t-[28px] rounded-b-none p-5 shadow-2xl sm:rounded-[28px] sm:p-6" style={keyboardInset ? { background: "var(--surface-solid)", maxHeight: `${Math.max(240, viewportHeight - 16)}px` } : { background: "var(--surface-solid)" }}><div className="mb-5 flex items-start gap-3 sm:mb-6"><div className="min-w-0 flex-1"><h2 className="m-0 text-xl font-black leading-snug">{title}</h2><p className="mb-0 mt-1 text-xs muted">{subtitle}</p></div><button type="button" onClick={onClose} className="btn-ghost grid size-11 min-h-11 shrink-0 place-items-center p-0" aria-label={`关闭${title}`} title="关闭"><X size={17} /></button></div>{children}</motion.div></motion.div>;
 }
 
-export function NotificationsModal({ lowStock, expiring, expired, onClose, onOpenItem, onDispose, onShopping }: { lowStock: Item[]; expiring: Item[]; expired: Item[]; onClose: () => void; onOpenItem: (item: Item) => void; onDispose: (item: Item) => void; onShopping: () => void }) {
+export function NotificationsModal({ lowStock, expiring, expired, onClose, onOpenItem, onOpenDetail, onDispose, onShopping }: { lowStock: Item[]; expiring: Item[]; expired: Item[]; onClose: () => void; onOpenItem: (item: Item) => void; onOpenDetail: (item: Item) => void; onDispose: (item: Item) => void; onShopping: () => void }) {
   const alerts = [
     ...expired.map((item) => ({ item, label: `${["食品", "饮品"].includes(item.category) ? "食品" : "物品"}已过期 · ${new Date(item.expiryDate!).toLocaleDateString("zh-CN")}`, color: "var(--danger)" })),
     ...expiring.filter((item) => !expired.some((old) => old.id === item.id)).map((item) => ({ item, label: `${["食品", "饮品"].includes(item.category) ? "食品即将到期" : "即将到期"} · ${new Date(item.expiryDate!).toLocaleDateString("zh-CN")}`, color: "var(--warning)" })),
     ...lowStock.filter((item) => !expired.some((old) => old.id === item.id)).map((item) => ({ item, label: isLiquidConsumable(item) && item.remainingPercent <= 20 ? `剩余量仅 ${Math.round(item.remainingPercent)}%` : `库存仅剩 ${item.quantity} ${item.unit}`, color: "#e37d25" })),
   ];
-  return <Modal title="提醒中心" subtitle={alerts.length ? `${alerts.length} 条待处理事项` : undefined} onClose={onClose}><div className="space-y-1">{alerts.map(({ item, label, color }) => <ListRow key={`${item.id}-${label}`} title={<><span className="mr-2 inline-block size-2 shrink-0 rounded-full align-middle" style={{ background: color }} />{item.name}</>} meta={label} onClick={() => onOpenItem(item)} trailing={expired.some((entry) => entry.id === item.id) ? <button type="button" onClick={() => onDispose(item)} className="shrink-0 rounded-xl px-2 py-1.5 text-xs font-bold" style={{ color: "var(--danger)" }}>移入回收站</button> : <ChevronRight size={16} className="shrink-0 muted" />} />)}{alerts.length === 0 && <Empty icon={Check} title="暂无提醒" text="库存和保质期都在安全范围内" />}</div>{lowStock.length > 0 && <button onClick={onShopping} className="btn-primary mt-4 w-full">查看采购清单</button>}</Modal>;
+  return <Modal title="提醒中心" subtitle={alerts.length ? `${alerts.length} 条待处理事项` : undefined} onClose={onClose}><div className="space-y-1">{alerts.map(({ item, label, color }) => (
+          <AlertRow
+            key={`${item.id}-${label}`}
+            item={item}
+            label={label}
+            color={color}
+            canDispose={expired.some((entry) => entry.id === item.id)}
+            onOpenItem={onOpenItem}
+            onOpenDetail={onOpenDetail}
+            onDispose={onDispose}
+          />
+        ))}{alerts.length === 0 && <Empty icon={Check} title="暂无提醒" text="库存和保质期都在安全范围内" />}</div>{lowStock.length > 0 && <button onClick={onShopping} className="btn-primary mt-4 w-full">查看采购清单</button>}</Modal>;
+}
+
+/** 提醒中心的一条:右键可「查看物品 / 复制物品编号 / 处理掉」。 */
+function AlertRow({ item, label, color, canDispose, onOpenItem, onOpenDetail, onDispose }: { item: Item; label: string; color?: string; canDispose: boolean; onOpenItem: (item: Item) => void; onOpenDetail: (item: Item) => void; onDispose: (item: Item) => void }) {
+  const context = useContextMenu();
+  const contextItems: ContextMenuItem[] = [
+    { label: "查看详情", icon: ExternalLink, onClick: () => onOpenDetail(item) },
+    { label: "编辑物品", icon: Pencil, onClick: () => onOpenItem(item) },
+    { label: "复制物品编号", icon: ClipboardCopy, onClick: () => { void copyToClipboard(item.itemCode || item.id); } },
+    ...(canDispose ? [{ label: "处理掉这件", danger: true, separatorBefore: true, onClick: () => onDispose(item) }] : []),
+  ];
+  return (
+    <>
+      <div onContextMenu={context.onContextMenu}>
+        <ListRow
+          title={<><span className="mr-2 inline-block size-2 shrink-0 rounded-full align-middle" style={{ background: color }} />{item.name}</>}
+          meta={label}
+          onClick={() => onOpenItem(item)}
+          trailing={canDispose ? <button type="button" onClick={() => onDispose(item)} className="shrink-0 rounded-xl px-2 py-1.5 text-xs font-bold" style={{ background: "var(--danger-soft, #ffe8eb)", color: "var(--danger)" }}>处理掉</button> : <ChevronRight size={16} className="shrink-0 muted" />}
+        />
+      </div>
+      <ContextMenu menu={context.menu} items={contextItems} onClose={context.close} />
+    </>
+  );
 }
 
 export function WelcomeModal({ hasDemoData, onClose, onAction }: { hasDemoData: boolean; onClose: () => void; onAction: (action: "item" | "location" | "shopping") => void }) {

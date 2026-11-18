@@ -19,6 +19,8 @@ import { monthOverMonthLabel } from "@/lib/chart";
 import { categoryIconMap } from "@/components/shared";
 import { View, expiryDays, expiryDateLabel, expiryAdvice, expiryGroupLabel } from "../shared";
 import { useConfirm } from "@/components/confirm-dialog";
+import { ContextMenu, useContextMenu, type ContextMenuItem } from "@/components/context-menu";
+import { copyToClipboard } from "@/lib/clipboard";
 import { ItemCard } from "./items-view";
 export function DashboardView({ data, now, lowStock, expiring, expired, pending, totalValue, onNavigate, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onDelete, onAddRestock, onQr, onAi, onAlerts, onCreate, onMerge, aiAvailable = false }: { data: DashboardData; now: number; lowStock: Item[]; expiring: Item[]; expired: Item[]; pending: ShoppingItem[]; totalValue: number; onNavigate: (v: View) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onDelete: (i: Item) => void; onAddRestock: (i: Item) => void; onMerge: (keepId: string, mergeIds: string[]) => Promise<unknown> | void; aiAvailable?: boolean; onQr: (i: Item) => void; onAi: (i: Item) => void; onAlerts: () => void; onCreate: () => void }) {
 
@@ -37,6 +39,20 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
     quantity: item.quantity, remainingPercent: item.remainingPercent,
     consumeRate: item.consumeRate ?? null, expiryDate: item.expiryDate, restockPausedUntil: item.restockPausedUntil,
   })));
+  // 库存分布:按分类统计件数,看看家里东西主要集中在哪里(只取前 6 类,其余合并为「其他」)。
+  const inventoryShare = (() => {
+    const buckets = new Map<string, number>();
+    for (const item of data.items) {
+      const key = item.category.replace(/^医药·/, "医药");
+      buckets.set(key, (buckets.get(key) ?? 0) + 1);
+    }
+    const sorted = [...buckets.entries()].sort((left, right) => right[1] - left[1]);
+    const head = sorted.slice(0, 6).map(([label, value]) => ({ label, value }));
+    const restCount = sorted.slice(6).reduce((sum, [, value]) => sum + value, 0);
+    if (restCount > 0) head.push({ label: "其他", value: restCount });
+    return head;
+  })();
+
   const duplicates = duplicateGroups(data.items.map((item) => ({
     id: item.id, name: item.name, category: item.category, type: item.type, unit: item.unit,
     quantity: item.quantity, remainingPercent: item.remainingPercent, consumeRate: item.consumeRate ?? null,
@@ -127,6 +143,19 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
             />
           </div>
         </details>
+        {/* 库存分布:此前面板只有「钱」和「时间」,没有「东西都在哪一类」。 */}
+        <details className="surface group p-4 sm:p-5">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 rounded-xl [&::-webkit-details-marker]:hidden md:min-h-10">
+            <span className="grid size-10 shrink-0 place-items-center rounded-2xl" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><Boxes size={18} /></span>
+            <span className="min-w-0 flex-1"><b className="block text-sm">库存分布</b><span className="mt-0.5 block text-xs muted">家里的东西都集中在哪一类</span></span>
+            <ChevronDown size={17} className="shrink-0 transition group-open:rotate-180" style={{ color: "var(--muted)" }} />
+          </summary>
+          <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--hairline)" }}>
+            <ShareBar rows={inventoryShare} ariaLabel="按分类的物品种类分布" valueFormatter={(value) => `${value} 件`} />
+            <p className="mb-0 mt-3 text-xs muted">共 {data.items.length} 件物品,其中消耗品 {data.items.filter((item) => item.type === "CONSUMABLE").length} 件。</p>
+          </div>
+        </details>
+
         {/* 到期日历:按月看哪天有东西到期。此前只有「提醒中心」的列表,看不出时间分布。 */}
         <details className="surface group p-4 sm:p-5">
           <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 rounded-xl [&::-webkit-details-marker]:hidden md:min-h-10">
@@ -230,9 +259,19 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
 }
 
 export function RecentItemRow({ item, onEdit, onQr, onAi }: { item: Item; onEdit: () => void; onQr: () => void; onAi: () => void }) {
+  // 右键:编辑 / 二维码 / AI / 复制编号 —— 概览里的这一行也是一个物品,操作应与物品卡片一致。
+  const recentMenu = useContextMenu();
+  const recentItems: ContextMenuItem[] = [
+    { label: "编辑物品", onClick: onEdit },
+    { label: "显示二维码", onClick: onQr },
+    { label: "AI 识别与建议", onClick: onAi },
+    { label: "复制物品编号", separatorBefore: true, onClick: () => { void copyToClipboard(item.itemCode || item.id); } },
+  ];
   const ai = itemAiHighlights(item);
   const CategoryIcon = categoryIconMap[item.category] || Package;
-  return <ListRow
+  return <>
+    <ListRow
+    onContextMenu={recentMenu.onContextMenu}
     onClick={onEdit}
     title={<span className="flex min-w-0 items-center gap-1.5">{item.imageUrl
       ? <span className="size-5 shrink-0 rounded-md bg-cover bg-center" style={{ backgroundImage: `url(${item.imageUrl})` }} />
@@ -245,7 +284,9 @@ export function RecentItemRow({ item, onEdit, onQr, onAi }: { item: Item; onEdit
         <span onClick={(event) => { event.stopPropagation(); onQr(); }} className="grid size-6 place-items-center rounded-md hover:bg-[var(--surface-solid)]" aria-label="显示二维码"><QrCode size={12} /></span>
       </span>
     </span>}
-  />;
+  />
+    <ContextMenu menu={recentMenu.menu} items={recentItems} onClose={recentMenu.close} />
+  </>;
 }
 
 export function HomeInsightsCompact({ data, onRestock }: { data: DashboardData; onRestock?: (itemId: string) => void }) {
