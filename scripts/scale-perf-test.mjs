@@ -135,6 +135,7 @@ record("宽匹配搜索不超时", searchBroad.status === 200, `status=${searchB
 
   // 搜索交互延迟:直接用物品页的搜索框,以「列表真的筛到目标」为判据
   // (此前用顶栏浮层的 innerText 命中数,受浮层渲染时机影响会误报)
+  const searchTarget = `S-物品${String(Math.max(1, Math.ceil(Number(process.env.SCALE_TARGET ?? 300) / 2))).padStart(3, "0")}`;
   const pageSearch = page.locator('main input[placeholder*="搜索"]').first();
   let searchElapsed = 0;
   let filteredCount = -1;
@@ -142,7 +143,8 @@ record("宽匹配搜索不超时", searchBroad.status === 200, `status=${searchB
   if (await pageSearch.count()) {
     await pageSearch.click();
     const searchStart = Date.now();
-    await pageSearch.fill("S-物品123");
+    // 目标取实际创建的中间一条,避免 SCALE_TARGET 变化时搜不到而不自知
+    await pageSearch.fill(searchTarget);
     await page.waitForTimeout(900);
     searchElapsed = Date.now() - searchStart;
     const state = await page.evaluate(() => ({
@@ -150,7 +152,7 @@ record("宽匹配搜索不超时", searchBroad.status === 200, `status=${searchB
       text: document.querySelector("main")?.innerText ?? "",
     }));
     filteredCount = state.cards;
-    hit = state.text.includes("S-物品123");
+    hit = state.text.includes(searchTarget);
     await pageSearch.fill("");
     await page.waitForTimeout(500);
   }

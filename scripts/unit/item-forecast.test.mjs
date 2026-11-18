@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { daysLeftFor, restockForecast, normalizeItemName, duplicateGroups, FORECAST_LABEL } from "../../src/lib/item-forecast.ts";
+import { daysLeftFor, restockForecast, normalizeItemName, duplicateGroups, learnConsumeRate, FORECAST_LABEL } from "../../src/lib/item-forecast.ts";
 
 const item = (patch) => ({
   id: patch.id ?? "x",
@@ -84,6 +84,28 @@ test("名字不同不会误判为重复", () => {
     item({ id: "two", name: "洗衣液" }),
   ]);
   assert.deepEqual(groups, []);
+});
+
+test("少于两次事件不学习消耗速度", () => {
+  const now = Date.now();
+  assert.equal(learnConsumeRate([{ at: now, units: 2 }], now), null);
+  assert.equal(learnConsumeRate([], now), null);
+});
+
+test("按事件跨度学习日均消耗", () => {
+  const now = Date.now();
+  const day = 86400000;
+  // 10 天内用掉 10 个单位 → 约 1/天
+  const events = [0, 3, 6, 10].map((offset) => ({ at: now - offset * day, units: 2.5 }));
+  const rate = learnConsumeRate(events, now);
+  assert.ok(rate > 0.8 && rate < 1.3, );
+});
+
+test("窗口外的旧事件不计入", () => {
+  const now = Date.now();
+  const day = 86400000;
+  const rate = learnConsumeRate([{ at: now - 60 * day, units: 10 }, { at: now - 2 * day, units: 1 }], now);
+  assert.equal(rate, null);
 });
 
 test("空名单不报错", () => {

@@ -5,6 +5,7 @@ import { apiError, requireWritableUser } from "@/lib/api";
 import { requireUser } from "@/lib/account-auth";
 import { needsRestock, normalizeItemQuantity, restockQuantity } from "@/lib/item-metrics";
 import { itemInsight } from "@/lib/item-insight";
+import { learnConsumeRate } from "@/lib/item-forecast";
 import { deleteStoredImage } from "@/lib/oss";
 
 type Context = { params: Promise<{ id: string }> };
@@ -35,6 +36,24 @@ export async function PATCH(request: NextRequest, { params }: Context) {
       const nextUnit = parsed.unit ?? existing.unit;
       const normalized = parsed.quantity === undefined ? parsed : { ...parsed, quantity: normalizeItemQuantity(parsed.quantity, nextUnit) };
       const data = nextType === "DURABLE" ? { ...normalized, expiryDate: null } : normalized;
+      // 后台自动学习:液体用余量刻度记录进度、不走 consume 接口,所以在这里补一条消耗流水,
+      // 再用最近 30 天的真实流水重算日均消耗 —— 用户不用手动填 consumeRate。
+      const nextPercent = data.remainingPercent;
+      const prevPercent = existing.remainingPercent;
+      if (typeof nextPercent === "number" && nextPercent < prevPercent) {
+        const equivalent = ((prevPercent - nextPercent) / 100) * Math.max(existing.quantity, 0);
+        if (equivalent >= 0.1) {
+          await tx.activityLog.create({ data: { action: "CONSUME", itemId: id, itemName: existing.name, userId: user.id, detail: `余量 ${Math.round(prevPercent)}% → ${Math.round(nextPercent)}%` } });
+          const recentEvents = await tx.activityLog.findMany({
+            where: { itemId: id, action: "CONSUME", undoneAt: null, createdAt: { gte: new Date(Date.now() - 30 * 86400000) } },
+            select: { createdAt: true },
+          });
+          // 历史每次下降幅度未知,用本次的等效量作近似,避免为了一个估值再查一堆明细。
+          const learned = learnConsumeRate(recentEvents.map((row) => ({ at: row.createdAt.getTime(), units: equivalent })));
+          if (learned) data.consumeRate = Number(learned.toFixed(3));
+        }
+      }
+
       // 后台自动重算:名称/分类/单位/类型任一变化都可能改变「该不该冷藏」与标签。
       const insight = itemInsight({ name: data.name ?? existing.name, category: data.category ?? existing.category, unit: (data.unit ?? existing.unit), type: (data.type ?? existing.type) as unknown as "DURABLE" | "CONSUMABLE" });
       const withInsight = { ...data, storage: insight.storage, storageReason: insight.storageReason, autoTags: insight.tags.join(",") };

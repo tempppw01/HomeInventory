@@ -24,6 +24,22 @@ export type ForecastInput = {
   restockPausedUntil?: string | null;
 };
 
+/**
+ * 从消耗事件学习「日均消耗」,供补货预测使用。
+ * 事件形如 { at: 时间戳, units: 该次用掉的等效数量 }(液体按余量百分比折算)。
+ * 至少 2 次才算「有规律」;用总量除以「距今实际跨度天数」,跨度至少按 1 天算。
+ */
+export function learnConsumeRate(events: ReadonlyArray<{ at: number; units: number }>, now = Date.now(), windowDays = 30) {
+  if (events.length < 2) return null;
+  const windowStart = now - windowDays * 86400000;
+  const recent = events.filter((event) => event.at >= windowStart && event.units > 0);
+  if (recent.length < 2) return null;
+  const total = recent.reduce((sum, event) => sum + event.units, 0);
+  const oldest = Math.min(...recent.map((event) => event.at));
+  const spanDays = Math.max(1, Math.ceil((now - oldest) / 86400000));
+  const rate = total / spanDays;
+  return rate > 0 ? rate : null;
+}
 export type RestockForecast = {
   id: string;
   name: string;
