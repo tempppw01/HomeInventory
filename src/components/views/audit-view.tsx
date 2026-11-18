@@ -123,7 +123,7 @@ export function AuditView({ items, locations, onRefresh, onToast }: { items: Ite
             </div>
           </div>
           <Metric label="未确认" value={unconfirmed.length} tone={unconfirmed.length ? "warning" : "success"} hint={unconfirmed.length ? "继续核对或统一处理" : "没有遗漏"} />
-          <Metric label="当前范围" value={scopeName} hint={locationId === "ALL" ? "全部空间" : "仅当前空间"} />
+          <Metric label="当前范围" value={scopeName} hint={locationId === "ALL" ? undefined : "仅当前空间"} />
         </div>
         <div className="mt-4 h-2 overflow-hidden rounded-full" style={{ background: "var(--surface-soft)" }}>
           <div className="h-full rounded-full transition-[width] duration-300" style={{ transitionTimingFunction: "var(--ease-out)", width: `${progressPercent}%`, background: "var(--primary)" }} />

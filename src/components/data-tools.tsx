@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Download, Upload, Users, UserPlus, History, ShieldCheck } from "lucide-react";
 import { ScanActivityPanel } from "@/components/scan-activity-panel";
+import { activityLabel } from "@/lib/activity-label";
 import { SettingsBadge, SettingsRow, SettingsSection } from "@/components/settings-primitives";
 import { ListRow } from "@/components/ui-kit";
 import { useConfirm } from "@/components/confirm-dialog";
@@ -54,7 +55,7 @@ export function DataTools({ onToast }: { onToast: (message: string) => void }) {
       icon={History}
       title="最近操作"
       stacked
-      control={<div className="w-full">{activity.slice(0, 5).map((entry) => <ListRow key={entry.id} title={<span className="block whitespace-normal break-words">{entry.action} · {entry.itemName || "物品"}</span>} trailing={<span className="shrink-0 text-xs muted">{new Date(entry.createdAt).toLocaleDateString("zh-CN")}</span>} />)}</div>}
+      control={<div className="w-full">{activity.slice(0, 5).map((entry) => <ListRow key={entry.id} title={<span className="block whitespace-normal break-words">{activityLabel(entry.action)} · {entry.itemName || "物品"}</span>} trailing={<span className="shrink-0 text-xs muted">{new Date(entry.createdAt).toLocaleDateString("zh-CN")}</span>} />)}</div>}
     />
 
     <ScanActivityPanel onToast={onToast} />

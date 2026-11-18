@@ -7,6 +7,7 @@ import { currentUser } from "@/lib/account-auth";
 import { dailyUsageCost, estimatedUseDays, isLiquidConsumable } from "@/lib/item-metrics";
 import { itemAiHighlights } from "@/lib/item-ai";
 import { Panel } from "@/components/ui-kit";
+import { CopyCodeButton } from "@/components/copy-code-button";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,17 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
   const useDays = estimatedUseDays(item);
   const showRemaining = isLiquidConsumable(item);
   const ai = itemAiHighlights(item);
+  // 有效期剩几天:药品/食品最要紧的一项,之前详情页完全没有显示。
+  const expiryDaysLeft = (() => {
+    if (!item.expiryDate) return null;
+    const target = new Date(item.expiryDate);
+    if (Number.isNaN(target.getTime())) return null;
+    const today = new Date();
+    const start = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+    const end = Date.UTC(target.getFullYear(), target.getMonth(), target.getDate());
+    return Math.round((end - start) / 86400000);
+  })();
+  const expiryTone = expiryDaysLeft === null ? undefined : expiryDaysLeft < 0 ? "var(--danger)" : expiryDaysLeft <= 30 ? "var(--warning)" : undefined;
   // 这件物品的变更流水:谁在什么时候改过它。此前 ActivityLog 有 itemId 却没有任何界面用到。
   const history = await prisma.activityLog.findMany({
     where: { itemId: item.id },
@@ -77,12 +89,17 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
             </div>
           </Panel>
 
+          {(useDays || dailyCost || Number(item.price) > 0 || item.purchaseDate || item.expiryDate) && (
           <Panel title="日期与价格">
             <div className="grid gap-4 sm:grid-cols-2">
+              {item.expiryDate && <Stat icon={<CalendarDays size={14} />} label="有效期至" value={new Date(item.expiryDate).toLocaleDateString("zh-CN")} hint={expiryDaysLeft === null ? undefined : expiryDaysLeft < 0 ? `已过期 ${Math.abs(expiryDaysLeft)} 天` : expiryDaysLeft === 0 ? "今天到期" : `还剩 ${expiryDaysLeft} 天`} tone={expiryTone} />}
+              {item.purchaseDate && <Stat icon={<Archive size={14} />} label="购入日期" value={new Date(item.purchaseDate).toLocaleDateString("zh-CN")} />}
               {useDays && <Stat icon={<Timer size={14} />} label="预计还能用" value={`约 ${useDays} 天`} />}
+              {Number(item.price) > 0 && <Stat icon={<WalletCards size={14} />} label="单价" value={`¥${Number(item.price).toFixed(2)}`} />}
               {dailyCost && <Stat icon={<WalletCards size={14} />} label="日均使用成本" value={`¥${dailyCost.cost.toFixed(dailyCost.cost >= 10 ? 0 : 2)} / 天`} hint={`已使用 ${dailyCost.days} 天`} />}
             </div>
           </Panel>
+          )}
 
           {item.notes && (
             <Panel title="备注">
@@ -106,7 +123,7 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
           <div className="rounded-2xl p-4" style={{ background: "var(--surface-soft)" }}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs font-bold muted">物品编号</span>
-              <a href={`/items/${item.id}`} className="btn-ghost inline-flex min-h-11 items-center gap-2 px-4 text-sm"><QrCode size={16} />复制</a>
+              <CopyCodeButton code={code} />
             </div>
             <p className="mb-0 mt-2 break-all font-mono text-sm font-bold">{code}</p>
           </div>

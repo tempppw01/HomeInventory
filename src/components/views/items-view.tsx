@@ -32,7 +32,7 @@ function TagBadge({ tone, children }: { tone: "warning" | "danger" | "muted"; ch
 // 一屏大约能看到 12-20 张卡片,60 是个「首屏够用、滚动不空窗」的量。
 const PAGE_SIZE = 60;
 
-export function ItemsView({ allItems, locations, items, shopping, search, setSearch, filter, setFilter, categoryFilter, setCategoryFilter, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onRemainingChange, onDelete, onQr, onAi, onPrint, onToast, onCopy, onToggleShopping, onFavoriteShopping, onAddShopping, onDeleteShopping, onBatchAi, onToastWithUndo }: { allItems: Item[]; locations: Location[]; items: Item[]; shopping: ShoppingItem[]; search: string; setSearch: (s: string) => void; filter: ItemQuickFilter; setFilter: (f: ItemQuickFilter) => void; categoryFilter: string; setCategoryFilter: (f: string) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onRemainingChange: (item: Item, remainingPercent: number) => void; onDelete: (i: Item) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onPrint: (items: Item[]) => void; onToast: (message: string) => void; onCopy: (i: Item) => void; onToggleShopping: (item: ShoppingItem) => void; onFavoriteShopping: (item: ShoppingItem) => void; onAddShopping: () => void; onDeleteShopping: (id: string) => void; onBatchAi: () => void; onToastWithUndo: (message: string, undo: () => Promise<void>) => void }) {
+export function ItemsView({ allItems, locations, items, shopping, search, setSearch, filter, setFilter, categoryFilter, setCategoryFilter, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onRemainingChange, onDelete, onQr, onAi, onPrint, onToast, onCopy, onToggleShopping, onFavoriteShopping, onAddShopping, onDeleteShopping, onBatchAi, onToastWithUndo, onCreate }: { allItems: Item[]; locations: Location[]; items: Item[]; shopping: ShoppingItem[]; search: string; setSearch: (s: string) => void; filter: ItemQuickFilter; setFilter: (f: ItemQuickFilter) => void; categoryFilter: string; setCategoryFilter: (f: string) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onRemainingChange: (item: Item, remainingPercent: number) => void; onDelete: (i: Item) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onPrint: (items: Item[]) => void; onToast: (message: string) => void; onCopy: (i: Item) => void; onToggleShopping: (item: ShoppingItem) => void; onFavoriteShopping: (item: ShoppingItem) => void; onAddShopping: () => void; onDeleteShopping: (id: string) => void; onBatchAi: () => void; onToastWithUndo: (message: string, undo: () => Promise<void>) => void; onCreate: () => void }) {
   const askConfirm = useConfirm();
   const readOnly = useContext(ReadOnlyContext);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -73,7 +73,7 @@ export function ItemsView({ allItems, locations, items, shopping, search, setSea
   const medicineCategories = presentCategories.filter(isMedicineCategory);
   const categoryOptions = filter === "MEDICINE"
     ? ["MEDICINE", ...medicineCategories]
-    : ["ALL", ...presentCategories.filter((category) => !isMedicineCategory(category))];
+    : ["ALL", ...presentCategories.filter((category) => !isMedicineCategory(category)), ...(medicineCategories.length ? ["MEDICINE"] : [])];
   // 导出「当前筛选结果」为 CSV。纯前端生成:数据本来就在内存里,不必再多一个接口。
   // 带 UTF-8 BOM,否则 Excel 打开中文会乱码。
   const exportCsv = () => {
@@ -152,7 +152,9 @@ export function ItemsView({ allItems, locations, items, shopping, search, setSea
                 </div>
               )}
             </div>
-            : <Panel><Empty icon={Search} title="没有找到物品" text="换个关键词或筛选条件试试" /></Panel>}
+            : allItems.length === 0
+              ? <Panel><Empty icon={Package} title="还没有录入物品" text="从眼前的一件东西开始:名称和数量就够,其他信息之后补。" action={<button onClick={onCreate} className="btn-primary min-h-11 px-4 text-sm">录入第一件物品</button>} /></Panel>
+              : <Panel><Empty icon={Search} title="没有找到物品" text="换个关键词或筛选条件试试" /></Panel>}
         </div>
       </div>
 
@@ -200,11 +202,11 @@ export function ItemCard({ item, onEdit, onOpenDetail, onImageUpload, onDuplicat
             <span className="shrink-0 text-sm font-black tabular-nums">{item.quantity}<span className="ml-0.5 text-xs font-normal muted">{item.unit}</span></span>
           </div>
           <div className="mt-1.5 flex min-w-0 items-center gap-1.5 text-xs muted">
-            <span className="min-w-0 flex-1 truncate">{[item.location?.name || "未设置位置", item.category, item.type === "CONSUMABLE" ? "消耗品" : "耐用品"].join(" · ")}</span>
+            <span className="min-w-0 flex-1 truncate">{[item.location?.name || "未设置位置", item.category.replace(/^医药·/, ""), item.type === "CONSUMABLE" ? "消耗品" : "耐用品"].join(" · ")}</span>
             {expired || expiring ? <TagBadge tone={expired ? "danger" : "warning"}>{expiryDateLabel(item)}</TagBadge> : null}
             {low && <TagBadge tone="warning">需补货</TagBadge>}
           </div>
-          {canConsumeOne && <button type="button" onClick={onConsume} className="mt-2 inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full px-2.5 text-xs font-bold transition-colors md:min-h-10" style={{ background: "var(--primary-soft)", color: "var(--primary-strong)" }} title="消耗一个单位"><Minus size={13} />用掉一个</button>}
+          {canConsumeOne && <button type="button" onClick={onConsume} className="mt-2 inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full px-2.5 text-xs font-bold transition-colors md:min-h-10" style={{ background: "var(--primary-soft)", color: "var(--primary-strong)" }} title={`消耗 1 ${item.unit}`} aria-label={`用掉 1 ${item.unit}`}><Minus size={13} />用掉 1 {item.unit}</button>}
         </div>
         {showRemaining && <RemainingLevel value={item.remainingPercent} onChange={onRemainingChange} />}
       </div>

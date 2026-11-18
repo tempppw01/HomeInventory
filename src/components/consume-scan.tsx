@@ -3,17 +3,22 @@
 import { CheckCircle2, CircleAlert, LoaderCircle, Package, ScanLine } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-type ScanItem = { id: string; name: string; category: string; type: "DURABLE" | "CONSUMABLE"; quantity: number; unit: string; location: { name: string } | null };
+type ScanItem = { id: string; name: string; category: string; type: "DURABLE" | "CONSUMABLE"; quantity: number; unit: string; location: { name: string } | null;
+  /** 液体消耗品按余量刻度记录,不参与按件消耗 —— 由服务端判定后传入。 */
+  liquid?: boolean };
 
 export function ConsumeScan({ item }: { item: ScanItem }) {
   const started = useRef(false);
   const requestId = useRef<string | null>(null);
-  const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
-  const [message, setMessage] = useState("正在登记消耗…");
+  // 液体消耗品本来就该用余量刻度记录,不参与按件消耗:直接以「提示态」初始化,
+  // 不再先发一个注定 409 的请求(那样控制台会出现假错误)。
+  const isLiquid = Boolean(item.liquid);
+  const [status, setStatus] = useState<"loading" | "success" | "error">(isLiquid ? "error" : "loading");
+  const [message, setMessage] = useState(isLiquid ? "液体请通过余量刻度记录使用进度" : "正在登记消耗...");
   const [remaining, setRemaining] = useState(item.quantity);
 
   useEffect(() => {
-    if (started.current) return;
+    if (started.current || isLiquid) return;
     started.current = true;
     const scanRequestId = requestId.current ||= crypto.randomUUID();
     fetch("/api/public/consume", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ itemId: item.id, requestId: scanRequestId }) })
@@ -28,8 +33,7 @@ export function ConsumeScan({ item }: { item: ScanItem }) {
         setStatus("error");
         setMessage(error instanceof Error ? error.message : "扫码消耗失败");
       });
-  }, [item.id, item.quantity, item.unit]);
-
+  }, [item.id, item.quantity, item.unit, isLiquid]);
   return <main className="mx-auto flex min-h-screen max-w-md items-center px-4 py-10"><article className="surface w-full rounded-[32px] p-7 text-center sm:p-9">
     <div className="mx-auto grid size-16 place-items-center rounded-3xl" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><ScanLine size={30} /></div>
     <p className="mb-0 mt-5 text-xs font-bold tracking-widest muted">家庭库存 · 扫码消耗</p>

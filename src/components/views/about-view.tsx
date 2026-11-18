@@ -25,7 +25,7 @@ export function AboutView() {
 
         <Panel title="版本与更新">
           <ListRow icon={Info} title={APP_VERSION} meta="当前版本" trailing={<span className="shrink-0 text-xs font-bold muted">MVP 迭代起点</span>} />
-          <ListRow icon={Sparkles} title="更新说明" meta="本版本新增:示范数据 · 保质期预警 · 消费概览" />
+          <ListRow icon={Sparkles} title="更新说明" meta="维护版本:修正界面密度、交互反馈与若干稳定性问题" />
         </Panel>
 
         <Panel title="使用提示">

@@ -18,7 +18,7 @@ import { units, request } from "../shared";
 // 面板样式集中在这里,避免各个弹窗各写一套背景与圆角造成割裂。
 const dialogPanelStyle = { background: "var(--surface-solid)" } as const;
 const dialogPanelClass = "w-full overflow-y-auto rounded-[28px] p-5 shadow-2xl sm:p-6";
-export function Modal({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: React.ReactNode }) {
+export function Modal({ title, subtitle, onClose, children }: { title: string; subtitle?: string; onClose: () => void; children: React.ReactNode }) {
   useEscapeClose(onClose);
   // 手机上软键盘只缩小 visualViewport、不缩小布局视口,固定 88dvh 的弹层会把
   // 底部(含保存按钮)留在键盘后面。跟随 visualViewport 收一次高度即可。
@@ -42,7 +42,7 @@ export function NotificationsModal({ lowStock, expiring, expired, onClose, onOpe
     ...expiring.filter((item) => !expired.some((old) => old.id === item.id)).map((item) => ({ item, label: `${["食品", "饮品"].includes(item.category) ? "食品即将到期" : "即将到期"} · ${new Date(item.expiryDate!).toLocaleDateString("zh-CN")}`, color: "var(--warning)" })),
     ...lowStock.filter((item) => !expired.some((old) => old.id === item.id)).map((item) => ({ item, label: isLiquidConsumable(item) && item.remainingPercent <= 20 ? `剩余量仅 ${Math.round(item.remainingPercent)}%` : `库存仅剩 ${item.quantity} ${item.unit}`, color: "#e37d25" })),
   ];
-  return <Modal title="提醒中心" subtitle={`${alerts.length} 条待处理事项`} onClose={onClose}><div className="space-y-1">{alerts.map(({ item, label, color }) => <ListRow key={`${item.id}-${label}`} title={<><span className="mr-2 inline-block size-2 shrink-0 rounded-full align-middle" style={{ background: color }} />{item.name}</>} meta={label} onClick={() => onOpenItem(item)} trailing={expired.some((entry) => entry.id === item.id) ? <button type="button" onClick={() => onDispose(item)} className="shrink-0 rounded-xl px-2 py-1.5 text-xs font-bold" style={{ color: "var(--danger)" }}>移入回收站</button> : <ChevronRight size={16} className="shrink-0 muted" />} />)}{alerts.length === 0 && <Empty icon={Check} title="暂无提醒" text="库存和保质期都在安全范围内" />}</div>{lowStock.length > 0 && <button onClick={onShopping} className="btn-primary mt-4 w-full">查看采购清单</button>}</Modal>;
+  return <Modal title="提醒中心" subtitle={alerts.length ? `${alerts.length} 条待处理事项` : undefined} onClose={onClose}><div className="space-y-1">{alerts.map(({ item, label, color }) => <ListRow key={`${item.id}-${label}`} title={<><span className="mr-2 inline-block size-2 shrink-0 rounded-full align-middle" style={{ background: color }} />{item.name}</>} meta={label} onClick={() => onOpenItem(item)} trailing={expired.some((entry) => entry.id === item.id) ? <button type="button" onClick={() => onDispose(item)} className="shrink-0 rounded-xl px-2 py-1.5 text-xs font-bold" style={{ color: "var(--danger)" }}>移入回收站</button> : <ChevronRight size={16} className="shrink-0 muted" />} />)}{alerts.length === 0 && <Empty icon={Check} title="暂无提醒" text="库存和保质期都在安全范围内" />}</div>{lowStock.length > 0 && <button onClick={onShopping} className="btn-primary mt-4 w-full">查看采购清单</button>}</Modal>;
 }
 
 export function WelcomeModal({ hasDemoData, onClose, onAction }: { hasDemoData: boolean; onClose: () => void; onAction: (action: "item" | "location" | "shopping") => void }) {

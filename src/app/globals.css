@@ -242,7 +242,9 @@
 html { background: var(--background); scroll-behavior: smooth; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--muted) 32%, transparent) transparent; }
 body {
   margin: 0;
-  background: radial-gradient(ellipse at 90% 0%, color-mix(in srgb, var(--primary-soft) 52%, transparent), transparent 34rem), var(--background);
+  /* 渐变与底色分开写:合在 background 简写里再叠 transition 会让深色→浅色的变量更新卡住。 */
+  background-image: radial-gradient(ellipse at 90% 0%, color-mix(in srgb, var(--primary-soft) 52%, transparent), transparent 34rem);
+  background-color: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
   font-size: var(--text-body);
@@ -252,7 +254,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
-  transition: background-color 220ms var(--ease-out), color 220ms var(--ease-out);
+  transition: color 220ms var(--ease-out);
 }
 button { cursor: pointer; }
 /* Unlayered on purpose: it must beat the plain `button` rule above. */

@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { Bot, ChevronDown, ImagePlus, MapPin, Package, Sparkles, X, Link2, Upload } from "lucide-react";
+import { Bot, ChevronDown, CircleAlert, ImagePlus, Link2, MapPin, Package, Sparkles, Upload, X } from "lucide-react";
 import {
   FormEvent, useEffect, useRef, useState,
 } from "react";
@@ -107,7 +107,9 @@ export function ItemModal({ locations, allItems, item, onClose, onSaved, aiAvail
     set("quantity", Math.max(0, value));
   };
   const commitQuantityText = () => { const normalized = normalizeItemQuantity(draft.quantity, draft.unit); set("quantity", normalized); setQtyText(String(normalized)); };
-  const changeUnit = (unit: string) => { const quantity = normalizeItemQuantity(draft.quantity, unit); setDraft((current) => ({ ...current, unit, quantity })); setQtyText(String(quantity)); };
+  // 用户手动选过单位之后,分类切换就不再自动改单位。
+  const [unitTouched, setUnitTouched] = useState(false);
+  const changeUnit = (unit: string) => { setUnitTouched(true); const quantity = normalizeItemQuantity(draft.quantity, unit); setDraft((current) => ({ ...current, unit, quantity })); setQtyText(String(quantity)); };
   // 手动点类型 = 关掉自动识别,后续不再覆盖用户的选择。
   const chooseItemType = (type: ItemType) => {
     setTypeTouched(true);
@@ -187,6 +189,18 @@ export function ItemModal({ locations, allItems, item, onClose, onSaved, aiAvail
   };
   const dailyCostPreview = dailyUsageCost({ type: draft.type, price: draft.price === "" ? null : moneyValue(draft.price), purchaseDate: draft.purchaseDate || null });
   const draftAi = itemAiHighlights(draft);
+  // 药品的有效期是最关键的一项,但「快速保存」路径会跳过它。这里在保存前给出就地引导。
+  const isMedicine = isMedicineCategory(draft.category);
+  const missingExpiry = isMedicine && draft.type === "CONSUMABLE" && !draft.expiryDate;
+  const focusExpiry = () => {
+    setMoreOpen(true);
+    // 展开是动画驱动的,等一帧再滚动定位到期日期。
+    requestAnimationFrame(() => {
+      const trigger = document.querySelector<HTMLElement>('[data-expiry-field] [data-date-picker-trigger], [data-expiry-field] button');
+      trigger?.scrollIntoView({ block: "center", behavior: "smooth" });
+      trigger?.focus?.();
+    });
+  };
   const addLocation = (location: Location) => { setAvailableLocations((current) => [...current, location]); set("locationId", location.id); setQuickLocationOpen(false); };
   return <><Modal title={item ? "编辑物品" : "录入新物品"} subtitle={item?.itemCode || "只填名称和数量也可以，其他信息稍后补充"} onClose={requestClose}><form onSubmit={submit} className="space-y-5">
     {!item && savedTemplates.length > 0 && <div className="-mt-1 overflow-x-auto pb-1"><div className="mb-1.5 flex items-center justify-between"><span className="text-xs font-bold muted">最近使用 / 我的模板</span><button type="button" onClick={() => { setSavedTemplates([]); localStorage.removeItem(itemTemplateStorageKey); }} className="text-xs muted hover:text-[var(--danger)]">清空</button></div><div className="flex min-w-max gap-2">{savedTemplates.slice().sort((a, b) => b.usedAt - a.usedAt).map((template) => <button key={template.id} type="button" onClick={() => applySavedTemplate(template)} className="rounded-xl border px-2.5 py-1.5 text-left text-xs font-bold transition hover:border-[var(--primary)] hover:bg-[var(--primary-soft)]" style={{ borderColor: "var(--border)" }}><span className="block max-w-32 truncate">{template.name}</span><span className="mt-0.5 block text-xs font-normal muted">{template.category} · {template.unit}</span></button>)}</div></div>}
@@ -238,7 +252,7 @@ export function ItemModal({ locations, allItems, item, onClose, onSaved, aiAvail
 
     <div className="overflow-hidden rounded-[20px] border" style={{ borderColor: "var(--hairline)", background: "var(--surface-solid)" }}>
       <FormRow label="分类">
-        <select className="input" aria-label="分类" value={draft.category} onChange={(e) => set("category", e.target.value)}>{categories.map((c) => <option key={c}>{c}</option>)}</select>
+        <select className="input" aria-label="分类" value={draft.category} onChange={(e) => { const next = e.target.value; set("category", next); if (!unitTouched && draft.unit === "件" && isMedicineCategory(next)) changeUnit("盒"); }}>{categories.map((c) => <option key={c}>{c}</option>)}</select>
       </FormRow>
       <FormRow label="存放位置">
         <select className="input" aria-label="存放位置" value={draft.locationId} onChange={(e) => { if (e.target.value === "__new__") { setQuickLocationOpen(true); return; } set("locationId", e.target.value); }}>
@@ -301,7 +315,7 @@ export function ItemModal({ locations, allItems, item, onClose, onSaved, aiAvail
           </FormRow>
         )}
         <DateField label="购入日期" value={draft.purchaseDate} onChange={(value) => set("purchaseDate", value)} presets={purchaseDatePresets()} max={dateInputValue()} relative={false} help={draft.purchaseDate ? purchaseAgeLabel(draft.purchaseDate) + "(日均成本按它计算)" : "按实际购买那天填,日均成本会用它计算。"} />
-        {draft.type === "CONSUMABLE" && <DateField label="到期日期" value={draft.expiryDate} onChange={(value) => set("expiryDate", value)} presets={expiryDatePresets()} min={draft.purchaseDate || dateInputValue()} help="留空表示不提醒保质期;过期后会出现在提醒中心。" />}
+        {draft.type === "CONSUMABLE" && <div data-expiry-field><DateField label="到期日期" value={draft.expiryDate} onChange={(value) => set("expiryDate", value)} presets={expiryDatePresets()} min={draft.purchaseDate || dateInputValue()} help="留空表示不提醒保质期;过期后会出现在提醒中心。" /></div>}
         {draft.purchaseDate && draft.expiryDate && draft.expiryDate < draft.purchaseDate && (
           <p className="m-0 px-3 py-2.5 text-xs leading-5" style={{ background: "var(--warning-soft, #fff4dc)", color: "#8a571c" }}>到期日期({draft.expiryDate})早于购入日期({draft.purchaseDate}),保存后会立刻算作过期,建议改一下。</p>
         )}
@@ -310,6 +324,13 @@ export function ItemModal({ locations, allItems, item, onClose, onSaved, aiAvail
         </FormRow>
       </AccordionRow>
     </div>
+    {missingExpiry && (
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl px-3 py-2.5 text-xs leading-5" style={{ background: "var(--warning-soft, #fff4dc)", color: "#8a571c" }}>
+        <CircleAlert size={14} className="shrink-0" />
+        <span className="min-w-0 flex-1">这是药品,填上有效期后会在到期前提醒你。</span>
+        <button type="button" onClick={focusExpiry} className="min-h-10 shrink-0 font-bold underline">填写有效期</button>
+      </div>
+    )}
     {error && <p className="m-0 rounded-xl p-2.5 text-sm text-red-500" style={{ background: "#ffe8eb" }}>{error}</p>}<div className="sticky bottom-0 -mx-5 flex gap-2.5 border-t bg-[var(--surface-solid)] px-5 pb-1 pt-3 sm:-mx-6 sm:px-6" style={{ borderColor: "var(--hairline)" }}><button type="button" onClick={requestClose} className="btn-ghost min-h-11 flex-1">取消</button>{!item && <button type="button" onClick={saveAsTemplate} className="btn-ghost min-h-11 shrink-0 px-3" title="保存名称、分类、单位和常用设置">存为模板</button>}<button disabled={saving || uploading || aiLoading} className="btn-primary min-h-11 flex-1 disabled:opacity-60">{saving ? "保存中…" : item ? "保存修改" : "快速保存"}</button></div>
   </form></Modal><AnimatePresence>{imagePreviewOpen && draft.imageUrl && <ImageLightbox src={draft.imageUrl} alt={draft.name || "物品图片"} onClose={() => setImagePreviewOpen(false)} />}</AnimatePresence><AnimatePresence>{quickLocationOpen && <QuickLocationDialog onClose={() => setQuickLocationOpen(false)} onCreated={addLocation} />}</AnimatePresence></>;
 }

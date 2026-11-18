@@ -75,7 +75,7 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
         </>}
       >
         {recentView === "cards"
-          ? <div data-testid="recent-cards" className="grid gap-3 sm:grid-cols-2">{data.items.slice(0, 6).map((item) => <ItemCard key={item.id} item={item} onEdit={() => onEdit(item)} onOpenDetail={() => onOpenDetail(item)} onImageUpload={(file) => onImageUpload(item, file)} onDuplicate={() => onDuplicate(item)} onConsume={() => onConsume(item)} onQr={() => onQr(item)} onAi={() => onAi(item)} compact />)}{data.items.length === 0 && <div className="sm:col-span-2"><Empty icon={Boxes} title="还没有物品" text="录入第一件物品后,这里会按更新时间列出最近变动的物品。" action={<button type="button" className="btn-ghost" onClick={onCreate}>录入第一件物品</button>} /></div>}</div>
+          ? <div data-testid="recent-cards" className="grid gap-3 sm:grid-cols-2">{data.items.slice(0, 6).map((item) => <ItemCard key={item.id} item={item} onEdit={() => onEdit(item)} onOpenDetail={() => onOpenDetail(item)} onImageUpload={(file) => onImageUpload(item, file)} onDuplicate={() => onDuplicate(item)} onConsume={() => onConsume(item)} onQr={() => onQr(item)} onAi={() => onAi(item)} compact />)}{data.items.length === 0 && <div className="sm:col-span-2"><Empty icon={Boxes} title="还没有物品" text="录入第一件物品后,这里会按更新时间列出最近变动的物品。" action={undefined} /></div>}</div>
           : <div data-testid="recent-list" className="min-w-0">{data.items.slice(0, 6).map((item) => <RecentItemRow key={item.id} item={item} onEdit={() => onEdit(item)} onQr={() => onQr(item)} onAi={() => onAi(item)} />)}{data.items.length === 0 && <Empty icon={Boxes} title="还没有物品" text="录入第一件物品后,这里会按更新时间列出最近变动的物品。" action={<button type="button" className="btn-ghost" onClick={onCreate}>录入第一件物品</button>} />}</div>}
       </Panel>
 
@@ -147,7 +147,7 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
                 title={item.name}
                 meta={`${item.quantity} ${item.unit} · ${item.category || "未分类"}`}
                 trailing={<span className="size-2 shrink-0 rounded-full" style={{ background: item.priority === 2 ? "var(--danger)" : "var(--warning)" }} />}
-              />)}{pending.length === 0 && <p className="mb-0 py-2 text-sm muted">清单已完成，暂时没有需要采购的物品。</p>}</div>
+              />)}{pending.length === 0 && <p className="mb-0 py-2 text-sm muted">还没有采购项,低库存物品会自动出现在这里。</p>}</div>
             </section>
           </div>
         </details>
@@ -241,7 +241,7 @@ function ExpiryCalendar({ items }: { items: DashboardData["items"] }) {
           const hasExpired = list.some((entry) => entry.expired);
           const isToday = key === todayKey;
           return (
-            <button key={key} type="button" onClick={() => setSelectedDay(selectedDay === key ? null : key)} disabled={list.length === 0} className="grid min-h-11 place-items-center gap-0.5 rounded-xl px-1 py-1 text-xs disabled:opacity-45" style={{ background: selectedDay === key ? "var(--primary-soft)" : list.length ? (hasExpired ? "color-mix(in srgb, var(--danger) 12%, transparent)" : "color-mix(in srgb, var(--warning) 14%, transparent)") : "transparent", outline: isToday ? "2px solid var(--primary)" : "none", outlineOffset: "-2px" }} title={list.length ? list.map((entry) => entry.name).join("、") : undefined}>
+            <button key={key} type="button" onClick={() => setSelectedDay(selectedDay === key ? null : key)} disabled={list.length === 0} aria-label={`${month + 1} 月 ${day} 日${list.length ? `,${list.length} 件到期:${list.map((entry) => entry.name).join("、")}` : ",没有到期物品"}`} className="grid min-h-11 place-items-center gap-0.5 rounded-xl px-1 py-1 text-xs disabled:opacity-45" style={{ background: selectedDay === key ? "var(--primary-soft)" : list.length ? (hasExpired ? "color-mix(in srgb, var(--danger) 12%, transparent)" : "color-mix(in srgb, var(--warning) 14%, transparent)") : "transparent", outline: isToday ? "2px solid var(--primary)" : "none", outlineOffset: "-2px" }} title={list.length ? list.map((entry) => entry.name).join("、") : undefined}>
               <span className="font-bold tabular-nums">{day}</span>
               {list.length > 0 && <span className="text-xs font-black" style={{ color: hasExpired ? "var(--danger)" : "var(--warning)" }}>{list.length}</span>}
             </button>
