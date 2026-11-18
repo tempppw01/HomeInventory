@@ -54,6 +54,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx prisma generate --schema prisma/schema.prisma
+      # 渲染层检查(edge-input-test)需要真实浏览器:CI 上装一份 Chromium。
+      # 不装也不会挂 —— 脚本会跳过那一段并打日志;但装了才有真实覆盖率。
+      - name: 安装 Chromium(供渲染层检查)
+        run: npx playwright install --with-deps chromium
       - run: npm run build
       - name: 初始化数据库与管理员账号
         run: |

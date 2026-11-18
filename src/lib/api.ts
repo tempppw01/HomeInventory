@@ -26,7 +26,17 @@ function prismaCode(error: unknown): string | null {
 }
 
 export function apiError(error: unknown) {
-  console.error(error);
+  // 先判定再决定是否记录:预期内的客户端错误不该刷日志(否则真实故障会被淹没)。
+  const knownStatus = (() => {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") return 401;
+    if (error instanceof Error && error.message === "FORBIDDEN") return 403;
+    if (error instanceof ZodError || error instanceof SyntaxError) return 400;
+    const code = prismaCode(error);
+    if (code === "P2025") return 404;
+    if (code === "P2002" || code === "P2003" || code === "P2014") return 409;
+    return null;
+  })();
+  if (knownStatus === null) console.error(error);
   if (error instanceof Error && error.message === "UNAUTHORIZED") {
     return NextResponse.json({ error: "请先登录" }, { status: 401 });
   }

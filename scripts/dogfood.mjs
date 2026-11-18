@@ -5,7 +5,7 @@
 //   TAG=base MODE=all node scripts/dogfood.mjs
 //
 // MODE: all | desktop | mobile
-import { chromium } from "playwright";
+import { launchChromium } from "./lib/browser.mjs";
 import { mkdir, writeFile } from "node:fs/promises";
 
 const BASE = process.env.BASE_URL || "http://127.0.0.1:3001";
@@ -16,13 +16,12 @@ const MODE = process.env.MODE || "all";
 const OUT = "output/experience";
 if (!PASS) throw new Error("set PROBE_PASS before running this script");
 
-const EXECUTABLE = `${process.env.LOCALAPPDATA}\\ms-playwright\\chromium-1248\\chrome-win64\\chrome.exe`;
 
 await mkdir(OUT, { recursive: true });
 
 const VIEWS = ["概览", "物品", "任务", "空间", "盘点", "设置", "关于"];
 
-const browser = await chromium.launch({ executablePath: EXECUTABLE });
+const browser = await launchChromium();
 
 // ---------------------------------------------------------------- collectors
 const collect = () =>

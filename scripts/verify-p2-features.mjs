@@ -1,12 +1,11 @@
 // 验证 P2 新增功能:详情页变更记录、CSV 导出、批量改数量、到期日历、SW 注册。
-import { chromium } from "playwright";
+import { launchChromium } from "./lib/browser.mjs";
 
 const BASE = process.env.BASE_URL || "http://127.0.0.1:3001";
-const EXECUTABLE = `${process.env.LOCALAPPDATA}\\ms-playwright\\chromium-1248\\chrome-win64\\chrome.exe`;
 const results = [];
 const record = (name, ok, detail) => { results.push({ name, ok, detail }); console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok ? "" : "  → " + detail}`); };
 
-const browser = await chromium.launch({ executablePath: EXECUTABLE });
+const browser = await launchChromium();
 const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
 const page = await context.newPage();
 await page.goto(BASE, { waitUntil: "domcontentloaded" });

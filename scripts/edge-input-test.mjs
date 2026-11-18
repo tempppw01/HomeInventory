@@ -1,8 +1,7 @@
 // 极端输入与安全测试:注入载荷是否被转义、超范围数值、日期边界、搜索特殊字符。
-import { chromium } from "playwright";
+import { launchChromiumOrNull } from "./lib/browser.mjs";
 
 const BASE = process.env.BASE_URL || "http://127.0.0.1:3001";
-const EXECUTABLE = `${process.env.LOCALAPPDATA}\\ms-playwright\\chromium-1248\\chrome-win64\\chrome.exe`;
 const results = [];
 const record = (area, name, ok, detail) => {
   results.push({ area, name, ok, detail });
@@ -123,7 +122,11 @@ for (const [label, payload] of payloads) {
 
 // ============ 5. 渲染层:注入是否被转义 ============
 {
-  const browser = await chromium.launch({ executablePath: EXECUTABLE });
+  // CI 上可能没装 Chromium:这种情况跳过渲染层检查,而不是把整套用例判失败。
+  const browser = await launchChromiumOrNull();
+  if (!browser) {
+    console.log("      渲染层注入检查已跳过(当前环境没有可用的 Chromium)");
+  } else {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await context.addCookies(cookie.split("; ").map((pair) => {
     const index = pair.indexOf("=");
@@ -154,7 +157,8 @@ for (const [label, payload] of payloads) {
   record("注入", "列表页未执行注入脚本", listState.xss === null && listState.imgX === 0, JSON.stringify(listState));
   record("注入", "全程未弹 alert/confirm", dialogs.length === 0, `dialogs=${dialogs.join("|")}`);
 
-  await browser.close();
+    await browser.close();
+  }
 }
 
 // ---- 清理 ----

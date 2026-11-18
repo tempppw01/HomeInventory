@@ -4,7 +4,7 @@
 // it measured, so nothing here is asserted from reading the source.
 //
 //   BASE_URL=http://127.0.0.1:3001 PROBE_USER=leadcheck PROBE_PASS=... node scripts/verify-entry-fixes.mjs
-import { chromium } from "playwright";
+import { launchChromium } from "./lib/browser.mjs";
 import { mkdir, writeFile } from "node:fs/promises";
 
 const BASE = process.env.BASE_URL || "http://127.0.0.1:3001";
@@ -14,8 +14,7 @@ if (!PASS) throw new Error("set PROBE_PASS");
 const OUT = "output/experience";
 await mkdir(OUT, { recursive: true });
 
-const EXECUTABLE = `${process.env.LOCALAPPDATA}\\ms-playwright\\chromium-1248\\chrome-win64\\chrome.exe`;
-const browser = await chromium.launch({ executablePath: EXECUTABLE });
+const browser = await launchChromium();
 const results = [];
 const check = (name, ok, detail) => {
   results.push({ name, ok: Boolean(ok), detail: String(detail) });

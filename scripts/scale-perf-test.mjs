@@ -1,8 +1,7 @@
 // 规模与性能测试:分批造 N 件物品,测列表/搜索/仪表盘耗时与劣化曲线。
-import { chromium } from "playwright";
+import { launchChromium } from "./lib/browser.mjs";
 
 const BASE = process.env.BASE_URL || "http://127.0.0.1:3001";
-const EXECUTABLE = `${process.env.LOCALAPPDATA}\\ms-playwright\\chromium-1248\\chrome-win64\\chrome.exe`;
 const results = [];
 const record = (name, ok, detail) => { results.push({ name, ok, detail }); console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok ? "" : "  → " + detail}`); };
 
@@ -94,7 +93,7 @@ record("宽匹配搜索不超时", searchBroad.status === 200, `status=${searchB
 
 // ---- 前端渲染耗时 ----
 {
-  const browser = await chromium.launch({ executablePath: EXECUTABLE });
+  const browser = await launchChromium();
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await context.addCookies(cookieHeader.split("; ").map((pair) => { const index = pair.indexOf("="); return { name: pair.slice(0, index), value: pair.slice(index + 1), domain: "127.0.0.1", path: "/" }; }));
   const page = await context.newPage();
