@@ -13,6 +13,7 @@ import { ContextMenu, useContextMenu, ContextMenuItem } from "@/components/conte
 import { isMedicineCategory, medicineCategoryLabel } from "@/lib/categories";
 import { Field } from "@/components/ui-kit";
 import { formatLocationPath, locationSegmentsById } from "@/lib/location-path";
+import { isSortMode, SORT_MODES, sortHint, sortItems, type SortMode } from "@/lib/item-sort";
 import { useConfirm } from "@/components/confirm-dialog";
 import { Chip, Empty, ListRow, Panel, Screen, Toolbar } from "@/components/ui-kit";
 import { ReadOnlyContext, ItemQuickFilter, expiryDays, expiryDateLabel, request } from "../shared";
@@ -51,12 +52,24 @@ export function ItemsView({ allItems, locations, items, shopping, search, setSea
   // 翻页进度按「查询条件」重置:数据每 15 秒刷新一次不应该把用户已经展开的列表收回去,
   // 所以这里用渲染期比较 key 的写法(React 官方推荐的 adjust-state-during-render),
   // 而不是在 effect 里同步 setState(那会触发级联渲染,React 19 的 lint 也会报错)。
-  const queryKey = `${search}|${filter}|${categoryFilter}`;
+  // 排序偏好存在本地:下次进来还是按上次的方式排。
+  const [sortMode, setSortMode] = useState<SortMode>(() => {
+    if (typeof window === "undefined") return "updated";
+    const saved = localStorage.getItem("home-inventory-item-sort");
+    return isSortMode(saved) ? saved : "updated";
+  });
+  const changeSort = (mode: SortMode) => {
+    setSortMode(mode);
+    try { localStorage.setItem("home-inventory-item-sort", mode); } catch { /* 隐私模式忽略 */ }
+  };
+  const queryKey = `${search}|${filter}|${categoryFilter}|${sortMode}`;
   const [page, setPage] = useState({ key: queryKey, count: PAGE_SIZE });
   const [coldOnly, setColdOnly] = useState(false);
   if (page.key !== queryKey) setPage({ key: queryKey, count: PAGE_SIZE });
   // 「只看需冷藏」叠加在类型/分类之上,不影响原有筛选状态。
-  const shownItems = coldOnly ? items.filter((item) => item.storage === "COLD" || item.storage === "COLD_AFTER_OPEN") : items;
+  // 先按用户选的顺序排,再叠加「只看需冷藏」,最后交给分批渲染。
+  const sortedItems = sortItems(items, sortMode);
+  const shownItems = coldOnly ? sortedItems.filter((item) => item.storage === "COLD" || item.storage === "COLD_AFTER_OPEN") : sortedItems;
   const visibleCount = Math.min(page.count, Math.max(shownItems.length, PAGE_SIZE));
   const visibleItems = shownItems.slice(0, visibleCount);
   const loadMoreRef = useRef<HTMLButtonElement | null>(null);
@@ -123,8 +136,23 @@ export function ItemsView({ allItems, locations, items, shopping, search, setSea
     >
       <Toolbar>
         <div className="min-w-0 flex-1 md:hidden"><SearchBox items={allItems} value={search} onChange={setSearch} onSelect={(item) => setSearch(item.name)} placeholder="搜索名称或物品编号..." /></div>
+        <label className="flex shrink-0 items-center gap-1 text-xs font-bold muted">
+          排序
+          <select
+            aria-label="物品排序方式"
+            value={sortMode}
+            onChange={(event) => changeSort(event.target.value as SortMode)}
+            className="input w-auto py-1.5 text-xs"
+          >
+            {SORT_MODES.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}
+          </select>
+        </label>
         <div className="hidden min-w-0 items-center gap-2 md:flex">{typeChips}{coldChip}</div>
         <span className="hidden shrink-0 text-xs tabular-nums muted md:inline">{shownItems.length} 件</span>
+        {sortMode === "expiry" && (() => {
+          const hint = sortHint(sortMode, shownItems);
+          return hint ? <span className="hidden shrink-0 text-xs muted lg:inline">{hint}</span> : null;
+        })()}
         <button onClick={exportCsv} disabled={items.length === 0} className="btn-ghost flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-xs disabled:opacity-40" aria-label="导出当前筛选为 CSV" title="把当前筛选出的物品导出成 CSV(Excel 可直接打开)"><Download size={15} /><span className="desktop-only">导出</span></button>
         <div className="flex shrink-0 items-center gap-2 md:ml-auto">
           {selectMode
