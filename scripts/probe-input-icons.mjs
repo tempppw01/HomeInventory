@@ -55,7 +55,6 @@ const scan = () =>
       wrapper.querySelectorAll(":scope > svg, :scope > span > svg").forEach((svg) => {
         const sbox = svg.getBoundingClientRect();
         if (sbox.width === 0 || sbox.height === 0) return;
-        const dx = sbox.left + sbox.width / 2 - (fieldBox.left + fieldBox.width / 2);
         const dy = sbox.top + sbox.height / 2 - (fieldBox.top + fieldBox.height / 2);
         out.push({
           id: field.id || field.getAttribute("aria-label") || field.className.toString().slice(0, 40),

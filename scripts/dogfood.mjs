@@ -61,7 +61,6 @@ const collect = () =>
       const hit = document.elementFromPoint(cx, cy);
       if (!hit) continue;
       const isButtonish = (n) => n && n.closest("button, a, input, select, summary, textarea");
-      const self = isButtonish(el);
       if (hit === el || el.contains(hit)) continue;
       const blocker = isButtonish(hit);
       if (!blocker || blocker === el || el.contains(blocker) || blocker.contains(el)) continue;
@@ -225,7 +224,7 @@ const runProfile = async ({ name, viewport, colorScheme, isMobile }) => {
     ["打开归物助手", 'button[aria-label="打开归物助手"]', "modal:assistant"],
     ["添加物品", 'button[aria-label="添加物品"]', "modal:new-item-mobile"],
   ];
-  for (const [aria, selector, where] of modals) {
+  for (const [, selector, where] of modals) {
     const trigger = page.locator(`${selector}:visible`).first();
     if (!(await trigger.count())) continue;
     await trigger.click({ timeout: 6000 }).catch(() => {});

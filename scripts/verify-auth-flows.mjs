@@ -30,7 +30,8 @@ let setupPassword = "";
   await page.click("text=生成强密码");
   const generated = await page.inputValue("#auth-password");
   setupPassword = generated;
-  const strengthLabel = await page.locator(".ds-field-hint").last().textContent();
+  const strengthLabel = (await page.locator(".ds-field-hint").last().textContent()) ?? "";
+  console.log("      密码提示:" + strengthLabel.trim().slice(0, 40));
   await page.screenshot({ path: `${OUT}/auth-setup-generated.png` });
   record("setup-generate", { length: generated.length, hasMixedCase: /[a-z]/.test(generated) && /[A-Z]/.test(generated), hasDigit: /\d/.test(generated), hasSymbol: /[^A-Za-z0-9]/.test(generated) });
 
