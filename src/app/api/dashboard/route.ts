@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/api";
 import { requireUser } from "@/lib/account-auth";
 import { getAiConfig } from "@/lib/ai";
+import { monthlyBuckets } from "@/lib/chart";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,9 @@ export async function GET() {
 
     const sixMonthTotal = priceRecords.reduce((sum, record) => sum + record.totalPrice, 0);
     const currentMonthTotal = priceRecords.filter((record) => record.purchasedAt >= currentMonthStart).reduce((sum, record) => sum + record.totalPrice, 0);
+    // 近 6 个月支出序列:前端直接画柱状图,不在浏览器里再聚合一遍。
+    const monthly = monthlyBuckets(priceRecords, now, 6).map((row) => ({ label: row.label, value: row.total }));
+
     const categoryTotals = new Map<string, number>();
     priceRecords.filter((record) => record.purchasedAt >= currentMonthStart).forEach((record) => categoryTotals.set(record.category, (categoryTotals.get(record.category) || 0) + record.totalPrice));
     const consumption = new Map<string, { itemName: string; count: number; lastUsedAt: string }>();
@@ -36,7 +40,7 @@ export async function GET() {
       items,
       locations,
       shopping,
-      finance: { currentMonthTotal, averageMonthly: sixMonthTotal / 6, recordCount: priceRecords.length, recent: priceRecords.slice(0, 5), byCategory: [...categoryTotals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([category, total]) => ({ category, total })) },
+      finance: { currentMonthTotal, averageMonthly: sixMonthTotal / 6, recordCount: priceRecords.length, monthly, recent: priceRecords.slice(0, 5), byCategory: [...categoryTotals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([category, total]) => ({ category, total })) },
       consumption: [...consumption.values()].sort((a, b) => b.count - a.count).slice(0, 5),
       // AI 未配置时前端把按钮换成「去设置」引导,而不是让用户点了才看到报错。
       aiAvailable: Boolean(await getAiConfig()),

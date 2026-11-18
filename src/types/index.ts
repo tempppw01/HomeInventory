@@ -89,7 +89,7 @@ export interface DashboardData {
   items: Item[];
   locations: Location[];
   shopping: ShoppingItem[];
-  finance: { currentMonthTotal: number; averageMonthly: number; recordCount: number; recent: PriceRecord[]; byCategory: { category: string; total: number }[] };
+  finance: { currentMonthTotal: number; averageMonthly: number; recordCount: number; recent: PriceRecord[]; byCategory: { category: string; total: number }[]; monthly: { label: string; value: number }[] };
   consumption: { itemName: string; count: number; lastUsedAt: string }[];
   preferences?: { expiryReminderDays: number; lowStockReminder: boolean; weeklyReviewEnabled: boolean; weeklyReviewDay: number };
   tasks: HouseholdTask[];

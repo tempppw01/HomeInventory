@@ -7,6 +7,8 @@ import { currentUser } from "@/lib/account-auth";
 import { restockForecast } from "@/lib/item-forecast";
 import { fridgePlan } from "@/lib/fridge";
 import { buildHouseholdReport, reportHeadline } from "@/lib/household-report";
+import { MonthlyBars, ShareBar } from "@/components/charts";
+import { monthlyBuckets } from "@/lib/chart";
 import { ReportPrintButton } from "@/components/report-print-button";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +24,7 @@ export default async function ReportPage() {
   const user = await currentUser();
   if (!user) redirect("/");
 
-  const [items, locations] = await Promise.all([
+  const [items, locations, priceRecords] = await Promise.all([
     prisma.item.findMany({
       where: { deletedAt: null, quantity: { gt: 0 } },
       select: {
@@ -33,6 +35,11 @@ export default async function ReportPage() {
       },
     }),
     prisma.location.findMany({ select: { id: true, name: true } }),
+    // 账单类数据:近 6 个月用于趋势图,本月用于分类占比。
+    prisma.priceRecord.findMany({
+      where: { purchasedAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth() - 5, 1) } },
+      select: { category: true, totalPrice: true, purchasedAt: true },
+    }),
   ]);
 
   const now = new Date();
@@ -60,6 +67,15 @@ export default async function ReportPage() {
     id: item.id, name: item.name, unit: item.unit, quantity: item.quantity,
     storage: item.storage ?? null, locationName: item.location?.name ?? null,
   })));
+
+  const monthly = monthlyBuckets(priceRecords, now, 6).map((row) => ({ label: row.label, value: row.total }));
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const categoryTotals = new Map<string, number>();
+  for (const record of priceRecords) {
+    if (new Date(record.purchasedAt) < monthStart) continue;
+    categoryTotals.set(record.category, (categoryTotals.get(record.category) ?? 0) + record.totalPrice);
+  }
+  const byCategory = [...categoryTotals.entries()].map(([category, total]) => ({ label: category, value: Number(total.toFixed(2)) })).sort((left, right) => right.value - left.value).slice(0, 4);
 
   const report = buildHouseholdReport({
     now,
@@ -117,6 +133,13 @@ export default async function ReportPage() {
         </div>
 
         <div className="mt-6 grid gap-5">
+          {monthly.some((row) => row.value > 0) && section(<Wallet size={14} />, "近 6 个月支出", (
+            <div>
+              <MonthlyBars points={monthly} ariaLabel="近 6 个月支出趋势" valueFormatter={(value) => `¥${Math.round(value)}`} />
+              {byCategory.length > 0 && <div className="mt-3"><ShareBar rows={byCategory} ariaLabel="本月消费分类占比" valueFormatter={(value) => `¥${Math.round(value)}`} /></div>}
+            </div>
+          ))}
+
           {section(<CalendarDays size={14} />, "要到期了", report.expiring.length
             ? <ul className="m-0 list-none space-y-1 p-0 text-sm">{report.expiring.map((row) => <li key={row.name}>{row.name} · {row.expired ? `已过期 ${Math.abs(row.days)} 天` : `${row.days} 天后到期`}</li>)}</ul>
             : <p className="m-0 text-sm muted">30 天内没有到期的东西</p>)}

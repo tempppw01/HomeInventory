@@ -14,6 +14,8 @@ import { daysLeftFor, duplicateGroups, restockForecast } from "@/lib/item-foreca
 import { fridgePlan, fridgeSummary } from "@/lib/fridge";
 import { spendForecast, spendSummary } from "@/lib/spend-forecast";
 import { AiInsightsCard } from "@/components/ai-insights-card";
+import { MonthlyBars, RankBars, ShareBar } from "@/components/charts";
+import { monthOverMonthLabel } from "@/lib/chart";
 import { categoryIconMap } from "@/components/shared";
 import { View, expiryDays, expiryDateLabel, expiryAdvice, expiryGroupLabel } from "../shared";
 import { useConfirm } from "@/components/confirm-dialog";
@@ -265,6 +267,36 @@ export function HomeInsightsCompact({ data, onRestock }: { data: DashboardData; 
       <Metric label="本月" value={`¥${data.finance.currentMonthTotal.toFixed(0)}`} />
       <Metric label="近 6 月均值" value={`¥${data.finance.averageMonthly.toFixed(0)}`} />
     </div>
+
+    {/* 图表:先给「这几个月花了多少」一个直观形状,再拆分类占比与消耗排行。 */}
+    {data.finance.monthly?.length > 0 && (
+      <div className="mt-4">
+        <div className="mb-1.5 flex items-baseline justify-between">
+          <span className="text-xs font-bold muted">近 6 个月支出</span>
+          {(() => {
+            const mom = monthOverMonthLabel(data.finance.monthly.map((row, index) => ({ month: String(index), label: row.label, total: row.value })));
+            if (!mom) return null;
+            const tone = mom.tone === "up" ? "var(--danger)" : mom.tone === "down" ? "var(--success)" : "var(--muted)";
+            return <span className="text-[11px] font-bold" style={{ color: tone }}>{mom.text}</span>;
+          })()}
+        </div>
+        <MonthlyBars points={data.finance.monthly} ariaLabel="近 6 个月支出趋势" valueFormatter={(value) => `¥${Math.round(value)}`} />
+      </div>
+    )}
+
+    {data.finance.byCategory.length > 0 && (
+      <div className="mt-4">
+        <div className="mb-2 text-xs font-bold muted">本月花在哪</div>
+        <ShareBar rows={data.finance.byCategory.map((row) => ({ label: row.category, value: row.total }))} ariaLabel="本月消费分类占比" valueFormatter={(value) => `¥${Math.round(value)}`} />
+      </div>
+    )}
+
+    {data.consumption.length > 0 && (
+      <div className="mt-4 border-t pt-3" style={{ borderColor: "var(--hairline)" }}>
+        <div className="mb-2 text-xs font-bold muted">最近用得多</div>
+        <RankBars rows={data.consumption.map((row) => ({ label: row.itemName, value: row.count, hint: "次" }))} ariaLabel="最近消耗次数排行" tone="warning" />
+      </div>
+    )}
 
     {spendText && <div className="mt-3 rounded-2xl px-3 py-2.5" style={{ background: "var(--surface-soft)" }}>
       <div className="text-xs font-bold muted">按当前用量预计</div>
