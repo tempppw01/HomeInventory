@@ -3,6 +3,7 @@
 // 之前物品页能导出 CSV,但导入只接受应用自己生成的 JSON,导出的表格改完再传回来会失败。
 // 这里把 CSV 解析与列名映射做成纯函数,便于单测,也方便以后支持更多列。
 // 只做「解析 + 映射」:校验与写库仍由 /api/items/import 负责,避免两套规则。
+// 「存放位置」列只输出 locationName,由接口按名字匹配(不存在时可创建),前端不碰数据库。
 
 export type CsvIssue = { row: number; error: string };
 
@@ -32,6 +33,10 @@ const HEADER_ALIASES: Record<string, string> = {
   price: "price",
   备注: "notes",
   notes: "notes",
+  存放位置: "locationName",
+  位置: "locationName",
+  location: "locationName",
+  locationname: "locationName",
   最低库存: "minQuantity",
   minquantity: "minQuantity",
 };
@@ -143,6 +148,7 @@ export function csvToItems(text: string, limit = 1000): { items: CsvItemRow[]; i
       ...(purchaseDate ? { purchaseDate } : {}),
       ...(expiryDate ? { expiryDate } : {}),
       ...(record.notes ? { notes: record.notes } : {}),
+      ...(record.locationName ? { locationName: record.locationName } : {}),
     });
   }
 
@@ -154,12 +160,17 @@ export function importResultText(
   imported: number,
   remoteErrors: CsvIssue[] | undefined,
   localIssues: CsvIssue[] = [],
+  createdLocations: string[] = [],
 ): string {
   const issues = [...localIssues, ...(remoteErrors ?? [])];
   if (!imported && !issues.length) return "没有可导入的内容";
   const base = imported ? `已导入 ${imported} 件物品` : "没有导入任何物品";
-  if (!issues.length) return base;
+  if (!issues.length) {
+    return createdLocations.length ? `${base};新建空间 ${createdLocations.length} 个(${createdLocations.slice(0, 3).join("、")}${createdLocations.length > 3 ? " 等" : ""})` : base;
+  }
   const first = issues[0];
   const more = issues.length > 1 ? ` 等 ${issues.length} 处` : "";
-  return `${base};跳过 ${issues.length} 处(第 ${first.row} 行:${first.error})${more}`;
+  const skipped = `跳过 ${issues.length} 处(第 ${first.row} 行:${first.error})${more}`;
+  const locations = createdLocations.length ? `;新建空间 ${createdLocations.length} 个(${createdLocations.slice(0, 3).join("、")}${createdLocations.length > 3 ? " 等" : ""})` : "";
+  return `${base};${skipped}${locations}`;
 }

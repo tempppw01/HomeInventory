@@ -42,7 +42,25 @@ test("按导出的表头映射成导入结构", () => {
     purchaseDate: "2026-01-02",
     expiryDate: "2027-01-02",
     notes: "夏天的",
+    locationName: "冰箱",
   });
+});
+
+test("存放位置列会带出空间名,交给接口解析", () => {
+  const csv = [HEADER, "洗衣液,2,瓶,清洁,消耗品,卫生间,,,2027/01/01,39,,"].join("\n");
+  const { items } = csvToItems(csv);
+  assert.equal(items[0].locationName, "卫生间");
+});
+
+test("没有位置列时不产生 locationName 字段", () => {
+  const csv = ["名称,数量", "抹布,2"].join("\n");
+  const { items } = csvToItems(csv);
+  assert.equal("locationName" in items[0], false);
+});
+
+test("结果文案会说明新建了哪些空间", () => {
+  assert.match(importResultText(3, [], [], ["卫生间", "阳台"]), /新建空间 2 个\(卫生间、阳台\)/);
+  assert.match(importResultText(3, [], []), /^已导入 3 件物品$/);
 });
 
 test("缺名称的行记入问题而不是静默丢弃", () => {

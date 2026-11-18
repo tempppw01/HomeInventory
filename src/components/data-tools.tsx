@@ -36,7 +36,7 @@ export function DataTools({ onToast }: { onToast: (message: string) => void }) {
       const response = await fetch("/api/items/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const result = await response.json();
       if (!response.ok && !result?.count) throw new Error(result.error || "导入失败");
-      onToast(importResultText(Number(result.count ?? 0), result.errors, issues));
+      onToast(importResultText(Number(result.count ?? 0), result.errors, issues, Array.isArray(result.createdLocations) ? result.createdLocations : []));
     } catch (error) { onToast(error instanceof Error ? error.message : "导入失败"); }
   };
 
