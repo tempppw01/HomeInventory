@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Sparkles } from "lucide-react";
+import { addDismissed, filterDismissed, insightKey, parseDismissed } from "@/lib/insight-dismiss";
+import { Sparkles, X } from "lucide-react";
 
 async function jsonRequest<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { ...options, headers: { "Content-Type": "application/json", ...options?.headers } });
@@ -27,6 +28,19 @@ type Payload = { headline: string; insights: Insight[]; generatedAt: string; mod
  * 打开页面就自动请求一次,不需要用户点任何按钮;失败时整块自己消失,不打扰主流程。
  */
 export function AiInsightsCard({ aiAvailable, onRestock, onOpenItem }: { aiAvailable: boolean; onRestock: (itemId: string) => void; onOpenItem: (itemId: string) => void }) {
+  // 被忽略的建议只存在本机:它们本来就是「这台设备上不想再看到」。
+  const [dismissedKeys, setDismissedKeys] = useState<string[]>(() => (typeof window === "undefined" ? [] : parseDismissed(localStorage.getItem("home-inventory-dismissed-insights"))));
+  const dismissInsight = (insight: { kind?: string; title: string; itemId?: string | null }) => {
+    setDismissedKeys((current) => {
+      const next = addDismissed(current, insightKey(insight));
+      try { localStorage.setItem("home-inventory-dismissed-insights", JSON.stringify(next)); } catch { /* 隐私模式忽略 */ }
+      return next;
+    });
+  };
+  const restoreInsights = () => {
+    setDismissedKeys([]);
+    try { localStorage.removeItem("home-inventory-dismissed-insights"); } catch { /* 忽略 */ }
+  };
   const [payload, setPayload] = useState<Payload | null>(null);
   const [failed, setFailed] = useState(false);
   const started = useRef(false);
@@ -75,7 +89,7 @@ export function AiInsightsCard({ aiAvailable, onRestock, onOpenItem }: { aiAvail
         <>
           <p className="mb-0 mt-3 text-sm font-bold">{payload.headline}</p>
           <ul className="mt-3 space-y-2.5">
-            {payload.insights.map((insight, index) => (
+            {filterDismissed(payload.insights, dismissedKeys).map((insight, index) => (
               <li key={`${insight.title}-${index}`} className="flex gap-2.5">
                 <span className="mt-1 size-1.5 shrink-0 rounded-full" style={{ background: "var(--primary)" }} />
                 <span className="min-w-0 flex-1">
@@ -92,9 +106,30 @@ export function AiInsightsCard({ aiAvailable, onRestock, onOpenItem }: { aiAvail
                     </button>
                   )}
                 </span>
+                <button
+                  type="button"
+                  onClick={() => dismissInsight(insight)}
+                  className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg opacity-45 transition hover:opacity-100"
+                  aria-label={`忽略这条建议:${insight.title}`}
+                  title="不再提示这条建议"
+                >
+                  <X size={13} />
+                </button>
               </li>
             ))}
           </ul>
+          {filterDismissed(payload.insights, dismissedKeys).length === 0 && (
+            <p className="mb-0 mt-3 text-xs muted">这条建议你都不需要了,已经收起来。</p>
+          )}
+          {dismissedKeys.length > 0 && (
+            <button
+              type="button"
+              onClick={restoreInsights}
+              className="mt-2 inline-flex min-h-9 items-center rounded-full px-2.5 text-xs font-bold muted"
+            >
+              恢复已忽略的 {dismissedKeys.length} 条
+            </button>
+          )}
         </>
       )}
     </section>
