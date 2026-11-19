@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   // 只生成构建机(容器内 alpine)对应的引擎,避免把全平台二进制打进镜像。
   binaryTargets = ["native"]
 }
@@ -31,35 +31,35 @@ enum UserRole {
 }
 
 model User {
-  id           String            @id @default(cuid())
-  username     String            @unique
-  displayName  String
-  passwordHash String
+  id                  String           @id @default(cuid())
+  username            String           @unique
+  displayName         String
+  passwordHash        String
   // 一次性恢复码(忘记密码时用)。只保存不可逆哈希,重置成功后立即轮换。
   recoveryCodeHash    String?
   recoveryGeneratedAt DateTime?
-  role         UserRole          @default(MEMBER)
-  active       Boolean           @default(true)
-  member       HouseholdMember?
-  activities   ActivityLog[]
-  sessions     AuthSession[]
-  loginRecords LoginRecord[]
-  chatMessages AiChatMessage[]
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  role                UserRole         @default(MEMBER)
+  active              Boolean          @default(true)
+  member              HouseholdMember?
+  activities          ActivityLog[]
+  sessions            AuthSession[]
+  loginRecords        LoginRecord[]
+  chatMessages        AiChatMessage[]
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
 }
 
 model AiChatMessage {
-  id            String   @id @default(cuid())
-  userId        String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  position      Int
-  role          String
-  content       String
-  attachments   String?
-  itemDraft     String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  position    Int
+  role        String
+  content     String
+  attachments String?
+  itemDraft   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@unique([userId, position])
   @@index([userId, updatedAt])
@@ -96,17 +96,17 @@ model LoginRecord {
 }
 
 model Location {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  icon      String   @default("Package")
-  color     String   @default("#7c3aed")
+  id           String     @id @default(cuid())
+  name         String     @unique
+  icon         String     @default("Package")
+  color        String     @default("#7c3aed")
   thumbnailUrl String?
-  parentId  String?
-  parent    Location? @relation("LocationHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
-  children  Location[] @relation("LocationHierarchy")
-  items     Item[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  parentId     String?
+  parent       Location?  @relation("LocationHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Location[] @relation("LocationHierarchy")
+  items        Item[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 }
 
 model Item {
@@ -128,12 +128,18 @@ model Item {
   aiStorageAdvice       String?
   aiUsageAdvice         String?
   aiReplenishmentAdvice String?
-  /** 后台自动判定的存放建议:COLD=需冷藏 / COLD_AFTER_OPEN=开封后冷藏 / ROOM=常温即可 */
-  storage       String?
-  /** 上述判定的依据,给用户看的一句话 */
-  storageReason String?
-  /** 后台自动打的标签(逗号分隔),参与搜索 */
-  autoTags      String?
+  /**
+   * 后台自动判定的存放建议:COLD=需冷藏 / COLD_AFTER_OPEN=开封后冷藏 / ROOM=常温即可
+   */
+  storage               String?
+  /**
+   * 上述判定的依据,给用户看的一句话
+   */
+  storageReason         String?
+  /**
+   * 后台自动打的标签(逗号分隔),参与搜索
+   */
+  autoTags              String?
   locationId            String?
   location              Location?     @relation(fields: [locationId], references: [id], onDelete: SetNull)
   priceRecords          PriceRecord[]
@@ -165,20 +171,20 @@ model HouseholdMember {
 }
 
 model ActivityLog {
-  id         String            @id @default(cuid())
-  action     String
-  itemId     String?
-  itemName   String?
-  memberId   String?
-  userId     String?
-  detail     String?
-  undoOfId   String?
-  undoneAt   DateTime?
-  scanRequestId String?         @unique
-  item       Item?             @relation(fields: [itemId], references: [id], onDelete: SetNull)
-  member     HouseholdMember?  @relation(fields: [memberId], references: [id], onDelete: SetNull)
-  user       User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
-  createdAt  DateTime          @default(now())
+  id            String           @id @default(cuid())
+  action        String
+  itemId        String?
+  itemName      String?
+  memberId      String?
+  userId        String?
+  detail        String?
+  undoOfId      String?
+  undoneAt      DateTime?
+  scanRequestId String?          @unique
+  item          Item?            @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  member        HouseholdMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  user          User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt     DateTime         @default(now())
 
   @@index([itemId])
   @@index([memberId])
@@ -229,29 +235,43 @@ model AiSetting {
 }
 
 model ShoppingItem {
-  id        String         @id @default(cuid())
-  name      String
-  quantity  Float          @default(1)
-  unit      String         @default("件")
-  category  String?
-  priority  Int            @default(1)
-  status    ShoppingStatus @default(PENDING)
-  source    String         @default("manual")
-  isFavorite Boolean       @default(false)
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  id         String         @id @default(cuid())
+  name       String
+  quantity   Float          @default(1)
+  unit       String         @default("件")
+  category   String?
+  priority   Int            @default(1)
+  status     ShoppingStatus @default(PENDING)
+  source     String         @default("manual")
+  isFavorite Boolean        @default(false)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
 
   @@index([status])
 }
 
 model HouseholdPreference {
-  id                   String   @id @default("default")
-  expiryReminderDays   Int      @default(7)
-  lowStockReminder     Boolean  @default(true)
-  weeklyReviewEnabled  Boolean  @default(true)
-  weeklyReviewDay      Int      @default(0)
-  lastAutoBackupAt     DateTime?
-  updatedAt            DateTime @updatedAt
+  id                  String    @id @default("default")
+  expiryReminderDays  Int       @default(7)
+  lowStockReminder    Boolean   @default(true)
+  weeklyReviewEnabled Boolean   @default(true)
+  weeklyReviewDay     Int       @default(0)
+  lastAutoBackupAt    DateTime?
+  updatedAt           DateTime  @updatedAt
+}
+
+/// 盘点历史。此前只存在浏览器 localStorage —— 换设备或清缓存就丢了,
+/// 而「最近一次盘点了多少件、确认了多少」恰恰是该长期留存的记录。
+model AuditRecord {
+  id           String   @id @default(cuid())
+  userId       String?
+  total        Int
+  confirmed    Int
+  locationName String   @default("全部空间")
+  finishedAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  @@index([finishedAt])
 }
 
 model HouseholdTask {
@@ -270,7 +290,6 @@ model HouseholdTask {
   @@index([dueAt])
   @@index([nextDueAt])
 }
-
 
 model SearchHistory {
   id        String   @id @default(cuid())

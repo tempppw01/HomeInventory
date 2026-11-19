@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ClipboardCheck, Package, QrCode } from "lucide-react";
-import { useContext, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import type { Item, Location } from "@/types";
 import { useConfirm } from "@/components/confirm-dialog";
 import { ContextMenu, useContextMenu, type ContextMenuItem } from "@/components/context-menu";
@@ -55,8 +55,27 @@ export function AuditView({ items, locations, onRefresh, onToast }: { items: Ite
   const [locationId, setLocationId] = useState("ALL");
   const [history, setHistory] = useState<{ at: string; total: number; confirmed: number; locationName: string }[]>(() => {
     if (typeof window === "undefined") return [];
+
     try { return JSON.parse(localStorage.getItem(historyKey) || "[]"); } catch { return []; }
   });
+  // 盘点历史优先读服务端:此前只存 localStorage,换设备或清缓存就丢。
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch("/api/audits", { cache: "no-store" });
+        if (!response.ok) return;
+        const body = await response.json();
+        if (cancelled || !Array.isArray(body.audits)) return;
+        if (!body.audits.length) return; // 服务端还没有记录时,保留本地历史
+        setHistory(body.audits.slice(0, 5));
+      } catch {
+        // 网络不可用时保持本地历史,不影响盘点流程
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // 历史盘点趋势:只在有两次以上记录时画,一个点看不出走势。
   const trend = auditTrend(history);
   const trendText = auditTrendText(trend);
@@ -130,6 +149,8 @@ export function AuditView({ items, locations, onRefresh, onToast }: { items: Ite
     const nextHistory = [entry, ...history].slice(0, 5);
     setHistory(nextHistory);
     localStorage.setItem(historyKey, JSON.stringify(nextHistory));
+    // 同时写服务端:换设备也能看到「最近盘点」。失败不阻塞流程(本地仍然有记录)。
+    void fetch("/api/audits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(entry) }).catch(() => {});
     setFinished(true);
     if (!unconfirmed.length) localStorage.removeItem(storageKey);
   };

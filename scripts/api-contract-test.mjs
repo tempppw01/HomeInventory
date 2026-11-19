@@ -213,6 +213,26 @@ const baseItem = { name: "T-基础物品", category: "日用", type: "CONSUMABLE
   record("shopping", "撤销后库存数量保持不变(只回退采购状态)", Number(afterUndo.body?.quantity) === startQty + 3, `quantity=${afterUndo.body?.quantity}(期望 ${startQty + 3})`);
 }
 
+// ============ 5c. 盘点历史(服务端留存)============
+// 盘点结果曾经只存在浏览器 localStorage,换设备或清缓存就丢。
+// 现在服务端留存最近 20 条,这里守住「能写、能读、非法数据被拒」。
+{
+  const created = await call("POST", "/api/audits", { total: 12, confirmed: 9, locationName: "契约核对" });
+  record("audits", "写入盘点记录", created.status === 201 && Boolean(created.body?.id), `status=${created.status}`);
+
+  const bad = await call("POST", "/api/audits", { total: "abc", confirmed: 1 });
+  record("audits", "非法盘点数据应被拒绝", bad.status === 400, `status=${bad.status}`);
+
+  const list = await call("GET", "/api/audits");
+  const rows = list.body?.audits ?? [];
+  const hit = rows.some((row) => row.locationName === "契约核对" && row.total === 12 && row.confirmed === 9);
+  record("audits", "能读回刚写入的盘点记录", list.status === 200 && hit, `条数=${rows.length} 命中=${hit}`);
+
+  // 确认数超过总数时应被夹住,避免「20/10 件」这种不可能的数据
+  const clamp = await call("POST", "/api/audits", { total: 4, confirmed: 99, locationName: "契约核对夹取" });
+  record("audits", "确认数超过总数应被夹到总数", clamp.body?.confirmed === 4, `confirmed=${clamp.body?.confirmed}`);
+}
+
 // ============ 6. tasks ============
 {
   const r = await call("POST", "/api/tasks", { title: "T-任务", description: "", dueAt: new Date(Date.now() + 86400000).toISOString(), recurrence: "NONE" });
