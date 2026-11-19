@@ -1,0 +1,76 @@
+// 打印月报页(/report)的验收检查。
+//
+// 单独成篇的原因:这一页是服务端组件,曾经把函数(valueFormatter)传给客户端图表组件,
+// React 无法序列化函数 → 整页 500。当时没有任何检查覆盖到它,直到手动点开才发现。
+// 这类「服务端组件 + 客户端组件」的边界问题值得一条常驻检查。
+
+import { launchChromiumOrNull } from "./lib/browser.mjs";
+
+const BASE = process.env.BASE_URL || "http://127.0.0.1:3001";
+const USER = process.env.PROBE_USER || "bgs";
+const PASS = process.env.PROBE_PASS || "GuiWu-2026-Home";
+
+const results = [];
+const check = (name, ok, detail = "") => {
+  results.push({ name, ok, detail });
+  console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok ? "" : "  → " + detail}`);
+};
+
+const browser = await launchChromiumOrNull();
+if (!browser) {
+  console.log("跳过:当前环境没有可用的 Chromium");
+  process.exit(0);
+}
+
+const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+const page = await context.newPage();
+const consoleErrors = [];
+page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text().slice(0, 120)); });
+
+// 登录
+await page.goto(BASE);
+await page.waitForTimeout(1500);
+if (await page.locator("#auth-username").count()) {
+  await page.fill("#auth-username", USER);
+  await page.fill("#auth-password", PASS);
+  await page.click('button[type="submit"]');
+  await page.waitForTimeout(3000);
+}
+
+const response = await page.goto(`${BASE}/report`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(2200);
+const status = response ? response.status() : 0;
+
+const state = await page.evaluate(() => {
+  const text = document.body.innerText || "";
+  return {
+    title: text.includes("家庭月报"),
+    boundary: text.includes("页面没能加载出来"),
+    sections: ["要到期了", "快用完了", "该放冰箱的", "该补货的"].filter((label) => text.includes(label)).length,
+    chartBars: document.querySelectorAll('svg[viewBox^="0 0 100"] rect').length,
+    shareAria: document.querySelector('[role="img"][aria-label^="本月消费分类占比"]')?.getAttribute("aria-label") ?? null,
+    printButton: Array.from(document.querySelectorAll("button")).some((button) => (button.textContent || "").includes("打印")),
+    monthLabel: /\d{4} 年 \d{1,2} 月/.test(text),
+  };
+});
+
+check("月报页返回 200 且没有落进错误边界", status === 200 && !state.boundary, `status=${status} boundary=${state.boundary}`);
+check("月报页显示标题与四个小节", state.title && state.sections === 4, `title=${state.title} sections=${state.sections}`);
+check("月报页有月份标签", state.monthLabel, `monthLabel=${state.monthLabel}`);
+check("月报页图表正常渲染(柱状 + 占比)", state.chartBars > 0 && Boolean(state.shareAria), `bars=${state.chartBars} share=${state.shareAria}`);
+check("月报页有打印按钮", state.printButton, `printButton=${state.printButton}`);
+// 外部字体/CDN 拉取失败不算应用错误:字体是第三方 OSS 托管,
+// 网络受限或离线时必然失败,但界面已用 font-display: swap 回退到系统字体,功能不受影响。
+const externalResourceFailure = (text) => text.includes("Failed to load resource") || /font at|ERR_(FAILED|CONNECTION|BLOCKED)/.test(text);
+const relevant = consoleErrors.filter((text) => !text.includes("favicon") && !externalResourceFailure(text));
+check("月报页没有控制台错误", relevant.length === 0, relevant.slice(0, 2).join(" | "));
+
+await context.close();
+await browser.close();
+
+const failed = results.filter((entry) => !entry.ok);
+console.log(`\n${results.length - failed.length}/${results.length} 通过`);
+if (failed.length) {
+  for (const entry of failed) console.log(`[${entry.name}] ${entry.detail}`);
+}
+process.exit(failed.length ? 1 : 0);

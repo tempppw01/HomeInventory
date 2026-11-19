@@ -7,26 +7,44 @@
 
 import { barLayout, formatCompact, niceMax, sharesOf, ticksFor, type SeriesPoint } from "@/lib/chart";
 
+/**
+ * 数值格式用「名字」而不是函数传递。
+ * 服务端组件不能把函数传给客户端组件(React 会直接报错),所以这里用可序列化的枚举,
+ * 需要时仍可传 valueFormatter(仅限客户端组件使用)。
+ */
+export type ChartFormat = "compact" | "money" | "percent" | "count";
+
+function resolveFormatter(format: ChartFormat | undefined, valueFormatter?: (value: number) => string) {
+  if (valueFormatter) return valueFormatter;
+  if (format === "money") return (value: number) => `¥${Math.round(value)}`;
+  if (format === "percent") return (value: number) => `${Math.round(value)}%`;
+  if (format === "count") return (value: number) => `${Math.round(value)} 件`;
+  return formatCompact;
+}
+
 /** 按月支出的柱状图。 */
 export function MonthlyBars({
   points,
   height = 120,
   ariaLabel,
-  valueFormatter = formatCompact,
+  format,
+  valueFormatter,
 }: {
   points: readonly SeriesPoint[];
   height?: number;
   ariaLabel: string;
+  format?: ChartFormat;
   valueFormatter?: (value: number) => string;
 }) {
   if (!points.length) return null;
+  const fmt = resolveFormatter(format, valueFormatter);
   const width = 100; // viewBox 用百分比坐标,自动适配容器宽度
   const values = points.map((point) => point.value);
   const rects = barLayout(values, width, height, 0.34);
   const top = niceMax(Math.max(...values));
   const gridLines = ticksFor(Math.max(...values), 3);
   const maxIndex = values.indexOf(Math.max(...values));
-  const summary = points.map((point) => `${point.label} ${valueFormatter(point.value)}`).join(",");
+  const summary = points.map((point) => `${point.label} ${fmt(point.value)}`).join(",");
 
   return (
     <figure className="m-0" role="img" aria-label={`${ariaLabel}。${summary}`}>
@@ -60,18 +78,21 @@ export function MonthlyBars({
 export function RankBars({
   rows,
   ariaLabel,
+  format,
   valueFormatter = (value: number) => String(value),
   tone = "primary",
   onSelect,
 }: {
   rows: ReadonlyArray<{ label: string; value: number; hint?: string }>;
   ariaLabel: string;
+  format?: ChartFormat;
   valueFormatter?: (value: number) => string;
   tone?: "primary" | "warning";
   /** 传入后每行变成可点击按钮(例如点物品跳到详情) */
   onSelect?: (label: string) => void;
 }) {
   if (!rows.length) return null;
+  const fmt = resolveFormatter(format, valueFormatter);
   const shares = sharesOf(rows.map((row) => row.value));
 
   return (
@@ -82,7 +103,7 @@ export function RankBars({
             <div className="flex items-baseline justify-between gap-3 text-xs">
               <span className="min-w-0 truncate font-bold">{row.label}</span>
               <span className="shrink-0 tabular-nums muted">
-                {valueFormatter(row.value)}
+                {fmt(row.value)}
                 {row.hint ? <span className="ml-1">· {row.hint}</span> : null}
               </span>
             </div>
@@ -121,22 +142,25 @@ export function RankBars({
 export function ShareBar({
   rows,
   ariaLabel,
-  valueFormatter = formatCompact,
+  format,
+  valueFormatter,
   onSelect,
   isSelectable,
 }: {
   rows: ReadonlyArray<{ label: string; value: number }>;
   ariaLabel: string;
+  format?: ChartFormat;
   valueFormatter?: (value: number) => string;
   onSelect?: (label: string) => void;
   /** 哪些项可点:聚合出来的「其他」没有对应分类,传 false 让它保持纯文本 */
   isSelectable?: (label: string) => boolean;
 }) {
   if (!rows.length) return null;
+  const fmt = resolveFormatter(format, valueFormatter);
   const shares = sharesOf(rows.map((row) => row.value));
   const total = rows.reduce((sum, row) => sum + row.value, 0);
   const palette = ["var(--primary)", "var(--warning)", "var(--success)", "var(--danger)"];
-  const summary = rows.map((row) => `${row.label} ${valueFormatter(row.value)}`).join(",");
+  const summary = rows.map((row) => `${row.label} ${fmt(row.value)}`).join(",");
 
   return (
     <div role="img" aria-label={`${ariaLabel}。${summary}`}>
@@ -152,7 +176,7 @@ export function ShareBar({
               <span className="size-2 shrink-0 rounded-sm" style={{ background: palette[index % palette.length] }} aria-hidden />
               <span className="font-bold">{row.label}</span>
               <span className="tabular-nums">
-                {valueFormatter(row.value)}
+                {fmt(row.value)}
                 {total > 0 ? ` · ${Math.round(shares[index] * 100)}%` : ""}
               </span>
             </>

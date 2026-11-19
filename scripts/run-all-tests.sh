@@ -27,6 +27,7 @@ run "极端输入" node scripts/edge-input-test.mjs
 run "P2 功能" node scripts/verify-p2-features.mjs
 run "UI 体验" node scripts/verify-experience.mjs
 run "UI 修复" node scripts/verify-entry-fixes.mjs
+run "打印月报" node scripts/verify-report-page.mjs
 run "规模性能" node scripts/scale-perf-test.mjs
 
 printf '\n'

@@ -135,8 +135,8 @@ export default async function ReportPage() {
         <div className="mt-6 grid gap-5">
           {monthly.some((row) => row.value > 0) && section(<Wallet size={14} />, "近 6 个月支出", (
             <div>
-              <MonthlyBars points={monthly} ariaLabel="近 6 个月支出趋势" valueFormatter={(value) => `¥${Math.round(value)}`} />
-              {byCategory.length > 0 && <div className="mt-3"><ShareBar rows={byCategory} ariaLabel="本月消费分类占比" valueFormatter={(value) => `¥${Math.round(value)}`} /></div>}
+              <MonthlyBars points={monthly} ariaLabel="近 6 个月支出趋势" format="money" />
+              {byCategory.length > 0 && <div className="mt-3"><ShareBar rows={byCategory} ariaLabel="本月消费分类占比" format="money" /></div>}
             </div>
           ))}
 

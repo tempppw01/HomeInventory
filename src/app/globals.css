@@ -3,49 +3,49 @@
 /* Typography system: MiSans for interface copy, Geist Mono for IDs and numeric data. */
 @font-face {
   font-family: "MiSans";
-  src: url("https://cloudreve-bei.oss-cn-guangzhou.aliyuncs.com/ledgerflow/fonts/MiSans-Regular.woff2") format("woff2");
+  src: local("MiSans"), local("MiSans VF"), url("https://cloudreve-bei.oss-cn-guangzhou.aliyuncs.com/ledgerflow/fonts/MiSans-Regular.woff2") format("woff2");
   font-style: normal;
   font-weight: 400;
   font-display: swap;
 }
 @font-face {
   font-family: "MiSans";
-  src: url("https://cloudreve-bei.oss-cn-guangzhou.aliyuncs.com/ledgerflow/fonts/MiSans-Medium.woff2") format("woff2");
+  src: local("MiSans"), local("MiSans VF"), url("https://cloudreve-bei.oss-cn-guangzhou.aliyuncs.com/ledgerflow/fonts/MiSans-Medium.woff2") format("woff2");
   font-style: normal;
   font-weight: 500;
   font-display: swap;
 }
 @font-face {
   font-family: "MiSans";
-  src: url("https://cloudreve-bei.oss-cn-guangzhou.aliyuncs.com/ledgerflow/fonts/MiSans-Semibold.woff2") format("woff2");
+  src: local("MiSans"), local("MiSans VF"), url("https://cloudreve-bei.oss-cn-guangzhou.aliyuncs.com/ledgerflow/fonts/MiSans-Semibold.woff2") format("woff2");
   font-style: normal;
   font-weight: 600;
   font-display: swap;
 }
 @font-face {
   font-family: "MiSans";
-  src: url("https://cloudreve-bei.oss-cn-guangzhou.aliyuncs.com/ledgerflow/fonts/MiSans-Bold.woff2") format("woff2");
+  src: local("MiSans"), local("MiSans VF"), url("https://cloudreve-bei.oss-cn-guangzhou.aliyuncs.com/ledgerflow/fonts/MiSans-Bold.woff2") format("woff2");
   font-style: normal;
   font-weight: 700;
   font-display: swap;
 }
 @font-face {
   font-family: "MiSans";
-  src: url("https://cloudreve-bei.oss-cn-guangzhou.aliyuncs.com/ledgerflow/fonts/MiSans-Heavy.woff2") format("woff2");
+  src: local("MiSans"), local("MiSans VF"), url("https://cloudreve-bei.oss-cn-guangzhou.aliyuncs.com/ledgerflow/fonts/MiSans-Heavy.woff2") format("woff2");
   font-style: normal;
   font-weight: 800 900;
   font-display: swap;
 }
 @font-face {
   font-family: "Geist Mono";
-  src: url("https://cloudreve-bei.oss-cn-guangzhou.aliyuncs.com/ledgerflow/fonts/GeistMono-Regular.woff2") format("woff2");
+  src: local("Geist Mono"), url("https://cloudreve-bei.oss-cn-guangzhou.aliyuncs.com/ledgerflow/fonts/GeistMono-Regular.woff2") format("woff2");
   font-style: normal;
   font-weight: 400;
   font-display: swap;
 }
 @font-face {
   font-family: "Geist Mono";
-  src: url("https://cloudreve-bei.oss-cn-guangzhou.aliyuncs.com/ledgerflow/fonts/GeistMono-SemiBold.woff2") format("woff2");
+  src: local("Geist Mono"), url("https://cloudreve-bei.oss-cn-guangzhou.aliyuncs.com/ledgerflow/fonts/GeistMono-SemiBold.woff2") format("woff2");
   font-style: normal;
   font-weight: 600 700;
   font-display: swap;

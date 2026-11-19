@@ -654,6 +654,7 @@ viewerChecks: {
       shopping += 1;
     }
     return { items, shopping };
+
   });
   console.log(`探针临时数据清理: 物品 ${removed.items} · 采购 ${removed.shopping}`);
   await context.close();
