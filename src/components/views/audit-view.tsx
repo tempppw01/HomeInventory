@@ -11,6 +11,8 @@ import { QrScannerModal, normalizeScannedCode } from "@/components/qr-scanner";
 import { Empty, ListRow, Metric, Panel, Screen, Toolbar } from "@/components/ui-kit";
 import { csvStringify, withBom } from "@/lib/csv";
 import { AUDIT_HEADER, auditCsvRows, auditRows, auditSummaryText } from "@/lib/audit-export";
+import { auditTrend, auditTrendText } from "@/lib/audit-trend";
+import { MonthlyBars } from "@/components/charts";
 import { ReadOnlyContext, request } from "../shared";
 /** 核对表的一行:右键给出「确认 / 取消确认 / 复制编号」,与物品卡片的交互保持一致。 */
 function AuditRow({ item, checked, onToggle, trailing }: { item: Item; checked: boolean; onToggle: () => void; trailing: React.ReactNode }) {
@@ -55,6 +57,9 @@ export function AuditView({ items, locations, onRefresh, onToast }: { items: Ite
     if (typeof window === "undefined") return [];
     try { return JSON.parse(localStorage.getItem(historyKey) || "[]"); } catch { return []; }
   });
+  // 历史盘点趋势:只在有两次以上记录时画,一个点看不出走势。
+  const trend = auditTrend(history);
+  const trendText = auditTrendText(trend);
   const scopedItems = locationId === "ALL" ? items : items.filter((item) => item.locationId === locationId);
   const scopeName = locationId === "ALL" ? "全部空间" : locations.find((location) => location.id === locationId)?.name || "当前空间";
 
@@ -175,6 +180,16 @@ export function AuditView({ items, locations, onRefresh, onToast }: { items: Ite
           <Metric label="未确认" value={unconfirmed.length} tone={unconfirmed.length ? "warning" : "success"} hint={unconfirmed.length ? "继续核对或统一处理" : "没有遗漏"} />
           <Metric label="当前范围" value={scopeName} hint={locationId === "ALL" ? undefined : "仅当前空间"} />
         </div>
+        {trend.length >= 2 && (
+          <div className="mt-4 border-t pt-3" style={{ borderColor: "var(--hairline)" }}>
+            <div className="mb-2 flex items-baseline justify-between gap-2">
+              <span className="text-xs font-bold muted">近几次盘点的核对率</span>
+              {trendText && <span className="text-[11px] muted">{trendText}</span>}
+            </div>
+            <MonthlyBars points={trend.map((row) => ({ label: row.label, value: row.value }))} ariaLabel="近几次盘点的核对率" height={90} valueFormatter={(value) => `${value}%`} />
+          </div>
+        )}
+
         <div className="mt-4 h-2 overflow-hidden rounded-full" style={{ background: "var(--surface-soft)" }}>
           <div className="h-full rounded-full transition-[width] duration-300" style={{ transitionTimingFunction: "var(--ease-out)", width: `${progressPercent}%`, background: "var(--primary)" }} />
         </div>
