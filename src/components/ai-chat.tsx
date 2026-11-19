@@ -138,7 +138,7 @@ export function AiChat({ onClose, items = [], onOpenItem, seed }: { onClose: () 
   };
 
   const paste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => { const files = Array.from(event.clipboardData.files); if (files.length) { event.preventDefault(); void addFiles(files); } };
-  return <><div aria-hidden="true" className="fixed inset-0 z-[95] bg-black/35 backdrop-blur-sm" onMouseDown={onClose} /><div role="dialog" aria-label="归物助手" className="ai-chat-panel fixed bottom-4 right-4 z-[100] flex h-[min(720px,calc(100vh-32px))] w-[min(460px,calc(100vw-32px))] flex-col overflow-hidden rounded-3xl border shadow-2xl" style={{ background: "var(--surface-solid)", borderColor: "var(--hairline)" }}><header className="flex items-center gap-3 border-b p-4" style={{ borderColor: "var(--hairline)" }}><div className="grid size-10 place-items-center rounded-2xl" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><Bot size={20} /></div><div className="min-w-0 flex-1"><h2 className="m-0 text-lg font-black leading-snug">归物助手</h2><p className="mb-0 mt-1 text-xs muted">库存问答、图片识别和联网资料查询</p></div>{askedQuestions.length >= 2 && (
+  return <><div aria-hidden="true" className="fixed inset-0 z-[95] bg-black/35 backdrop-blur-sm" onMouseDown={onClose} /><div role="dialog" aria-label="归物助手" className="ai-chat-panel fixed bottom-4 right-4 z-[100] flex h-[min(720px,calc(100vh-32px))] w-[min(460px,calc(100vw-32px))] flex-col overflow-hidden rounded-3xl border shadow-2xl" style={{ background: "var(--surface-solid)", borderColor: "var(--hairline)" }}><header className="flex items-center gap-3 border-b p-4" style={{ borderColor: "var(--hairline)" }}><div className="hidden size-10 shrink-0 place-items-center rounded-2xl sm:grid" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><Bot size={20} /></div><div className="min-w-0 flex-1"><h2 className="m-0 truncate whitespace-nowrap text-base font-black leading-snug sm:text-lg">归物助手</h2><p className="mb-0 mt-1 truncate whitespace-nowrap text-xs muted">库存问答、图片识别和联网资料查询</p></div>{askedQuestions.length >= 2 && (
   <button
     type="button"
     onClick={() => setShowOutline((value) => !value)}
@@ -148,7 +148,8 @@ export function AiChat({ onClose, items = [], onOpenItem, seed }: { onClose: () 
     aria-label={`${showOutline ? "隐藏" : "显示"}本次对话要点`}
   >
     <ListTree size={14} />
-    要点 {askedQuestions.length}
+    <span className="hidden sm:inline">要点</span>
+    <span>{askedQuestions.length}</span>
   </button>
 )}
 <button onClick={onClose} className="icon-action size-11 min-h-11" aria-label="关闭归物助手" title="关闭"><X size={18} /></button></header>{showOutline && (
@@ -213,7 +214,7 @@ export function AiChat({ onClose, items = [], onOpenItem, seed }: { onClose: () 
     ))}
   </div>
 )}
-<form onSubmit={ask} className="flex items-end gap-2"><button type="button" onClick={() => fileInput.current?.click()} className="btn-ghost grid size-11 min-h-11 shrink-0 place-items-center p-0" aria-label="上传图片或文件" title="上传图片或文件"><Paperclip size={17} /></button><input ref={fileInput} type="file" multiple accept="image/*,.txt,.csv,.json,.md,.log,.xml,.yaml,.yml" className="hidden" onChange={(event) => { void addFiles(event.target.files || []); event.currentTarget.value = ""; }} /><textarea className="ai-chat-input input min-h-11 min-w-0 flex-1 resize-none py-2.5" rows={1} value={input} onPaste={paste} onChange={(event) => setInput(event.target.value)} placeholder="问问题,或上传图片识别后录入" aria-label="输入问题"
+<form onSubmit={ask} className="flex items-end gap-1.5 sm:gap-2"><button type="button" onClick={() => fileInput.current?.click()} className="btn-ghost grid size-11 min-h-11 shrink-0 place-items-center p-0" aria-label="上传图片或文件" title="上传图片或文件"><Paperclip size={17} /></button><input ref={fileInput} type="file" multiple accept="image/*,.txt,.csv,.json,.md,.log,.xml,.yaml,.yml" className="hidden" onChange={(event) => { void addFiles(event.target.files || []); event.currentTarget.value = ""; }} /><textarea className="ai-chat-input input min-h-11 min-w-0 flex-1 resize-none px-2.5 py-2.5 text-sm sm:px-3" rows={1} value={input} onPaste={paste} onChange={(event) => setInput(event.target.value)} placeholder="问点什么…" aria-label="输入问题"
  onKeyDown={(event) => {
    // 中文输入法组字过程中的 Enter 是「选词」,不能当成发送。
    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
