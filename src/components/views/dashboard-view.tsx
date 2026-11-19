@@ -349,7 +349,7 @@ export function HomeInsightsCompact({ data, onRestock }: { data: DashboardData; 
           {spend.nextPurchases.slice(0, 4).map((row) => (
             <div key={row.id} className="flex items-center gap-2">
               <span className="min-w-0 flex-1 truncate text-xs muted">{row.name} · 约 {Math.max(0, row.daysLeft)} 天后{row.estimatedCost > 0 ? ` · 预计 ¥${Math.round(row.estimatedCost)}` : ""}</span>
-              <button type="button" onClick={() => onRestock(row.id)} className="btn-ghost min-h-9 shrink-0 rounded-full px-2.5 text-xs font-bold" style={{ color: "var(--primary)" }} aria-label={`把${row.name}加到采购清单`}>加到清单</button>
+              <button type="button" onClick={() => onRestock(row.id)} className="btn-ghost min-h-11 shrink-0 rounded-full px-2.5 text-xs font-bold md:min-h-9" style={{ color: "var(--primary)" }} aria-label={`把${row.name}加到采购清单`}>加到清单</button>
             </div>
           ))}
         </div>

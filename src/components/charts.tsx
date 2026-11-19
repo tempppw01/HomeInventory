@@ -125,7 +125,7 @@ export function RankBars({
               <button
                 type="button"
                 onClick={() => onSelect(row.label)}
-                className="block w-full min-w-0 rounded-xl px-1 py-1 text-left transition-colors hover:bg-[var(--surface-soft)]"
+                className="block w-full min-w-0 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-[var(--surface-soft)] md:px-1 md:py-1"
                 aria-label={`查看「${row.label}」`}
               >
                 {content}
@@ -187,7 +187,7 @@ export function ShareBar({
                 <button
                   type="button"
                   onClick={() => onSelect(row.label)}
-                  className="flex items-center gap-1.5 rounded-lg px-1 py-1 transition-colors hover:bg-[var(--surface-soft)]"
+                  className="flex min-h-11 items-center gap-1.5 rounded-lg px-2 py-1 transition-colors hover:bg-[var(--surface-soft)] md:min-h-9 md:px-1"
                   aria-label={`查看「${row.label}」的物品`}
                 >
                   {content}
