@@ -22,7 +22,7 @@ import { useConfirm } from "@/components/confirm-dialog";
 import { ContextMenu, useContextMenu, type ContextMenuItem } from "@/components/context-menu";
 import { copyToClipboard } from "@/lib/clipboard";
 import { ItemCard } from "./items-view";
-export function DashboardView({ data, now, lowStock, expiring, expired, pending, totalValue, onNavigate, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onDelete, onAddRestock, onQr, onAi, onAlerts, onCreate, onMerge, aiAvailable = false }: { data: DashboardData; now: number; lowStock: Item[]; expiring: Item[]; expired: Item[]; pending: ShoppingItem[]; totalValue: number; onNavigate: (v: View) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onDelete: (i: Item) => void; onAddRestock: (i: Item) => void; onMerge: (keepId: string, mergeIds: string[]) => Promise<unknown> | void; aiAvailable?: boolean; onQr: (i: Item) => void; onAi: (i: Item) => void; onAlerts: () => void; onCreate: () => void }) {
+export function DashboardView({ data, now, lowStock, expiring, expired, pending, totalValue, onNavigate, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onDelete, onAddRestock, onQr, onAi, onAlerts, onCreate, onMerge, aiAvailable = false, onOpenCategory }: { data: DashboardData; now: number; lowStock: Item[]; expiring: Item[]; expired: Item[]; pending: ShoppingItem[]; totalValue: number; onNavigate: (v: View) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onDelete: (i: Item) => void; onAddRestock: (i: Item) => void; onMerge: (keepId: string, mergeIds: string[]) => Promise<unknown> | void; aiAvailable?: boolean; /** 点分类图表后跳到物品页并按该分类筛选 */ onOpenCategory?: (category: string) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onAlerts: () => void; onCreate: () => void }) {
 
   // 后台自动预测:按近期消耗速度算「还能用几天」,并找出可能重复录入的物品。
   // 全部是纯函数计算,不需要用户点按钮,也不需要额外的网络请求。
@@ -43,7 +43,9 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
   const inventoryShare = (() => {
     const buckets = new Map<string, number>();
     for (const item of data.items) {
-      const key = item.category.replace(/^医药·/, "医药");
+      // 保留真实分类名:图表标签会直接用作物品页的筛选条件,
+      // 之前把「医药·感冒发热」压成「医药感冒发热」,点下去就筛不到任何东西。
+      const key = item.category;
       buckets.set(key, (buckets.get(key) ?? 0) + 1);
     }
     const sorted = [...buckets.entries()].sort((left, right) => right[1] - left[1]);
@@ -151,7 +153,7 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
             <ChevronDown size={17} className="shrink-0 transition group-open:rotate-180" style={{ color: "var(--muted)" }} />
           </summary>
           <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--hairline)" }}>
-            <ShareBar rows={inventoryShare} ariaLabel="按分类的物品种类分布" valueFormatter={(value) => `${value} 件`} />
+            <ShareBar rows={inventoryShare} ariaLabel="按分类的物品种类分布" onSelect={onOpenCategory} isSelectable={(label) => label !== "其他"} valueFormatter={(value) => `${value} 件`} />
             <p className="mb-0 mt-3 text-xs muted">共 {data.items.length} 件物品,其中消耗品 {data.items.filter((item) => item.type === "CONSUMABLE").length} 件。</p>
           </div>
         </details>
