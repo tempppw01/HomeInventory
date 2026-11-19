@@ -53,7 +53,7 @@ function mergeMessages(remote: ChatMessage[], local: ChatMessage[]) {
   return [...remote, ...local].filter((message) => { const key = JSON.stringify(persistable([message])[0]); if (seen.has(key)) return false; seen.add(key); return true; }).slice(-40);
 }
 
-export function AiChat({ onClose }: { onClose: () => void }) {
+export function AiChat({ onClose, items = [], onOpenItem }: { onClose: () => void; items?: Array<{ id: string; name: string }>; onOpenItem?: (id: string) => void }) {
   const [messages, setMessages] = useState<ChatMessage[]>([welcome]);
   const [input, setInput] = useState(""); const [attachments, setAttachments] = useState<Attachment[]>([]); const [loading, setLoading] = useState(false); const [webSearch, setWebSearch] = useState(false); const [ready, setReady] = useState(false); const [savingItem, setSavingItem] = useState<number | null>(null); const [recordedItems, setRecordedItems] = useState<Set<number>>(() => new Set());
   const fileInput = useRef<HTMLInputElement>(null); const scrollRef = useRef<HTMLDivElement>(null); const messagesRef = useRef(messages); const savingHistory = useRef(false); const historyUpdatedAt = useRef<string | null>(null);
@@ -121,14 +121,28 @@ export function AiChat({ onClose }: { onClose: () => void }) {
   };
 
   const paste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => { const files = Array.from(event.clipboardData.files); if (files.length) { event.preventDefault(); void addFiles(files); } };
-  return <><div aria-hidden="true" className="fixed inset-0 z-[95] bg-black/35 backdrop-blur-sm" onMouseDown={onClose} /><div role="dialog" aria-label="归物助手" className="ai-chat-panel fixed bottom-4 right-4 z-[100] flex h-[min(720px,calc(100vh-32px))] w-[min(460px,calc(100vw-32px))] flex-col overflow-hidden rounded-3xl border shadow-2xl" style={{ background: "var(--surface-solid)", borderColor: "var(--hairline)" }}><header className="flex items-center gap-3 border-b p-4" style={{ borderColor: "var(--hairline)" }}><div className="grid size-10 place-items-center rounded-2xl" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><Bot size={20} /></div><div className="min-w-0 flex-1"><h2 className="m-0 text-lg font-black leading-snug">归物助手</h2><p className="mb-0 mt-1 text-xs muted">库存问答、图片识别和联网资料查询</p></div><button onClick={onClose} className="icon-action size-11 min-h-11" aria-label="关闭归物助手" title="关闭"><X size={18} /></button></header><div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">{messages.map((message, index) => <div key={`${message.role}-${index}`} className={`flex flex-col ${message.role === "user" ? "items-end" : "items-start"}`}><div className={`max-w-[90%] rounded-2xl px-3 py-2.5 text-sm leading-6 ${message.role === "user" ? "whitespace-pre-wrap text-[var(--on-primary)]" : "whitespace-pre-wrap"}`} style={message.role === "user" ? { background: "var(--primary)" } : { background: "var(--surface-soft)" }}>{message.attachments?.map((attachment, attachmentIndex) => <AttachmentPreview key={`${attachment.name}-${attachmentIndex}`} attachment={attachment} tone={message.role === "user" ? "dark" : "light"} />)}{plainChatText(message.content)}</div>{message.role === "assistant" && (
+  return <><div aria-hidden="true" className="fixed inset-0 z-[95] bg-black/35 backdrop-blur-sm" onMouseDown={onClose} /><div role="dialog" aria-label="归物助手" className="ai-chat-panel fixed bottom-4 right-4 z-[100] flex h-[min(720px,calc(100vh-32px))] w-[min(460px,calc(100vw-32px))] flex-col overflow-hidden rounded-3xl border shadow-2xl" style={{ background: "var(--surface-solid)", borderColor: "var(--hairline)" }}><header className="flex items-center gap-3 border-b p-4" style={{ borderColor: "var(--hairline)" }}><div className="grid size-10 place-items-center rounded-2xl" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><Bot size={20} /></div><div className="min-w-0 flex-1"><h2 className="m-0 text-lg font-black leading-snug">归物助手</h2><p className="mb-0 mt-1 text-xs muted">库存问答、图片识别和联网资料查询</p></div><button onClick={onClose} className="icon-action size-11 min-h-11" aria-label="关闭归物助手" title="关闭"><X size={18} /></button></header><div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">{messages.map((message, index) => <div key={`${message.role}-${index}`} className={`flex flex-col ${message.role === "user" ? "items-end" : "items-start"}`}><div className={`max-w-[90%] rounded-2xl px-3 py-2.5 text-sm leading-6 ${message.role === "user" ? "whitespace-pre-wrap text-[var(--on-primary)]" : "whitespace-pre-wrap"}`} style={message.role === "user" ? { background: "var(--primary)" } : { background: "var(--surface-soft)" }}>{message.attachments?.map((attachment, attachmentIndex) => <AttachmentPreview key={`${attachment.name}-${attachmentIndex}`} attachment={attachment} tone={message.role === "user" ? "dark" : "light"} />)}{plainChatText(message.content)}</div>{message.role === "assistant" && (<>
+  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+    {mentionedItems(message.content, items).map((entry) => (
+      <button
+        key={entry.id}
+        type="button"
+        onClick={() => onOpenItem?.(entry.id)}
+        className="rounded-full px-2 py-1 text-[11px] font-bold transition-colors"
+        style={{ background: "var(--surface-soft)", color: "var(--primary)" }}
+        aria-label={`打开「${entry.name}」`}
+      >
+        {entry.name}
+      </button>
+    ))}
+  </div>
   <div className="mt-1 flex items-center gap-1">
     <button type="button" onClick={() => copyReply(message.content)} className="grid size-8 place-items-center rounded-lg transition-colors hover:bg-[var(--surface-soft)]" aria-label="复制这条回答" title="复制"><Copy size={13} /></button>
     {index === messages.length - 1 && !loading && (
       <button type="button" onClick={() => { void regenerate(); }} className="grid size-8 place-items-center rounded-lg transition-colors hover:bg-[var(--surface-soft)]" aria-label="重新生成这条回答" title="重新生成"><RotateCcw size={13} /></button>
     )}
   </div>
-)}
+</>)}
 {message.role === "assistant" && message.itemDraft?.name && <button type="button" onClick={() => void createItem(message.itemDraft!, index)} disabled={savingItem !== null || recordedItems.has(index)} className="btn-primary mt-2 inline-flex h-9 min-h-9 items-center gap-1.5 py-0 px-3 text-xs disabled:cursor-not-allowed disabled:opacity-60"><Plus size={15} />{savingItem === index ? "正在录入…" : recordedItems.has(index) ? <><Check size={15} />已录入</> : `录入“${message.itemDraft.name}”`}</button>}{index === messages.length - 1 && !loading && <button type="button" onClick={() => void clearContext()} className="mt-2 grid size-11 place-items-center rounded-full text-[var(--muted)] opacity-65 transition hover:bg-[var(--surface-soft)] hover:text-red-500 sm:size-10" aria-label="清空上下文" title="清空上下文"><Trash2 size={13} /></button>}</div>)}{loading && <div className="flex items-center gap-2 text-xs muted"><LoaderCircle className="animate-spin" size={14} />归物助手正在整理资料…</div>}</div><div className="border-t p-3" style={{ borderColor: "var(--border)" }}>{attachments.length > 0 && <div className="mb-2 flex flex-wrap gap-1.5">{attachments.map((attachment, index) => <div key={`${attachment.name}-${index}`} className="relative"><AttachmentPreview attachment={attachment} compact /><button type="button" onClick={() => setAttachments((current) => current.filter((_, i) => i !== index))} className="absolute -right-2 -top-2 grid size-11 place-items-center rounded-full bg-black/70 text-white sm:size-10" aria-label={`移除 ${attachment.name}`}><X size={12} /></button></div>)}</div>}{pendingQuestion && !input && (
   <div className="mb-2 flex items-center gap-2 rounded-2xl px-3 py-2 text-xs leading-5" style={{ background: "var(--warning-soft, #fff4dc)", color: "#8a571c" }}>
     <span className="min-w-0 flex-1">上一个问题还没回答完(可能是关闭面板时中断了)。</span>
@@ -159,5 +173,20 @@ export function AiChat({ onClose }: { onClose: () => void }) {
  }} /><button type="button" onClick={() => setWebSearch((value) => !value)} className="btn-ghost grid size-11 min-h-11 shrink-0 place-items-center p-0" style={webSearch ? { background: "var(--primary-soft)", color: "var(--primary)" } : undefined} aria-label="联网搜索" title={webSearch ? "已开启联网搜索" : "开启联网搜索"}><Search size={17} /></button><button className="btn-primary grid size-11 min-h-11 shrink-0 place-items-center p-0 disabled:opacity-50" aria-label="发送问题" disabled={loading || (!input.trim() && !attachments.length)}><Send size={17} /></button></form><div className="mt-1 text-xs muted">Enter 发送,Shift + Enter 换行。聊天记录会自动同步到你的其他已登录设备；上传图片后会优先识别为待录入物品。</div></div></div></>;
 }
 
+/**
+ * 从一段回答里找出「提到的物品」。
+ * 直接用正文做正则内联链接太脆(容易被标点、空格打断),改成匹配后列成芯片,点一下就能看详情。
+ */
+function mentionedItems(content: string, items: Array<{ id: string; name: string }>) {
+  const matched: Array<{ id: string; name: string }> = [];
+  for (const item of items) {
+    if (item.name.length < 2) continue;
+    if (!content.includes(item.name)) continue;
+    if (matched.some((entry) => entry.name === item.name)) continue;
+    matched.push({ id: item.id, name: item.name });
+    if (matched.length >= 4) break;
+  }
+  return matched;
+}
 function plainChatText(content: string) { return content.replace(/\*\*(.*?)\*\*/g, "$1").replace(/__(.*?)__/g, "$1"); }
 function AttachmentPreview({ attachment, tone = "light", compact = false }: { attachment: Attachment; tone?: "light" | "dark"; compact?: boolean }) { const source = attachment.dataUrl || attachment.url; if (attachment.kind === "image" && source) return <div className={`mb-2 overflow-hidden rounded-xl ${compact ? "size-12 mb-0" : "max-w-[220px]"}`}><img src={source} alt={attachment.name} className={compact ? "size-full object-cover" : "block max-h-40 w-full object-cover"} /><div className={compact ? "sr-only" : `flex items-center gap-1.5 px-2 py-1 text-xs ${tone === "dark" ? "bg-black/15 text-white/85" : "bg-black/5 muted"}`}><ImagePlus size={12} />{attachment.name}</div></div>; return <div className={`mb-2 flex items-center gap-2 rounded-xl px-2 py-1 text-xs ${tone === "dark" ? "bg-black/10" : "bg-black/5"}`}><FileText size={13} />{attachment.name}</div>; }
