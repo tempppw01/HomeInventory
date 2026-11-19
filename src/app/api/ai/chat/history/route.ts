@@ -20,7 +20,7 @@ function asMessages(value: unknown): Message[] {
       return [{ kind: value.kind, name: value.name.slice(0, 180), url: typeof value.url === "string" ? value.url.slice(0, 1000) : undefined, text: typeof value.text === "string" ? value.text.slice(0, 200000) : undefined }];
     }) : [];
     const itemDraft = message.itemDraft && typeof message.itemDraft === "object" ? message.itemDraft as ItemDraft : undefined;
-    return [{ role: message.role, content: message.content.slice(0, 12000), attachments, itemDraft }];
+    return [{ role: message.role, content: message.content.slice(0, 12000), ...(attachments.length ? { attachments } : {}), ...(itemDraft ? { itemDraft } : {}) }];
   });
 }
 
