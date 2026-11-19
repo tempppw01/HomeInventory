@@ -37,6 +37,16 @@ export function AiInsightsCard({ aiAvailable, onRestock, onOpenItem }: { aiAvail
       return next;
     });
   };
+  // 一次收掉全部可见建议。只有一条时不显示这个按钮 —— 那条自带的 × 就够了。
+  const dismissAllVisible = (insights: Array<{ kind?: string; title: string; itemId?: string | null }>) => {
+    setDismissedKeys((current) => {
+      let next = current;
+      for (const insight of insights) next = addDismissed(next, insightKey(insight));
+      try { localStorage.setItem("home-inventory-dismissed-insights", JSON.stringify(next)); } catch { /* 隐私模式忽略 */ }
+      return next;
+    });
+  };
+
   const restoreInsights = () => {
     setDismissedKeys([]);
     try { localStorage.removeItem("home-inventory-dismissed-insights"); } catch { /* 忽略 */ }
@@ -87,7 +97,19 @@ export function AiInsightsCard({ aiAvailable, onRestock, onOpenItem }: { aiAvail
 
       {payload && (
         <>
-          <p className="mb-0 mt-3 text-sm font-bold">{payload.headline}</p>
+          <div className="mt-3 flex items-start justify-between gap-3">
+            <p className="mb-0 text-sm font-bold">{payload.headline}</p>
+            {filterDismissed(payload.insights, dismissedKeys).length > 1 && (
+              <button
+                type="button"
+                onClick={() => dismissAllVisible(filterDismissed(payload.insights, dismissedKeys))}
+                className="shrink-0 rounded-full px-2.5 py-1 text-xs font-bold muted transition-colors hover:bg-[var(--surface-soft)]"
+                aria-label="把这周的建议全部标为已读"
+              >
+                全部标为已读
+              </button>
+            )}
+          </div>
           <ul className="mt-3 space-y-2.5">
             {filterDismissed(payload.insights, dismissedKeys).map((insight, index) => (
               <li key={`${insight.title}-${index}`} className="flex gap-2.5">
