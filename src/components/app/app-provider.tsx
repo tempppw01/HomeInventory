@@ -49,6 +49,9 @@ function useAppState() {
   const [theme, setTheme] = useState<ThemeMode>("system");
   const [showWelcome, setShowWelcome] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  // 空间筛选:按空间(含其子空间)精确过滤,而不是拿空间名去搜文字。
+  const [locationFilter, setLocationFilter] = useState<string>("ALL");
+  const changeLocationFilter = useCallback((next: string) => { setLocationFilter(next); }, []);
   // 从别处(物品详情等)打开助手时带一个预设问题:预填到输入框,由用户决定发不发。
   const [chatSeed, setChatSeed] = useState<string | null>(null);
   const openChatWith = useCallback((question: string) => { setChatSeed(question); setChatOpen(true); }, []);
@@ -232,15 +235,37 @@ function useAppState() {
     });
   };
 
+  // 选中某个空间时,把它的所有子空间一起算进范围(吊柜里的东西也算厨房的)。
+  const spaceScope = useMemo(() => {
+    if (!data || locationFilter === "ALL") return null;
+    const children = new Map<string, string[]>();
+    for (const location of data.locations) {
+      const parent = location.parentId ?? "ROOT";
+      children.set(parent, [...(children.get(parent) ?? []), location.id]);
+    }
+    const ids = new Set<string>([locationFilter]);
+    const stack = [locationFilter];
+    while (stack.length) {
+      const current = stack.pop() as string;
+      for (const child of children.get(current) ?? []) {
+        if (ids.has(child)) continue;
+        ids.add(child);
+        stack.push(child);
+      }
+    }
+    return ids;
+  }, [data, locationFilter]);
+
   const filteredItems = useMemo(() => {
     const term = search.toLowerCase().trim();
     return (data?.items ?? []).filter((item) =>
       item.quantity > 0 &&
       (typeFilter === "ALL" || (typeFilter === "MEDICINE" ? isMedicineCategory(item.category) : item.type === typeFilter)) &&
       (categoryFilter === "ALL" || (categoryFilter === "MEDICINE" ? isMedicineCategory(item.category) : item.category === categoryFilter)) &&
+      (!spaceScope || spaceScope.has(item.locationId ?? "")) &&
       (!term || [item.name, item.itemCode, item.category, item.location?.name, item.autoTags].some((value) => value ? value.toLowerCase().includes(term) : false)),
     );
-  }, [categoryFilter, data, search, typeFilter]);
+  }, [categoryFilter, data, search, spaceScope, typeFilter]);
 
   const lowStock = data?.preferences?.lowStockReminder === false ? [] : (data?.items ?? []).filter((item) => item.quantity > 0 && item.type === "CONSUMABLE" && (!item.restockPausedUntil || new Date(item.restockPausedUntil).getTime() <= now) && ((item.minQuantity > 0 && item.quantity <= item.minQuantity) || (isLiquidConsumable(item) && item.remainingPercent <= 20)));
   const pendingShopping = (data?.shopping ?? []).filter((item) => item.status === "PENDING");
@@ -395,6 +420,7 @@ function useAppState() {
     setToastAction,
     view, pathname, openView, beginNavigation,
     search, setSearch, typeFilter, categoryFilter, changeTypeFilter, changeCategoryFilter, filteredItems,
+    locationFilter, changeLocationFilter,
     readOnly, role, lowStock, pendingShopping, tasks, expiring, expired, totalValue, now,
     theme, setThemeMode, cycleTheme, density, setDensity, motionMode, setMotionMode,
     sidebarCollapsed, toggleSidebar,

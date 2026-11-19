@@ -34,7 +34,7 @@ function TagBadge({ tone, children }: { tone: "warning" | "danger" | "muted"; ch
 // 一屏大约能看到 12-20 张卡片,60 是个「首屏够用、滚动不空窗」的量。
 const PAGE_SIZE = 60;
 
-export function ItemsView({ allItems, locations, items, shopping, search, setSearch, filter, setFilter, categoryFilter, setCategoryFilter, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onRemainingChange, onDelete, onQr, onAi, onPrint, onToast, onCopy, onToggleShopping, onFavoriteShopping, onAddShopping, onDeleteShopping, onBatchAi, onToastWithUndo, onCreate }: { allItems: Item[]; locations: Location[]; items: Item[]; shopping: ShoppingItem[]; search: string; setSearch: (s: string) => void; filter: ItemQuickFilter; setFilter: (f: ItemQuickFilter) => void; categoryFilter: string; setCategoryFilter: (f: string) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onRemainingChange: (item: Item, remainingPercent: number) => void; onDelete: (i: Item) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onPrint: (items: Item[]) => void; onToast: (message: string) => void; onCopy: (i: Item) => void; onToggleShopping: (item: ShoppingItem) => void; onFavoriteShopping: (item: ShoppingItem) => void; onAddShopping: () => void; onDeleteShopping: (id: string) => void; onBatchAi: () => void; onToastWithUndo: (message: string, undo: () => Promise<void>) => void; onCreate: () => void }) {
+export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, locations, items, shopping, search, setSearch, filter, setFilter, categoryFilter, setCategoryFilter, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onRemainingChange, onDelete, onQr, onAi, onPrint, onToast, onCopy, onToggleShopping, onFavoriteShopping, onAddShopping, onDeleteShopping, onBatchAi, onToastWithUndo, onCreate }: { allItems: Item[]; locations: Location[]; items: Item[]; shopping: ShoppingItem[]; search: string; setSearch: (s: string) => void; filter: ItemQuickFilter; setFilter: (f: ItemQuickFilter) => void; categoryFilter: string; setCategoryFilter: (f: string) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onRemainingChange: (item: Item, remainingPercent: number) => void; onDelete: (i: Item) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onPrint: (items: Item[]) => void; onToast: (message: string) => void; onCopy: (i: Item) => void; onToggleShopping: (item: ShoppingItem) => void; onFavoriteShopping: (item: ShoppingItem) => void; onAddShopping: () => void; onDeleteShopping: (id: string) => void; onBatchAi: () => void; onToastWithUndo: (message: string, undo: () => Promise<void>) => void; onCreate: () => void; locationFilter?: string; onChangeLocationFilter?: (id: string) => void }) {
   const askConfirm = useConfirm();
   const readOnly = useContext(ReadOnlyContext);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -137,6 +137,18 @@ export function ItemsView({ allItems, locations, items, shopping, search, setSea
       <Toolbar>
         <div className="min-w-0 flex-1 md:hidden"><SearchBox items={allItems} value={search} onChange={setSearch} onSelect={(item) => setSearch(item.name)} placeholder="搜索名称或物品编号..." /></div>
         <label className="flex shrink-0 items-center gap-1 text-xs font-bold muted">
+  <span className="sr-only">空间</span>
+  <select
+    aria-label="按空间筛选物品"
+    value={locationFilter ?? "ALL"}
+    onChange={(event) => onChangeLocationFilter?.(event.target.value)}
+    className="input w-auto py-1.5 text-xs"
+  >
+    <option value="ALL">全部空间</option>
+    {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+  </select>
+</label>
+<label className="flex shrink-0 items-center gap-1 text-xs font-bold muted">
           排序
           <select
             aria-label="物品排序方式"
