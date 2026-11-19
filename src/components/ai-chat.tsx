@@ -142,7 +142,7 @@ export function AiChat({ onClose, items = [], onOpenItem, seed }: { onClose: () 
   <button
     type="button"
     onClick={() => setShowOutline((value) => !value)}
-    className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full px-2.5 text-xs font-bold md:min-h-10"
+    className="tap-target inline-flex min-h-9 shrink-0 items-center gap-1 rounded-full px-1.5 text-[11px] font-bold"
     style={showOutline ? { background: "var(--primary-soft)", color: "var(--primary)" } : { background: "var(--surface-soft)" }}
     aria-expanded={showOutline}
     aria-label={`${showOutline ? "隐藏" : "显示"}本次对话要点`}
@@ -152,7 +152,7 @@ export function AiChat({ onClose, items = [], onOpenItem, seed }: { onClose: () 
     <span>{askedQuestions.length}</span>
   </button>
 )}
-<button onClick={onClose} className="icon-action size-11 min-h-11" aria-label="关闭归物助手" title="关闭"><X size={18} /></button></header>{showOutline && (
+<button onClick={onClose} className="tap-target grid size-9 shrink-0 place-items-center rounded-xl transition-colors hover:bg-[var(--surface-soft)]" aria-label="关闭归物助手" title="关闭"><X size={18} /></button></header>{showOutline && (
   <div className="border-b p-3" style={{ borderColor: "var(--hairline)", background: "var(--surface-soft)" }}>
     <div className="mb-2 text-xs font-bold muted">本次对话问过</div>
     <ol className="m-0 max-h-40 list-none space-y-1 overflow-y-auto p-0">
@@ -178,7 +178,7 @@ export function AiChat({ onClose, items = [], onOpenItem, seed }: { onClose: () 
         key={entry.id}
         type="button"
         onClick={() => onOpenItem?.(entry.id)}
-        className="min-h-11 rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors md:min-h-8"
+        className="min-h-10 rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors"
         style={{ background: "var(--surface-soft)", color: "var(--primary)" }}
         aria-label={`打开「${entry.name}」`}
       >
@@ -187,9 +187,9 @@ export function AiChat({ onClose, items = [], onOpenItem, seed }: { onClose: () 
     ))}
   </div>
   <div className="mt-1 flex items-center gap-1">
-    <button type="button" onClick={() => copyReply(message.content)} className="grid size-11 place-items-center rounded-lg transition-colors hover:bg-[var(--surface-soft)] md:size-8" aria-label="复制这条回答" title="复制"><Copy size={13} /></button>
+    <button type="button" onClick={() => copyReply(message.content)} className="tap-target grid size-8 place-items-center rounded-lg transition-colors hover:bg-[var(--surface-soft)]" aria-label="复制这条回答" title="复制"><Copy size={13} /></button>
     {index === messages.length - 1 && !loading && (
-      <button type="button" onClick={() => { void regenerate(); }} className="grid size-11 place-items-center rounded-lg transition-colors hover:bg-[var(--surface-soft)] md:size-8" aria-label="重新生成这条回答" title="重新生成"><RotateCcw size={13} /></button>
+      <button type="button" onClick={() => { void regenerate(); }} className="tap-target grid size-8 place-items-center rounded-lg transition-colors hover:bg-[var(--surface-soft)]" aria-label="重新生成这条回答" title="重新生成"><RotateCcw size={13} /></button>
     )}
   </div>
 </>)}
@@ -206,7 +206,7 @@ export function AiChat({ onClose, items = [], onOpenItem, seed }: { onClose: () 
         key={prompt}
         type="button"
         onClick={() => setInput(prompt)}
-        className="min-h-11 rounded-full px-3 py-1.5 text-xs font-bold transition-colors md:min-h-8"
+        className="min-h-10 rounded-full px-3 py-1.5 text-xs font-bold transition-colors"
         style={{ background: "var(--surface-soft)", color: "var(--primary)" }}
       >
         {prompt}

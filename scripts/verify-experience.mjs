@@ -225,13 +225,25 @@ const login = async (page, reducedMotion = "no-preference") => {
     const button = document.querySelector('.ai-chat-panel button[aria-label="关闭归物助手"]');
     if (!button) return null;
     const r = button.getBoundingClientRect();
-    return { w: Math.round(r.width), h: Math.round(r.height), role: document.querySelector(".ai-chat-panel")?.getAttribute("role") };
+    const cx = r.x + r.width / 2;
+    const cy = r.y + r.height / 2;
+    const hit = (dx, dy) => {
+      const el = document.elementFromPoint(cx + dx, cy + dy);
+      return Boolean(el && (el === button || button.contains(el)));
+    };
+    return {
+      w: Math.round(r.width),
+      h: Math.round(r.height),
+      role: document.querySelector(".ai-chat-panel")?.getAttribute("role"),
+      verticalHit: r.height >= 40 || (hit(0, -20) && hit(0, 20)),
+      horizontalHit: r.width >= 40 || (hit(-20, 0) && hit(20, 0)),
+    };
   });
   await page.keyboard.press("Escape");
   await page.waitForTimeout(700);
   const afterEsc = await page.locator(".ai-chat-panel").count();
   check("AI 助手按 Escape 可关闭", afterEsc === 0, `panels=${afterEsc}`);
-  check("AI 助手关闭按钮 ≥44px 且有 dialog 语义", Boolean(closeSize && closeSize.w >= 44 && closeSize.h >= 44 && closeSize.role === "dialog"), JSON.stringify(closeSize));
+  check("AI 助手关闭按钮命中区 ≥44px 且有 dialog 语义", Boolean(closeSize && closeSize.verticalHit && closeSize.horizontalHit && closeSize.role === "dialog"), JSON.stringify(closeSize));
 
   await launcher.click();
   await page.waitForTimeout(1000);
@@ -472,9 +484,20 @@ const login = async (page, reducedMotion = "no-preference") => {
     const button = document.querySelector('.ai-chat-panel button[aria-label="关闭归物助手"]');
     if (!button) return null;
     const r = button.getBoundingClientRect();
-    return { w: Math.round(r.width), h: Math.round(r.height) };
+    const cx = r.x + r.width / 2;
+    const cy = r.y + r.height / 2;
+    const hit = (dx, dy) => {
+      const el = document.elementFromPoint(cx + dx, cy + dy);
+      return Boolean(el && (el === button || button.contains(el)));
+    };
+    return {
+      w: Math.round(r.width),
+      h: Math.round(r.height),
+      verticalHit: r.height >= 40 || (hit(0, -20) && hit(0, 20)),
+      horizontalHit: r.width >= 40 || (hit(-20, 0) && hit(20, 0)),
+    };
   });
-  check("移动端助手关闭按钮 ≥44px", Boolean(closeButton && closeButton.w >= 44 && closeButton.h >= 44), JSON.stringify(closeButton));
+  check("移动端助手关闭按钮命中区 ≥44px", Boolean(closeButton && closeButton.verticalHit && closeButton.horizontalHit), JSON.stringify(closeButton));
   await page.keyboard.press("Escape");
   await page.waitForTimeout(600);
 

@@ -286,7 +286,7 @@ export function ItemCard({ item, onEdit, onOpenDetail, onImageUpload, onDuplicat
             {item.storage === "COLD" && <TagBadge tone="muted">需冷藏</TagBadge>}
             {item.storage === "COLD_AFTER_OPEN" && <TagBadge tone="muted">开封后冷藏</TagBadge>}
           </div>
-          {canConsumeOne && <button type="button" onClick={onConsume} className="mt-2 inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full px-2.5 text-xs font-bold transition-colors md:min-h-10" style={{ background: "var(--primary-soft)", color: "var(--primary-strong)" }} title={`消耗 1 ${item.unit}`} aria-label={`用掉 1 ${item.unit}`}><Minus size={13} />用掉 1 {item.unit}</button>}
+          {canConsumeOne && <button type="button" onClick={onConsume} className="tap-target mt-2 inline-flex min-h-10 shrink-0 items-center justify-center gap-1 rounded-full px-2 text-xs font-bold transition-colors md:px-2.5" style={{ background: "var(--primary-soft)", color: "var(--primary-strong)" }} title={`消耗 1 ${item.unit}`} aria-label={`用掉 1 ${item.unit}`}><Minus size={13} /><span className="hidden md:inline">用掉 1 {item.unit}</span></button>}
         </div>
         {showRemaining && <RemainingLevel value={item.remainingPercent} onChange={onRemainingChange} />}
       </div>

@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+/*
+ * 可点区域 ≥44px,但**不占布局空间**。
+ *
+ * 小屏上把图标按钮直接放大到 44px 会挤压标题与正文(实测助手标题只剩 48% 宽)。
+ * 这里用伪元素把命中区向外扩,视觉尺寸与布局尺寸都保持紧凑,手指仍然够得着。
+ * 用法:视觉上给 size-8 / size-9,同时加 class="tap-target"。
+ */
+.tap-target {
+  position: relative;
+}
+.tap-target::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+}
+
 /* Typography system: MiSans for interface copy, Geist Mono for IDs and numeric data. */
 @font-face {
   font-family: "MiSans";
@@ -531,6 +547,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     box-shadow: 0 8px 18px color-mix(in srgb, var(--primary) 34%, transparent);
   }
   .mobile-bottom-nav { position: fixed; }
+  /* 底部导航是 fixed(约 75px 高),而页面容器原本只留 32px 底部内边距 ——
+     实测最后一张卡片的按钮正好压在导航下面,点不到也看不见。
+     这里补足到 96px(留出余量)+ 安全区,保证内容能滚到导航上方。 */
+  .ds-page-shell {
+    padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+  }
   .ai-chat-panel {
     right: .5rem;
     bottom: calc(.5rem + env(safe-area-inset-bottom));

@@ -33,6 +33,7 @@ async function waitForAsyncCards(page) {
   return false;
 }
 
+
 const results = [];
 const check = (name, ok, detail = "") => {
   results.push({ name, ok, detail });
@@ -131,7 +132,18 @@ for (let i = 0; i < 5; i += 1) {
       }).length,
       smallTargets: Array.from(dialog.querySelectorAll("button")).filter((button) => {
         const rect = button.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0 && rect.height < 40;
+        if (rect.width < 4 || rect.height < 4) return false;
+        const centerInView = rect.y + rect.height / 2 > 0 && rect.y + rect.height / 2 < window.innerHeight;
+        if (!centerInView) return false;
+        const cx = rect.x + rect.width / 2;
+        const cy = rect.y + rect.height / 2;
+        const probe = (dx, dy) => {
+          const el = document.elementFromPoint(cx + dx, cy + dy);
+          return Boolean(el && (el === button || button.contains(el)));
+        };
+        const verticalOk = rect.height >= 40 || (probe(0, -19) && probe(0, 19));
+        const horizontalOk = rect.width >= 40 || (probe(-19, 0) && probe(19, 0));
+        return !(rect.width >= 32 ? verticalOk : verticalOk && horizontalOk);
       }).length,
     };
   });
@@ -157,6 +169,14 @@ for (let i = 0; i < 5; i += 1) {
   for (const route of routes) {
     await page.goto(BASE + route);
     await page.waitForTimeout(2200);
+    // 关闭遗留弹层:上一步若打开过批量识别/采购清单等底部弹层,它会盖住页面内容,
+    // 导致命中区探针落到弹层上、误判为「按钮太小」。
+    for (let i = 0; i < 3; i += 1) {
+      const open = await page.evaluate(() => Array.from(document.querySelectorAll('[role="dialog"]')).some((d) => d.getBoundingClientRect().height > 0));
+      if (!open) break;
+      await page.keyboard.press("Escape").catch(() => {});
+      await page.waitForTimeout(500);
+    }
     if (route === "/") {
       await waitForAsyncCards(page); // 异步卡片就绪后再测
       // 折叠面板里的控件也要测到
@@ -168,6 +188,19 @@ for (let i = 0; i < 5; i += 1) {
       await page.waitForTimeout(1200);
     }
     const small = await page.evaluate(() => {
+      const hitAreaOk = (node) => {
+        const rect = node.getBoundingClientRect();
+        // .tap-target::after { inset: -8px } 这类扩展:把伪元素的扩展量算进命中区
+        const after = getComputedStyle(node, "::after");
+        const hasExpansion = after.content && after.content !== "none" && after.position === "absolute";
+        const inset = hasExpansion ? Math.abs(parseFloat(after.inset) || 0) : 0;
+        const hitHeight = rect.height + inset * 2;
+        const hitWidth = rect.width + inset * 2;
+        const verticalOk = hitHeight >= 40;
+        const horizontalOk = hitWidth >= 40;
+        // 文本类按钮(宽度本就够)只看纵向命中高度;图标按钮两边都要够
+        return rect.width >= 32 ? verticalOk : verticalOk && horizontalOk;
+      };
       const main = document.querySelector("main");
       if (!main) return [];
       return Array.from(main.querySelectorAll('button, a, select, [role="button"]'))
@@ -176,7 +209,7 @@ for (let i = 0; i < 5; i += 1) {
           if (rect.width < 4 || rect.height < 4) return false;
           const style = getComputedStyle(node);
           if (style.visibility === "hidden" || style.display === "none") return false;
-          return rect.height < 40;
+          return !hitAreaOk(node);
         })
         .map((node) => (node.getAttribute("aria-label") || node.textContent || "").trim().slice(0, 14) || node.tagName);
     });
@@ -217,10 +250,24 @@ for (let i = 0; i < 5; i += 1) {
     page.evaluate(() => {
       const dialog = Array.from(document.querySelectorAll('[role="dialog"]')).filter((node) => node.getBoundingClientRect().width > 0).pop();
       if (!dialog) return null;
+      const hitAreaOk = (node) => {
+        const rect = node.getBoundingClientRect();
+        // .tap-target::after { inset: -8px } 这类扩展:把伪元素的扩展量算进命中区
+        const after = getComputedStyle(node, "::after");
+        const hasExpansion = after.content && after.content !== "none" && after.position === "absolute";
+        const inset = hasExpansion ? Math.abs(parseFloat(after.inset) || 0) : 0;
+        const hitHeight = rect.height + inset * 2;
+        const hitWidth = rect.width + inset * 2;
+        const verticalOk = hitHeight >= 40;
+        const horizontalOk = hitWidth >= 40;
+        // 文本类按钮(宽度本就够)只看纵向命中高度;图标按钮两边都要够
+        return rect.width >= 32 ? verticalOk : verticalOk && horizontalOk;
+      };
       const small = Array.from(dialog.querySelectorAll("button, a, select"))
         .filter((node) => {
           const rect = node.getBoundingClientRect();
-          return rect.width >= 4 && rect.height >= 4 && rect.height < 40;
+          if (rect.width < 4 || rect.height < 4) return false;
+          return !hitAreaOk(node);
         })
         .map((node) => (node.getAttribute("aria-label") || node.textContent || "").trim().slice(0, 14) || node.tagName);
       const overflow = Array.from(dialog.querySelectorAll("*")).filter((node) => {

@@ -103,7 +103,7 @@ export function AiInsightsCard({ aiAvailable, onRestock, onOpenItem }: { aiAvail
               <button
                 type="button"
                 onClick={() => dismissAllVisible(filterDismissed(payload.insights, dismissedKeys))}
-                className="inline-flex min-h-11 shrink-0 items-center rounded-full px-2.5 text-xs font-bold muted transition-colors hover:bg-[var(--surface-soft)] md:min-h-8"
+                className="tap-target inline-flex min-h-9 shrink-0 items-center rounded-full px-2 text-xs font-bold muted transition-colors hover:bg-[var(--surface-soft)]"
                 aria-label="把这周的建议全部标为已读"
               >
                 全部标为已读
@@ -112,7 +112,7 @@ export function AiInsightsCard({ aiAvailable, onRestock, onOpenItem }: { aiAvail
           </div>
           <ul className="mt-3 space-y-2.5">
             {filterDismissed(payload.insights, dismissedKeys).map((insight, index) => (
-              <li key={`${insight.title}-${index}`} className="flex gap-2.5">
+              <li key={`${insight.title}-${index}`} className="relative flex gap-2.5 pr-7">
                 <span className="mt-1 size-1.5 shrink-0 rounded-full" style={{ background: "var(--primary)" }} />
                 <span className="min-w-0 flex-1">
                   <b className="text-sm">{insight.title}</b>
@@ -121,7 +121,7 @@ export function AiInsightsCard({ aiAvailable, onRestock, onOpenItem }: { aiAvail
                     <button
                       type="button"
                       onClick={() => (insight.kind === "restock" ? onRestock(insight.itemId!) : onOpenItem(insight.itemId!))}
-                      className="mt-1.5 inline-flex min-h-11 items-center rounded-full px-3 text-xs font-bold md:min-h-9 md:px-2.5"
+                      className="tap-target mt-1.5 inline-flex min-h-9 items-center rounded-full px-2.5 text-xs font-bold"
                       style={{ background: "var(--primary-soft)", color: "var(--primary)" }}
                     >
                       {insight.kind === "restock" ? "加到采购清单" : "看看这件"}
@@ -131,7 +131,7 @@ export function AiInsightsCard({ aiAvailable, onRestock, onOpenItem }: { aiAvail
                 <button
                   type="button"
                   onClick={() => dismissInsight(insight)}
-                  className="mt-0.5 grid size-11 shrink-0 place-items-center rounded-lg opacity-45 transition hover:opacity-100 md:size-7"
+                  className="tap-target absolute right-0 top-0 grid size-7 place-items-center rounded-lg opacity-45 transition hover:opacity-100"
                   aria-label={`忽略这条建议:${insight.title}`}
                   title="不再提示这条建议"
                 >
@@ -147,7 +147,7 @@ export function AiInsightsCard({ aiAvailable, onRestock, onOpenItem }: { aiAvail
             <button
               type="button"
               onClick={restoreInsights}
-              className="mt-2 inline-flex min-h-11 items-center rounded-full px-3 text-xs font-bold muted md:min-h-9 md:px-2.5"
+              className="tap-target mt-2 inline-flex min-h-9 items-center rounded-full px-2.5 text-xs font-bold muted"
             >
               恢复已忽略的 {dismissedKeys.length} 条
             </button>
