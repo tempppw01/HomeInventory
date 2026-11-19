@@ -105,8 +105,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx prisma generate --schema prisma/schema.prisma
+      # 浏览器缓存:省时间,也减少对 Playwright CDN 的依赖次数
+      - name: 缓存 Playwright 浏览器
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      # CDN 偶发失败(exit code 100),重试一次
       - name: 安装 Chromium
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium || (sleep 10 && npx playwright install --with-deps chromium)
       # runner 默认没有中文字体,缺字时文字渲染成方块、行数与宽度都会失真。
       - name: 安装中文字体(排版测量需要)
         run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk

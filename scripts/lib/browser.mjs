@@ -25,7 +25,12 @@ export async function launchChromiumOrNull(options = {}) {
   try {
     return await chromium.launch({ executablePath: chromiumExecutable(), ...options });
   } catch (error) {
-    console.log(`      跳过浏览器检查:${error instanceof Error ? error.message.split("\n")[0].slice(0, 120) : error}`);
+    const reason = error instanceof Error ? error.message.split("\n")[0].slice(0, 120) : String(error);
+    // CI 上没有浏览器是**配置问题**,不能悄悄跳过:否则检查会「绿着什么都没测」。
+    if (process.env.CI) {
+      throw new Error(`CI 环境缺少可用的 Chromium,检查无法进行:${reason}`);
+    }
+    console.log(`      跳过浏览器检查:${reason}`);
     return null;
   }
 }
