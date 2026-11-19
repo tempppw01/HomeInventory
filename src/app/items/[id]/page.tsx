@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
-import { Archive, CalendarDays, Droplets, Lightbulb, MapPin, Package, QrCode, Sparkles, Timer, WalletCards, Warehouse } from "lucide-react";
+import { Archive, CalendarDays, Droplets, Lightbulb, MapPin, Package, Sparkles, Timer, WalletCards, Warehouse } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { currentUser } from "@/lib/account-auth";
 import { dailyUsageCost, estimatedUseDays, isLiquidConsumable } from "@/lib/item-metrics";

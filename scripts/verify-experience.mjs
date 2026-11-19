@@ -70,7 +70,6 @@ const login = async (page, reducedMotion = "no-preference") => {
     await page.waitForTimeout(400);
   }
 };
-const openDialog = () => document.querySelectorAll('[role="dialog"][aria-modal="true"]').length;
 
 // ---------------------------------------------------------------- desktop
 {

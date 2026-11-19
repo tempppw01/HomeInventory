@@ -115,7 +115,7 @@ export function AppChrome({ children }: { children?: React.ReactNode }) {
               <AuditView items={data!.items.filter((item) => item.quantity > 0)} locations={data!.locations} onRefresh={refresh} onToast={setToast} />
             ) : view === "tasks" ? (
               <TasksView tasks={tasks} onAdd={() => setModal("task")} onToggle={toggleTask} onDelete={deleteTask} />
-            ) : view === "settings" ? <SettingsView onToast={setToast} onAbout={() => openView("about")} onAudit={() => openView("audit")} onRecycle={() => setModal("recycle")} theme={theme} onThemeChange={setThemeMode} density={density} motionMode={motionMode} onDensityChange={(next) => { setDensity(next); localStorage.setItem("home-inventory-density", next); }} onMotionChange={(next) => { setMotionMode(next); localStorage.setItem("home-inventory-motion", next); }} /> : <AboutView />}
+            ) : view === "settings" ? <SettingsView onToast={setToast} onAbout={() => openView("about")} theme={theme} onThemeChange={setThemeMode} density={density} motionMode={motionMode} onDensityChange={(next) => { setDensity(next); localStorage.setItem("home-inventory-density", next); }} onMotionChange={(next) => { setMotionMode(next); localStorage.setItem("home-inventory-motion", next); }} /> : <AboutView />}
           </motion.div>
         </AnimatePresence>
       </PageShell>

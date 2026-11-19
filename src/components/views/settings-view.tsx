@@ -13,7 +13,7 @@ import {
   SettingsSection, SettingsRow, SettingsSelect, SettingsBadge,
 } from "@/components/settings-primitives";
 import { ThemeMode, request } from "../shared";
-export function SettingsView({ onToast, onAbout, onAudit, onRecycle, theme, onThemeChange, density, motionMode, onDensityChange, onMotionChange }: { onToast: (message: string) => void; onAbout: () => void; onAudit: () => void; onRecycle: () => void; theme: ThemeMode; onThemeChange: (value: ThemeMode) => void; density: "comfortable" | "compact"; motionMode: "standard" | "reduced"; onDensityChange: (value: "comfortable" | "compact") => void; onMotionChange: (value: "standard" | "reduced") => void }) {
+export function SettingsView({ onToast, onAbout, theme, onThemeChange, density, motionMode, onDensityChange, onMotionChange }: { onToast: (message: string) => void; onAbout: () => void; theme: ThemeMode; onThemeChange: (value: ThemeMode) => void; density: "comfortable" | "compact"; motionMode: "standard" | "reduced"; onDensityChange: (value: "comfortable" | "compact") => void; onMotionChange: (value: "standard" | "reduced") => void }) {
   const [database, setDatabase] = useState<{ databaseLabel: string; storageMode: string } | null>(null);
   useEffect(() => { let active = true; request<{ databaseLabel: string; storageMode: string }>("/api/system/info").then((result) => { if (active) setDatabase(result); }).catch(() => undefined); return () => { active = false; }; }, []);
   return <Screen title="设置" description="按类别展开需要修改的设置,不常用的选项默认收起。">

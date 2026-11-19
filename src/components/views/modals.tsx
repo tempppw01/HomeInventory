@@ -1,5 +1,9 @@
 "use client";
 
+// 本文件里的 <img> 都是用户上传图片的预览(data URL 或任意 OSS 地址),
+// next/image 需要预先配置域名、也无法处理 data URL,所以这里显式关闭该规则。
+/* eslint-disable @next/next/no-img-element */
+
 import { motion } from "motion/react";
 import { QRCodeSVG } from "qrcode.react";
 import {
