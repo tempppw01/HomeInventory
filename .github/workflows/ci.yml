@@ -96,6 +96,23 @@ jobs:
         run: node scripts/verify-report-page.mjs
       - name: 窄屏(320px)布局检查
         run: node scripts/verify-narrow-layout.mjs
+
+      # 体验与录入修复两套界面检查:它们会自建探针数据(不依赖库里的现有内容),
+      # 需要单独的验收账号(ADMIN + 只读),由下面的步骤创建。
+      - name: 创建验收探针账号
+        run: node output/experience/make-lead-accounts.cjs
+      - name: 界面体验检查
+        env:
+          PROBE_USER: leadcheck
+          PROBE_PASS: Lead#2026
+          PROBE_VIEWER_PASS: View#2026
+        run: node scripts/verify-experience.mjs
+      - name: 录入与交互修复检查
+        env:
+          PROBE_USER: leadcheck
+          PROBE_PASS: Lead#2026
+          PROBE_VIEWER_PASS: View#2026
+        run: node scripts/verify-entry-fixes.mjs
       - name: 失败时打印服务日志
         if: failure()
         run: tail -100 server.log
