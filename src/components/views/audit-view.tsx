@@ -68,7 +68,7 @@ export function AuditView({ items, locations, onRefresh, onToast }: { items: Ite
         const body = await response.json();
         if (cancelled || !Array.isArray(body.audits)) return;
         if (!body.audits.length) return; // 服务端还没有记录时,保留本地历史
-        setHistory(body.audits.slice(0, 5));
+        setHistory(body.audits.slice(0, 20));
       } catch {
         // 网络不可用时保持本地历史,不影响盘点流程
       }
@@ -208,6 +208,21 @@ export function AuditView({ items, locations, onRefresh, onToast }: { items: Ite
               {trendText && <span className="text-[11px] muted">{trendText}</span>}
             </div>
             <MonthlyBars points={trend.map((row) => ({ label: row.label, value: row.value }))} ariaLabel="近几次盘点的核对率" height={90} valueFormatter={(value) => `${value}%`} />
+            {/* 最近几次盘点的明细:趋势图只能看走势,想看「哪天盘了多少」还得有列表。 */}
+            {history.length > 0 && (
+              <ul className="m-0 mt-3 list-none space-y-1.5 p-0 border-t pt-3" style={{ borderColor: "var(--hairline)" }} aria-label="最近盘点记录">
+                {history.slice(0, 6).map((entry, index) => (
+                  <li key={`${entry.at}-${index}`} className="flex items-baseline justify-between gap-3 text-xs">
+                    <span className="shrink-0 muted">{new Date(entry.at).toLocaleDateString("zh-CN")}</span>
+                    <span className="min-w-0 flex-1 truncate">{entry.locationName}</span>
+                    <span className="shrink-0 tabular-nums font-bold">
+                      {entry.confirmed}/{entry.total}
+                      {entry.total > 0 && <span className="ml-1 font-normal muted">{Math.round((entry.confirmed / entry.total) * 100)}%</span>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 
