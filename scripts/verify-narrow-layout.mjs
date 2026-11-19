@@ -255,6 +255,33 @@ for (let i = 0; i < 5; i += 1) {
   }
 }
 
+// ============ 3.5 底部留白:内容能滚出固定导航的遮挡 ============
+// 真实故障:页面容器底部只留 32px,而移动端底栏是 fixed 且高 75px,
+// 最后一张卡片的按钮整块压在导航下面 —— 点不到也看不见。
+//
+// 判断方式说明:一开始想用「滚到底后量最低元素是否露出」,但实测不可靠 ——
+// 页面里有嵌套滚动容器(设置页的记录列表)与分批加载,坐标会失真、结论自相矛盾。
+// 所以改为直接量那条修复所保证的不变量:页面容器底部留白 ≥ 导航高度 + 余量。
+{
+  const offenders = [];
+  for (const route of ["/items", "/settings", "/"]) {
+    await page.goto(BASE + route);
+    await page.waitForTimeout(2200);
+    const state = await page.evaluate(() => {
+      const nav = document.querySelector(".mobile-bottom-nav");
+      const navHeight = nav ? Math.round(nav.getBoundingClientRect().height) : 0;
+      const main = document.querySelector("main");
+      const paddingBottom = main ? parseFloat(getComputedStyle(main).paddingBottom) || 0 : null;
+      return { navHeight, paddingBottom: paddingBottom === null ? null : Math.round(paddingBottom) };
+    });
+    if (!state.navHeight || state.paddingBottom === null) continue; // 该视口没有底部导航
+    if (state.paddingBottom < state.navHeight + 8) {
+      offenders.push(`${route}: 底部留白 ${state.paddingBottom}px < 导航 ${state.navHeight}px+8`);
+    }
+  }
+  check("窄屏下页面底部留白足够(内容不被底部导航压住)", offenders.length === 0, offenders.join(" | "));
+}
+
 // ============ 4. 主要弹窗内部触摸目标与溢出 ============
 {
   const records = [];
