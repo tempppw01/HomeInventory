@@ -10,6 +10,7 @@ import { STORAGE_LABEL } from "@/lib/item-insight";
 import { Panel } from "@/components/ui-kit";
 import { CopyCodeButton } from "@/components/copy-code-button";
 import { ItemQuickActions } from "@/components/item-quick-actions";
+import { AskAiAboutItem } from "@/components/ask-ai-about-item";
 
 export const dynamic = "force-dynamic";
 
@@ -101,6 +102,9 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
                   />
                 </div>
               )}
+              <div className="sm:col-span-2">
+                <AskAiAboutItem itemName={item.name} />
+              </div>
               {showRemaining && <Stat icon={<Droplets size={14} />} label="当前剩余量" value={`${Math.round(item.remainingPercent)}%`} tone={item.remainingPercent <= 20 ? "var(--danger)" : undefined} />}
             </div>
           </Panel>

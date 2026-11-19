@@ -49,6 +49,9 @@ function useAppState() {
   const [theme, setTheme] = useState<ThemeMode>("system");
   const [showWelcome, setShowWelcome] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  // 从别处(物品详情等)打开助手时带一个预设问题:预填到输入框,由用户决定发不发。
+  const [chatSeed, setChatSeed] = useState<string | null>(null);
+  const openChatWith = useCallback((question: string) => { setChatSeed(question); setChatOpen(true); }, []);
   // 默认折叠:首屏把注意力留给内容;用户手动切换过之后会记住自己的选择。
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [density, setDensity] = useState<Density>(() => typeof window !== "undefined" && localStorage.getItem("home-inventory-density") === "compact" ? "compact" : "comfortable");
@@ -397,7 +400,7 @@ function useAppState() {
     sidebarCollapsed, toggleSidebar,
     modal, setModal, editing, setEditing, editingLocation, setEditingLocation, closeModal,
     qrItem, setQrItem, aiItem, setAiItem, printItems, setPrintItems,
-    chatOpen, setChatOpen, showWelcome, dismissWelcome,
+    chatOpen, setChatOpen, chatSeed, setChatSeed, openChatWith, showWelcome, dismissWelcome,
     toast, toastAction, setToast,
     openEdit, openDetail, uploadItemImage, duplicateItem, copyText, removeShopping, consume,
     updateRemaining, removeItem, mergeItems, addRestockSuggestion, toggleShopping, toggleFavoriteShopping,

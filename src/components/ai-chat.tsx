@@ -53,9 +53,9 @@ function mergeMessages(remote: ChatMessage[], local: ChatMessage[]) {
   return [...remote, ...local].filter((message) => { const key = JSON.stringify(persistable([message])[0]); if (seen.has(key)) return false; seen.add(key); return true; }).slice(-40);
 }
 
-export function AiChat({ onClose, items = [], onOpenItem }: { onClose: () => void; items?: Array<{ id: string; name: string }>; onOpenItem?: (id: string) => void }) {
+export function AiChat({ onClose, items = [], onOpenItem, seed }: { onClose: () => void; items?: Array<{ id: string; name: string }>; onOpenItem?: (id: string) => void; seed?: string | null }) {
   const [messages, setMessages] = useState<ChatMessage[]>([welcome]);
-  const [input, setInput] = useState(""); const [attachments, setAttachments] = useState<Attachment[]>([]); const [loading, setLoading] = useState(false); const [webSearch, setWebSearch] = useState(false); const [ready, setReady] = useState(false); const [savingItem, setSavingItem] = useState<number | null>(null); const [recordedItems, setRecordedItems] = useState<Set<number>>(() => new Set());
+  const [input, setInput] = useState(seed ?? ""); const [attachments, setAttachments] = useState<Attachment[]>([]); const [loading, setLoading] = useState(false); const [webSearch, setWebSearch] = useState(false); const [ready, setReady] = useState(false); const [savingItem, setSavingItem] = useState<number | null>(null); const [recordedItems, setRecordedItems] = useState<Set<number>>(() => new Set());
   const fileInput = useRef<HTMLInputElement>(null); const scrollRef = useRef<HTMLDivElement>(null); const messagesRef = useRef(messages); const savingHistory = useRef(false); const historyUpdatedAt = useRef<string | null>(null);
   useEscapeClose(onClose);
   const askConfirm = useConfirm();

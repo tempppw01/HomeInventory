@@ -43,13 +43,24 @@ export function AppChrome({ children }: { children?: React.ReactNode }) {
     readOnly, role, aiAvailable, lowStock, pendingShopping, tasks, expiring, expired, totalValue, now,
     theme, cycleTheme, setThemeMode, density, motionMode, setDensity, setMotionMode,
     sidebarCollapsed, toggleSidebar, modal, setModal, editing, editingLocation, setEditingLocation, closeModal,
-    qrItem, setQrItem, aiItem, setAiItem, printItems, setPrintItems, chatOpen, setChatOpen,
+    qrItem, setQrItem, aiItem, setAiItem, printItems, setPrintItems, chatOpen, setChatOpen, chatSeed, setChatSeed,
     showWelcome, dismissWelcome, toast, toastAction, setToast, setToastAction,
     openEdit, openDetail, uploadItemImage, duplicateItem, copyText, removeShopping, consume,
     updateRemaining, removeItem, mergeItems, addRestockSuggestion, toggleShopping, toggleFavoriteShopping,
     toggleTask, deleteTask,
   } = app;
 
+  // 详情页的「问 AI 关于这件」会带着 ?ask= 跳回来:这里接住、预填,再把参数从地址栏清掉。
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const question = params.get("ask");
+    if (!question) return;
+    setChatSeed(question);
+    setChatOpen(true);
+    params.delete("ask");
+    const next = window.location.pathname + (params.toString() ? `?${params.toString()}` : "");
+    window.history.replaceState(null, "", next);
+  }, [setChatSeed, setChatOpen]);
   // Keeps keyboard focus inside whichever modal is open, returns it to the
   // trigger on close, and stops the page behind from scrolling.
   useModalFocusManagement();
@@ -133,7 +144,7 @@ export function AppChrome({ children }: { children?: React.ReactNode }) {
         {aiItem && <AiAssistantModal item={aiItem} onClose={() => setAiItem(null)} onApplied={async (message) => { setToast(message); await refresh(); }} />}
       </AnimatePresence>
       {!chatOpen && <AssistantLauncher onOpen={() => setChatOpen(true)} />}
-      {chatOpen && <AiChat onClose={() => setChatOpen(false)} items={data!.items.map((item) => ({ id: item.id, name: item.name }))} onOpenItem={(id) => { const target = data!.items.find((item) => item.id === id); if (!target) return; setChatOpen(false); openDetail(target); }} />}
+      {chatOpen && <AiChat onClose={() => { setChatOpen(false); setChatSeed(null); }} seed={chatSeed} items={(data?.items ?? []).map((item) => ({ id: item.id, name: item.name }))} onOpenItem={(id) => { const target = data?.items.find((item) => item.id === id); if (!target) return; setChatOpen(false); openDetail(target); }} />}
       {printItems && <PrintStudio items={printItems} onClose={() => setPrintItems(null)} />}
       {showWelcome && <WelcomeModal hasDemoData={data?.items.some((item) => item.itemCode?.startsWith("INV-DEMO-")) ?? false} onClose={() => dismissWelcome()} onAction={(action) => dismissWelcome(action)} />}
       <AnimatePresence>{toast && <motion.div initial={{ opacity: 0, y: 20, x: "-50%" }} animate={{ opacity: 1, y: 0, x: "-50%" }} exit={{ opacity: 0, y: 12, x: "-50%" }} role="status" aria-live="polite" className="fixed bottom-24 left-1/2 z-[70] flex max-w-[calc(100vw-32px)] items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-white shadow-2xl md:bottom-8" style={{ background: "#24242d" }}><span className="min-w-0">{toast}</span>{toastAction && <button type="button" onClick={() => void toastAction.onClick()} className="shrink-0 rounded-lg px-2 py-1 text-xs font-black" style={{ background: "rgba(255,255,255,.16)" }}>{toastAction.label}</button>}</motion.div>}</AnimatePresence>
@@ -222,3 +233,4 @@ function AssistantLauncher({ onOpen }: { onOpen: () => void }) {
   const mobileStyle = mobile && position ? { left: position.x, top: position.y, right: "auto", bottom: "auto", background: "var(--primary)" } : { background: "var(--primary)" };
   return <button onClick={() => { if (suppressClickRef.current) { suppressClickRef.current = false; return; } onOpen(); }} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} className={`fixed bottom-[calc(76px+env(safe-area-inset-bottom))] right-4 z-[90] grid size-12 touch-none select-none place-items-center rounded-full text-[var(--on-primary)] shadow-xl transition-transform duration-200 hover:scale-105 md:bottom-5 md:right-5 md:size-14 ${dodging ? "pointer-events-none translate-x-[130%] opacity-0" : "translate-x-0 opacity-100"}`} style={mobileStyle} aria-label="打开归物助手" title="归物助手:可在手机上沿屏幕边缘拖动"><Bot size={21} /></button>;
 }
+
