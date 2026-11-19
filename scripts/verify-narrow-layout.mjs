@@ -108,6 +108,88 @@ for (let i = 0; i < 5; i += 1) {
   }
 }
 
+// ============ 3. 各页面触摸目标 ≥40px ============
+// 只统计真正可见且可点的元素:sr-only 的隐藏控件(高 1px)是给读屏用的,
+// 它们对应的可见 label 才是触摸目标,所以用「尺寸 + 可见性」一起判断。
+{
+  const routes = ["/", "/items", "/locations", "/tasks", "/audit", "/settings"];
+  const offenders = [];
+  for (const route of routes) {
+    await page.goto(BASE + route);
+    await page.waitForTimeout(2200);
+    const small = await page.evaluate(() => {
+      const main = document.querySelector("main");
+      if (!main) return [];
+      return Array.from(main.querySelectorAll('button, a, select, [role="button"]'))
+        .filter((node) => {
+          const rect = node.getBoundingClientRect();
+          if (rect.width < 4 || rect.height < 4) return false;
+          const style = getComputedStyle(node);
+          if (style.visibility === "hidden" || style.display === "none") return false;
+          return rect.height < 40;
+        })
+        .map((node) => (node.getAttribute("aria-label") || node.textContent || "").trim().slice(0, 14) || node.tagName);
+    });
+    if (small.length) offenders.push(`${route}: ${small.join("/")}`);
+  }
+  check("窄屏下各页面可点元素都 ≥40px", offenders.length === 0, offenders.join(" | "));
+}
+
+// ============ 4. 主要弹窗内部触摸目标与溢出 ============
+{
+  const records = [];
+
+  const measureDialog = () =>
+    page.evaluate(() => {
+      const dialog = Array.from(document.querySelectorAll('[role="dialog"]')).filter((node) => node.getBoundingClientRect().width > 0).pop();
+      if (!dialog) return null;
+      const small = Array.from(dialog.querySelectorAll("button, a, select"))
+        .filter((node) => {
+          const rect = node.getBoundingClientRect();
+          return rect.width >= 4 && rect.height >= 4 && rect.height < 40;
+        })
+        .map((node) => (node.getAttribute("aria-label") || node.textContent || "").trim().slice(0, 14) || node.tagName);
+      const overflow = Array.from(dialog.querySelectorAll("*")).filter((node) => {
+        const rect = node.getBoundingClientRect();
+        return rect.width > 4 && (rect.right > window.innerWidth + 2 || rect.left < -2);
+      }).length;
+      return { small, overflow };
+    });
+
+  // 录入物品
+  await page.goto(BASE + "/items");
+  await page.waitForTimeout(2200);
+  await page.locator('button[aria-label="录入物品"]').first().click();
+  await page.waitForTimeout(1200);
+  records.push({ name: "录入物品", ...(await measureDialog()) });
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(800);
+  const giveUp = page.locator('[role="dialog"] button:has-text("放弃")').first();
+  if (await giveUp.count()) { await giveUp.click().catch(() => {}); await page.waitForTimeout(600); }
+
+  // 添加空间
+  await page.goto(BASE + "/locations");
+  await page.waitForTimeout(2200);
+  await page.locator('button:has-text("添加空间")').first().click();
+  await page.waitForTimeout(1200);
+  records.push({ name: "添加空间", ...(await measureDialog()) });
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(800);
+
+  // 安排任务
+  await page.goto(BASE + "/tasks");
+  await page.waitForTimeout(2200);
+  await page.locator('button:has-text("安排任务")').first().click();
+  await page.waitForTimeout(1200);
+  records.push({ name: "安排任务", ...(await measureDialog()) });
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(600);
+
+  const problems = records.filter((record) => record.small.length || record.overflow);
+  const detail = records.map((record) => `${record.name}:${record.small.length ? record.small.join("/") : "ok"}/overflow=${record.overflow}`).join(" | ");
+  check("窄屏下主要弹窗可点元素 ≥40px 且不溢出", problems.length === 0, detail);
+}
+
 await context.close();
 await browser.close();
 

@@ -103,7 +103,7 @@ export function AiInsightsCard({ aiAvailable, onRestock, onOpenItem }: { aiAvail
               <button
                 type="button"
                 onClick={() => dismissAllVisible(filterDismissed(payload.insights, dismissedKeys))}
-                className="shrink-0 rounded-full px-2.5 py-1 text-xs font-bold muted transition-colors hover:bg-[var(--surface-soft)]"
+                className="inline-flex min-h-11 shrink-0 items-center rounded-full px-2.5 text-xs font-bold muted transition-colors hover:bg-[var(--surface-soft)] md:min-h-8"
                 aria-label="把这周的建议全部标为已读"
               >
                 全部标为已读
@@ -121,7 +121,7 @@ export function AiInsightsCard({ aiAvailable, onRestock, onOpenItem }: { aiAvail
                     <button
                       type="button"
                       onClick={() => (insight.kind === "restock" ? onRestock(insight.itemId!) : onOpenItem(insight.itemId!))}
-                      className="mt-1.5 inline-flex min-h-9 items-center rounded-full px-2.5 text-xs font-bold"
+                      className="mt-1.5 inline-flex min-h-11 items-center rounded-full px-3 text-xs font-bold md:min-h-9 md:px-2.5"
                       style={{ background: "var(--primary-soft)", color: "var(--primary)" }}
                     >
                       {insight.kind === "restock" ? "加到采购清单" : "看看这件"}
@@ -131,7 +131,7 @@ export function AiInsightsCard({ aiAvailable, onRestock, onOpenItem }: { aiAvail
                 <button
                   type="button"
                   onClick={() => dismissInsight(insight)}
-                  className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg opacity-45 transition hover:opacity-100"
+                  className="mt-0.5 grid size-11 shrink-0 place-items-center rounded-lg opacity-45 transition hover:opacity-100 md:size-7"
                   aria-label={`忽略这条建议:${insight.title}`}
                   title="不再提示这条建议"
                 >
@@ -147,7 +147,7 @@ export function AiInsightsCard({ aiAvailable, onRestock, onOpenItem }: { aiAvail
             <button
               type="button"
               onClick={restoreInsights}
-              className="mt-2 inline-flex min-h-9 items-center rounded-full px-2.5 text-xs font-bold muted"
+              className="mt-2 inline-flex min-h-11 items-center rounded-full px-3 text-xs font-bold muted md:min-h-9 md:px-2.5"
             >
               恢复已忽略的 {dismissedKeys.length} 条
             </button>
