@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, ImagePlus, LoaderCircle, Paperclip, Search, Send, Trash2, Bot, X, Plus, Check } from "lucide-react";
+import { FileText, ImagePlus, LoaderCircle, Paperclip, Search, Send, Trash2, Bot, X, Plus, Check, ListTree } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useEscapeClose } from "@/lib/use-escape-close";
 import { useConfirm } from "@/components/confirm-dialog";
@@ -108,6 +108,23 @@ export function AiChat({ onClose, items = [], onOpenItem, seed }: { onClose: () 
   };
 
   const copyReply = (content: string) => { void copyToClipboard(content); };
+  // 本次对话问过什么。长对话里翻回去很费劲,这里给一份可点的目录(不额外调用模型)。
+  const [showOutline, setShowOutline] = useState(false);
+  const askedQuestions = messages.flatMap((message, index) => (message.role === "user" && message.content.trim() ? [{ index, text: message.content.trim() }] : []));
+  const jumpToMessage = (index: number) => {
+    setShowOutline(false);
+    // 两个坑都在这里踩过:
+    // 1) 助手面板是 position:fixed,scrollIntoView 在它内部完全不生效(滚动位置纹丝不动);
+    // 2) 收起目录会引起重渲染,若在同一帧里滚动,布局变化会把滚动直接取消。
+    // 所以:等两帧(确保提交完成)之后,用瞬时滚动显式设置滚动容器的位置。
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const scroller = scrollRef.current;
+      const target = document.getElementById(`chat-message-${index}`);
+      if (!scroller || !target) return;
+      const delta = target.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      scroller.scrollTo({ top: Math.max(0, scroller.scrollTop + delta - scroller.clientHeight / 2 + target.clientHeight / 2), behavior: "auto" });
+    }));
+  };
   // 重新生成:去掉最后一条回答,用同一条问题再问一次(不动用户消息,避免重复入库)。
   const regenerate = async () => {
     if (loading) return;
@@ -121,7 +138,39 @@ export function AiChat({ onClose, items = [], onOpenItem, seed }: { onClose: () 
   };
 
   const paste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => { const files = Array.from(event.clipboardData.files); if (files.length) { event.preventDefault(); void addFiles(files); } };
-  return <><div aria-hidden="true" className="fixed inset-0 z-[95] bg-black/35 backdrop-blur-sm" onMouseDown={onClose} /><div role="dialog" aria-label="归物助手" className="ai-chat-panel fixed bottom-4 right-4 z-[100] flex h-[min(720px,calc(100vh-32px))] w-[min(460px,calc(100vw-32px))] flex-col overflow-hidden rounded-3xl border shadow-2xl" style={{ background: "var(--surface-solid)", borderColor: "var(--hairline)" }}><header className="flex items-center gap-3 border-b p-4" style={{ borderColor: "var(--hairline)" }}><div className="grid size-10 place-items-center rounded-2xl" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><Bot size={20} /></div><div className="min-w-0 flex-1"><h2 className="m-0 text-lg font-black leading-snug">归物助手</h2><p className="mb-0 mt-1 text-xs muted">库存问答、图片识别和联网资料查询</p></div><button onClick={onClose} className="icon-action size-11 min-h-11" aria-label="关闭归物助手" title="关闭"><X size={18} /></button></header><div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">{messages.map((message, index) => <div key={`${message.role}-${index}`} className={`flex flex-col ${message.role === "user" ? "items-end" : "items-start"}`}><div className={`max-w-[90%] rounded-2xl px-3 py-2.5 text-sm leading-6 ${message.role === "user" ? "whitespace-pre-wrap text-[var(--on-primary)]" : "whitespace-pre-wrap"}`} style={message.role === "user" ? { background: "var(--primary)" } : { background: "var(--surface-soft)" }}>{message.attachments?.map((attachment, attachmentIndex) => <AttachmentPreview key={`${attachment.name}-${attachmentIndex}`} attachment={attachment} tone={message.role === "user" ? "dark" : "light"} />)}{plainChatText(message.content)}</div>{message.role === "assistant" && (<>
+  return <><div aria-hidden="true" className="fixed inset-0 z-[95] bg-black/35 backdrop-blur-sm" onMouseDown={onClose} /><div role="dialog" aria-label="归物助手" className="ai-chat-panel fixed bottom-4 right-4 z-[100] flex h-[min(720px,calc(100vh-32px))] w-[min(460px,calc(100vw-32px))] flex-col overflow-hidden rounded-3xl border shadow-2xl" style={{ background: "var(--surface-solid)", borderColor: "var(--hairline)" }}><header className="flex items-center gap-3 border-b p-4" style={{ borderColor: "var(--hairline)" }}><div className="grid size-10 place-items-center rounded-2xl" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><Bot size={20} /></div><div className="min-w-0 flex-1"><h2 className="m-0 text-lg font-black leading-snug">归物助手</h2><p className="mb-0 mt-1 text-xs muted">库存问答、图片识别和联网资料查询</p></div>{askedQuestions.length >= 2 && (
+  <button
+    type="button"
+    onClick={() => setShowOutline((value) => !value)}
+    className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full px-2.5 text-xs font-bold md:min-h-10"
+    style={showOutline ? { background: "var(--primary-soft)", color: "var(--primary)" } : { background: "var(--surface-soft)" }}
+    aria-expanded={showOutline}
+    aria-label={`${showOutline ? "隐藏" : "显示"}本次对话要点`}
+  >
+    <ListTree size={14} />
+    要点 {askedQuestions.length}
+  </button>
+)}
+<button onClick={onClose} className="icon-action size-11 min-h-11" aria-label="关闭归物助手" title="关闭"><X size={18} /></button></header>{showOutline && (
+  <div className="border-b p-3" style={{ borderColor: "var(--hairline)", background: "var(--surface-soft)" }}>
+    <div className="mb-2 text-xs font-bold muted">本次对话问过</div>
+    <ol className="m-0 max-h-40 list-none space-y-1 overflow-y-auto p-0">
+      {askedQuestions.map((entry, order) => (
+        <li key={entry.index}>
+          <button
+            type="button"
+            onClick={() => jumpToMessage(entry.index)}
+            className="flex w-full min-h-9 items-start gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition-colors hover:bg-[var(--surface-solid)]"
+          >
+            <span className="shrink-0 font-bold muted">{order + 1}.</span>
+            <span className="min-w-0 truncate">{entry.text}</span>
+          </button>
+        </li>
+      ))}
+    </ol>
+  </div>
+)}
+<div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">{messages.map((message, index) => <div id={`chat-message-${index}`} key={`${message.role}-${index}`} className={`flex flex-col ${message.role === "user" ? "items-end" : "items-start"}`}><div className={`max-w-[90%] rounded-2xl px-3 py-2.5 text-sm leading-6 ${message.role === "user" ? "whitespace-pre-wrap text-[var(--on-primary)]" : "whitespace-pre-wrap"}`} style={message.role === "user" ? { background: "var(--primary)" } : { background: "var(--surface-soft)" }}>{message.attachments?.map((attachment, attachmentIndex) => <AttachmentPreview key={`${attachment.name}-${attachmentIndex}`} attachment={attachment} tone={message.role === "user" ? "dark" : "light"} />)}{plainChatText(message.content)}</div>{message.role === "assistant" && (<>
   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
     {mentionedItems(message.content, items).map((entry) => (
       <button
