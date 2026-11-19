@@ -282,6 +282,44 @@ for (let i = 0; i < 5; i += 1) {
   check("窄屏下页面底部留白足够(内容不被底部导航压住)", offenders.length === 0, offenders.join(" | "));
 }
 
+// ============ 3.8 文字被裁切时必须有查看全文的途径 ============
+// 小屏最容易出的阅读问题:文字被容器裁掉,用户又没有任何办法看到全文。
+// 判定:内容溢出容器(scrollWidth > clientWidth)且**既没有 title/aria-label,也没用截断样式** ——
+// 这说明是「意外裁切」,信息真的丢了。有 title 或用 truncate 的属于有意为之,不算问题。
+{
+  const routes = ["/items", "/locations", "/audit", "/settings", "/"];
+  const problems = [];
+  for (const route of routes) {
+    await page.goto(BASE + route);
+    await page.waitForTimeout(2300);
+    const found = await page.evaluate(() => {
+      const main = document.querySelector("main");
+      if (!main) return [];
+      const clipped = [];
+      for (const node of main.querySelectorAll("span, b, p, h1, h2, h3, td")) {
+        const text = (node.textContent || "").trim();
+        if (text.length < 4) continue;
+        const rect = node.getBoundingClientRect();
+        if (rect.width < 20 || rect.height < 4) continue;
+        // 不在视口内的元素坐标不可靠,跳过
+        if (rect.bottom < 0 || rect.top > window.innerHeight) continue;
+        const style = getComputedStyle(node);
+        const clippedX = node.scrollWidth > node.clientWidth + 4;
+        const clippedY = node.scrollHeight > node.clientHeight + 4;
+        if (!clippedX && !clippedY) continue;
+        const deliberate = /truncate|line-clamp|ellipsis/.test(String(node.className)) || style.textOverflow === "ellipsis";
+        if (deliberate) continue;
+        const hasWay = Boolean(node.getAttribute("title") || node.getAttribute("aria-label") || node.closest("[title]"));
+        if (hasWay) continue;
+        clipped.push(text.slice(0, 20));
+      }
+      return clipped.slice(0, 3);
+    });
+    if (found.length) problems.push(`${route}: ${found.join(" / ")}`);
+  }
+  check("窄屏下没有「被裁切且无法查看全文」的文字", problems.length === 0, problems.join(" | "));
+}
+
 // ============ 4. 主要弹窗内部触摸目标与溢出 ============
 {
   const records = [];
