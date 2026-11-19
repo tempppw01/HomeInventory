@@ -162,6 +162,13 @@ jobs:
           PROBE_PASS: Lead#2026
           PROBE_VIEWER_PASS: View#2026
         run: node scripts/verify-entry-fixes.mjs
+      # P2 功能检查(详情页变更记录 / CSV 导出 / 批量改数量 / 到期日历 / SW 注册):
+      # 自带探针数据,结束时自行清理。
+      - name: P2 功能检查
+        env:
+          PROBE_USER: leadcheck
+          PROBE_PASS: Lead#2026
+        run: node scripts/verify-p2-features.mjs
       - name: 失败时打印服务日志
         if: failure()
         run: tail -100 server.log
