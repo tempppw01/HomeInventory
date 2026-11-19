@@ -23,6 +23,13 @@ export async function GET() {
       prisma.householdTask.findMany({ where: { status: "OPEN" }, orderBy: { dueAt: "asc" }, take: 8 }),
     ]);
 
+    // 每件物品最近一次 AI 分析的时间:物品列表据此提示「结论已过时」。
+    const aiAnalyzedAtMap = new Map<string, Date>(
+      (await prisma.activityLog.groupBy({ by: ["itemId"], where: { action: "AI_ANALYZE", itemId: { not: null } }, _max: { createdAt: true } }))
+        .flatMap((row) => (row.itemId && row._max.createdAt ? [[row.itemId, row._max.createdAt] as [string, Date]] : [])),
+    );
+    const itemsWithAiTime = items.map((item) => ({ ...item, aiAnalyzedAt: aiAnalyzedAtMap.get(item.id)?.toISOString() ?? null }));
+
     const sixMonthTotal = priceRecords.reduce((sum, record) => sum + record.totalPrice, 0);
     const currentMonthTotal = priceRecords.filter((record) => record.purchasedAt >= currentMonthStart).reduce((sum, record) => sum + record.totalPrice, 0);
     // 近 6 个月支出序列:前端直接画柱状图,不在浏览器里再聚合一遍。
@@ -37,7 +44,7 @@ export async function GET() {
       consumption.set(entry.itemName, { itemName: entry.itemName, count: (previous?.count || 0) + 1, lastUsedAt: previous?.lastUsedAt || entry.createdAt.toISOString() });
     });
     return NextResponse.json({
-      items,
+      items: itemsWithAiTime,
       locations,
       shopping,
       finance: { currentMonthTotal, averageMonthly: sixMonthTotal / 6, recordCount: priceRecords.length, monthly, recent: priceRecords.slice(0, 5), byCategory: [...categoryTotals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([category, total]) => ({ category, total })) },

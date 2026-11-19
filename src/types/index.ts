@@ -44,6 +44,8 @@ export interface Item {
   aiStorageAdvice: string | null;
   aiUsageAdvice: string | null;
   aiReplenishmentAdvice: string | null;
+  /** 最近一次 AI 分析时间(来自活动日志,不是数据库字段) */
+  aiAnalyzedAt?: string | null;
   /** 后台规则引擎写入的存放建议:COLD / COLD_AFTER_OPEN / ROOM */
   storage: string | null;
   storageReason: string | null;

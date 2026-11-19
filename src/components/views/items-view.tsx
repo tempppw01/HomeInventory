@@ -9,6 +9,7 @@ import { SearchBox } from "@/components/search-box";
 import { BatchEditModal } from "@/components/batch-edit-modal";
 import { isLiquidConsumable } from "@/lib/item-metrics";
 import { itemAiHighlights } from "@/lib/item-ai";
+import { aiConclusionStale } from "@/lib/item-staleness";
 import { ContextMenu, useContextMenu, ContextMenuItem } from "@/components/context-menu";
 import { isMedicineCategory, medicineCategoryLabel } from "@/lib/categories";
 import { Field } from "@/components/ui-kit";
@@ -245,6 +246,8 @@ export function ItemCard({ item, onEdit, onOpenDetail, onImageUpload, onDuplicat
   const CategoryIcon = isMedicineCategory(item.category) ? Pill : (categoryIconMap[item.category] || Package);
   const readOnly = useContext(ReadOnlyContext);
   const ai = itemAiHighlights(item);
+  // 物品改过、但结论还是旧的:列表上给个明确提示,免得用户以为 AI 已经看过最新信息。
+  const aiStale = ai.hasHighlights && aiConclusionStale({ updatedAt: item.updatedAt, aiAnalyzedAt: item.aiAnalyzedAt });
   const isMedicine = isMedicineCategory(item.category);
   const showRemaining = !compact && isLiquidConsumable(item) && onRemainingChange;
   // 「用掉一个」只对按个数消耗的消耗品有意义:液体交给右侧滑块。
@@ -262,7 +265,7 @@ export function ItemCard({ item, onEdit, onOpenDetail, onImageUpload, onDuplicat
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2 pr-8">
             <button type="button" onClick={onOpenDetail} className="flex min-h-11 min-w-0 flex-1 items-center text-left md:min-h-10"><span className="min-w-0 truncate text-sm font-extrabold hover:underline">{item.name}</span></button>
-            {ai.hasHighlights && <Sparkles size={12} className="shrink-0" style={{ color: "var(--primary)" }} aria-label="有 AI 信息" />}
+            {ai.hasHighlights && <Sparkles size={12} className="shrink-0" style={{ color: "var(--primary)" }} aria-label="有 AI 信息" />}{aiStale && <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold" style={{ background: "var(--warning-soft, #fff4dc)", color: "#8a571c" }} title="物品信息改过,AI 结论还是旧的">建议重新分析</span>}
             <span className="shrink-0 text-sm font-black tabular-nums">{item.quantity}<span className="ml-0.5 text-xs font-normal muted">{item.unit}</span></span>
           </div>
           <div className="mt-1.5 flex min-w-0 items-center gap-1.5 text-xs muted">
