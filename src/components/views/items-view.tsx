@@ -265,7 +265,18 @@ export function ItemCard({ item, onEdit, onOpenDetail, onImageUpload, onDuplicat
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2 pr-8">
             <button type="button" onClick={onOpenDetail} className="flex min-h-11 min-w-0 flex-1 items-center text-left md:min-h-10"><span className="min-w-0 truncate text-sm font-extrabold hover:underline">{item.name}</span></button>
-            {ai.hasHighlights && <Sparkles size={12} className="shrink-0" style={{ color: "var(--primary)" }} aria-label="有 AI 信息" />}{aiStale && <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold" style={{ background: "var(--warning-soft, #fff4dc)", color: "#8a571c" }} title="物品信息改过,AI 结论还是旧的">建议重新分析</span>}
+            {ai.hasHighlights && <Sparkles size={12} className="shrink-0" style={{ color: "var(--primary)" }} aria-label="有 AI 信息" />}{aiStale && (
+  <button
+    type="button"
+    onClick={(event) => { event.stopPropagation(); event.preventDefault(); onAi(); }}
+    className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold transition-transform active:scale-95"
+    style={{ background: "var(--warning-soft, #fff4dc)", color: "#8a571c" }}
+    title="物品信息改过,点这里让 AI 重新看一遍"
+    aria-label={`重新分析「${item.name}」`}
+  >
+    建议重新分析
+  </button>
+)}
             <span className="shrink-0 text-sm font-black tabular-nums">{item.quantity}<span className="ml-0.5 text-xs font-normal muted">{item.unit}</span></span>
           </div>
           <div className="mt-1.5 flex min-w-0 items-center gap-1.5 text-xs muted">
