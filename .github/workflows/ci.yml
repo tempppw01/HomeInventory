@@ -93,6 +93,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: static
     env:
+      # 这套检查必须有真实浏览器:装不上就该失败,而不是跳过之后显示「通过」
+      REQUIRE_BROWSER: "1"
       DATABASE_URL: file:../data/ci.db
       PROBE_USER: bgs
       PROBE_PASS: Ci#Bootstrap2026
