@@ -12,6 +12,7 @@ import { CopyCodeButton } from "@/components/copy-code-button";
 import { ItemQuickActions } from "@/components/item-quick-actions";
 import { AskAiAboutItem } from "@/components/ask-ai-about-item";
 import { ReanalyzeAiButton } from "@/components/reanalyze-ai-button";
+import { relativeTimeText } from "@/lib/relative-time";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,9 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
     orderBy: { createdAt: "desc" },
     take: 12,
   });
+  // 「AI 说」是什么时候算的:history 已经按时间倒序取过了,直接找最近一条 AI 分析。
+  const aiAnalyzedAt = history.find((entry) => entry.action === "AI_ANALYZE")?.createdAt ?? null;
+  const aiTimeText = relativeTimeText(aiAnalyzedAt);
   const code = item.itemCode || item.id;
   const typeLabel = item.type === "CONSUMABLE" ? "消耗品" : "耐用品";
 
@@ -136,7 +140,7 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
 
           {/* 后台自动分析的结果:保存物品时在后台生成,用户不需要点任何按钮 */}
           {item.aiSummary && (
-          <Panel title="AI 说">
+          <Panel title="AI 说" description={aiTimeText ? `AI ${aiTimeText}看过这件` : undefined}>
             <p className="mb-0 text-sm leading-6">{item.aiSummary}</p>
             <div className="mt-3 grid gap-2">
               {item.aiStorageAdvice && <AiRow label="怎么存放" text={item.aiStorageAdvice} />}

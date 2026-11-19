@@ -59,6 +59,10 @@ export async function PATCH(request: NextRequest, { params }: Context) {
       const withInsight = { ...data, storage: insight.storage, storageReason: insight.storageReason, autoTags: insight.tags.join(",") };
       const updated = await tx.item.update({ where: { id }, data: withInsight, include: { location: true } });
       await tx.activityLog.create({ data: { action: "UPDATE", itemId: updated.id, itemName: updated.name, userId: user.id, detail: "更新物品信息" } });
+      // 结论变了就补一条 AI 分析记录:详情页据此显示「这份结论是什么时候算的」。
+      if (parsed.aiSummary !== undefined || parsed.aiStorageAdvice !== undefined || parsed.aiUsageAdvice !== undefined || parsed.aiReplenishmentAdvice !== undefined) {
+        await tx.activityLog.create({ data: { action: "AI_ANALYZE", itemId: updated.id, itemName: updated.name, userId: user.id, detail: "手动重新分析" } });
+      }
       if (recordPurchase && updated.price != null) {
         const quantity = Math.max(data.quantity ?? updated.quantity, 1);
         await tx.priceRecord.create({ data: { itemId: updated.id, itemName: updated.name, category: updated.category, unitPrice: updated.price, quantity, totalPrice: updated.price * quantity, purchasedAt: data.purchaseDate || new Date(), store: purchaseStore } });
