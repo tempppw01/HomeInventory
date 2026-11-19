@@ -66,6 +66,24 @@ for (let i = 0; i < 5; i += 1) {
   await page.waitForTimeout(400);
 }
 
+// ============ 0. 必须先确认已登录 ============
+// 这一条是被真实事故逼出来的:清理脚本会裁剪会话,若登录没成功,
+// 后面所有断言其实都量在登录页上 —— 全部「通过」却毫无意义。
+{
+  const loginState = await page.evaluate(() => ({
+    hasLoginForm: Boolean(document.querySelector("#auth-username")),
+    mainHead: (document.querySelector("main")?.innerText || "").slice(0, 40),
+  }));
+  check("窄屏检查已登录(否则测的是登录页)", !loginState.hasLoginForm, `仍停在登录页:${loginState.mainHead.replace(/\n/g, " ")}`);
+  if (loginState.hasLoginForm) {
+    await context.close();
+    await browser.close();
+    const failedEarly = results.filter((entry) => !entry.ok);
+    console.log(`\n${results.length - failedEarly.length}/${results.length} 通过`);
+    process.exit(1);
+  }
+}
+
 // ============ 1. 各页面在 320px 下不横向滚动 ============
 {
   const routes = ["/", "/items", "/locations", "/tasks", "/audit", "/settings"];
@@ -139,7 +157,16 @@ for (let i = 0; i < 5; i += 1) {
   for (const route of routes) {
     await page.goto(BASE + route);
     await page.waitForTimeout(2200);
-    if (route === "/") await waitForAsyncCards(page); // 异步卡片就绪后再测
+    if (route === "/") {
+      await waitForAsyncCards(page); // 异步卡片就绪后再测
+      // 折叠面板里的控件也要测到
+      await page.evaluate(async () => {
+        const summaries = Array.from(document.querySelectorAll("main details summary"));
+        for (const summary of summaries) summary.click();
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      });
+      await page.waitForTimeout(1200);
+    }
     const small = await page.evaluate(() => {
       const main = document.querySelector("main");
       if (!main) return [];
