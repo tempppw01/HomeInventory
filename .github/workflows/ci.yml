@@ -54,10 +54,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx prisma generate --schema prisma/schema.prisma
-      # 渲染层检查(edge-input-test)需要真实浏览器:CI 上装一份 Chromium。
-      # 不装也不会挂 —— 脚本会跳过那一段并打日志;但装了才有真实覆盖率。
-      - name: 安装 Chromium(供渲染层检查)
-        run: npx playwright install --with-deps chromium
       - run: npm run build
       - name: 初始化数据库与管理员账号
         run: |
@@ -138,6 +134,9 @@ jobs:
             if curl -fsS http://127.0.0.1:3001/api/health > /dev/null; then echo "ready"; break; fi
             sleep 2
           done
+      # 月报图表依赖消费记录:空库下页面没问题,但「图表必须渲染」的断言就失去意义。
+      - name: 播种界面检查数据
+        run: node scripts/seed-ci-fixtures.mjs
       - name: 打印月报页检查
         run: node scripts/verify-report-page.mjs
       - name: 窄屏(320px)布局检查
