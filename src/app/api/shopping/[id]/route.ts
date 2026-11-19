@@ -15,7 +15,10 @@ export async function PATCH(request: NextRequest, { params }: Context) {
     const item = await prisma.$transaction(async (tx) => {
       const updated = await tx.shoppingItem.update({ where: { id }, data: { status, ...(typeof body.isFavorite === "boolean" ? { isFavorite: body.isFavorite } : {}) } });
       const replenishItemId = typeof body.replenishItemId === "string" ? body.replenishItemId : null;
-      if (status === "PURCHASED" && replenishItemId && updated.source === "restock-suggestion") {
+      // 这里原本只允许「补货建议」来源的采购项入库,
+      // 导致手动添加的采购项即使前端问过「要加进库存吗」并得到确认,也被静默忽略 ——
+      // 提示说「已入库」而库存没变。改为只要调用方明确传了物品就入库。
+      if (status === "PURCHASED" && replenishItemId) {
         const inventoryItem = await tx.item.findUnique({ where: { id: replenishItemId } });
         if (inventoryItem) {
           await tx.item.update({

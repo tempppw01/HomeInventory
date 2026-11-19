@@ -393,12 +393,28 @@ function useAppState() {
   const toggleShopping = async (item: ShoppingItem) => {
     const status = item.status === "PENDING" ? "PURCHASED" : "PENDING";
     let replenishItemId: string | undefined;
-    if (status === "PURCHASED" && item.source === "restock-suggestion") {
+    // 买到了就该问一句要不要入库 —— 以前只对「补货建议」来的采购项问,
+    // 手动加的采购项(家里牛奶喝完了随手记一笔)反而没有这个引导。
+    if (status === "PURCHASED") {
       const matches = (data?.items ?? []).filter((entry) => normalizedItemName(entry.name) === normalizedItemName(item.name));
-      if (matches.length === 1 && await askConfirm(`“${item.name}”已买到。要同时补货到原物品吗?`, { title: "同时补货", confirmLabel: "补货到原物品" })) replenishItemId = matches[0].id;
+      if (matches.length === 1) {
+        const label = item.source === "restock-suggestion" ? "要同时补货到原物品吗?" : "要把它加进库存吗?";
+        if (await askConfirm(`“${item.name}”已买到。${label}`, { title: "顺便入库", confirmLabel: "入库" })) replenishItemId = matches[0].id;
+      }
     }
     await request(`/api/shopping/${item.id}`, { method: "PATCH", body: JSON.stringify({ status, replenishItemId }) });
-    setToast(replenishItemId ? "采购已完成,并已补货到物品" : status === "PURCHASED" ? "采购项已完成" : "已恢复为待采购");
+    setToast(replenishItemId ? "采购已完成,并已入库" : status === "PURCHASED" ? "采购项已完成" : "已恢复为待采购");
+    // 误点「已购买」是最容易发生的操作失误,给一次撤销机会(与删除物品、消耗的交互保持一致)。
+    setToastAction(status === "PURCHASED" ? { label: "撤销", onClick: async () => {
+      try {
+        await request(`/api/shopping/${item.id}`, { method: "PATCH", body: JSON.stringify({ status: "PENDING" }) });
+        setToast("已恢复为待采购");
+        setToastAction(null);
+        await refresh();
+      } catch {
+        setToast("撤销失败,请手动改回待采购");
+      }
+    } } : null);
     await refresh();
   };
   const toggleFavoriteShopping = async (item: ShoppingItem) => {
