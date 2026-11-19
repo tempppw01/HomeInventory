@@ -161,6 +161,18 @@ export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, lo
         </label>
         <div className="hidden min-w-0 items-center gap-2 md:flex">{typeChips}{coldChip}</div>
         <span className="hidden shrink-0 text-xs tabular-nums muted md:inline">{shownItems.length} 件</span>
+{locationFilter && locationFilter !== "ALL" && (
+  <button
+    type="button"
+    onClick={() => onChangeLocationFilter?.("ALL")}
+    className="flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold"
+    style={{ background: "var(--primary-soft)", color: "var(--primary)" }}
+    aria-label={`清除空间筛选:${locations.find((location) => location.id === locationFilter)?.name ?? ""}`}
+  >
+    空间:{locations.find((location) => location.id === locationFilter)?.name ?? "未知"}
+    <X size={12} />
+  </button>
+)}
         {sortMode === "expiry" && (() => {
           const hint = sortHint(sortMode, shownItems);
           return hint ? <span className="hidden shrink-0 text-xs muted lg:inline">{hint}</span> : null;
