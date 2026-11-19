@@ -77,6 +77,10 @@ const openDialog = () => document.querySelectorAll('[role="dialog"][aria-modal="
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   await login(page);
+  {
+    const state = await page.evaluate(() => ({ loginForm: Boolean(document.querySelector("#auth-username")), head: (document.querySelector("main")?.innerText || "").slice(0, 40).replace(/\s+/g, " ") }));
+    check("体验检查已登录(否则测的是登录页)", !state.loginForm, state.loginForm ? `仍停在登录页(${state.head || "无内容"})` : "已进入应用");
+  }
 
   // 库里不再有示范数据,干净安装下物品与采购清单都是空的。依赖真实数据的断言
   // (删除采购项、卡片上的图标按钮尺寸)需要至少一条记录才有意义,所以这里按需

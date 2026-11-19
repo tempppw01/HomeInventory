@@ -5,6 +5,7 @@
 // 这类「服务端组件 + 客户端组件」的边界问题值得一条常驻检查。
 
 import { launchChromiumOrNull } from "./lib/browser.mjs";
+import { dismissBlockingDialogs, loginAndConfirm } from "./lib/probe-auth.mjs";
 
 const BASE = process.env.BASE_URL || "http://127.0.0.1:3001";
 const USER = process.env.PROBE_USER || "bgs";
@@ -27,15 +28,17 @@ const page = await context.newPage();
 const consoleErrors = [];
 page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text().slice(0, 120)); });
 
-// 登录
-await page.goto(BASE);
-await page.waitForTimeout(1500);
-if (await page.locator("#auth-username").count()) {
-  await page.fill("#auth-username", USER);
-  await page.fill("#auth-password", PASS);
-  await page.click('button[type="submit"]');
-  await page.waitForTimeout(3000);
+// 登录并确认:没登进去的话,后面测的都是登录页
+const auth = await loginAndConfirm(page, BASE, USER, PASS);
+check("月报检查已登录(否则测的是登录页)", auth.ok, auth.detail);
+if (!auth.ok) {
+  await context.close();
+  await browser.close();
+  const early = results.filter((entry) => !entry.ok);
+  console.log(`\n${results.length - early.length}/${results.length} 通过`);
+  process.exit(1);
 }
+await dismissBlockingDialogs(page);
 
 const response = await page.goto(`${BASE}/report`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(2200);
