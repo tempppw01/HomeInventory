@@ -11,6 +11,7 @@ import { Panel } from "@/components/ui-kit";
 import { CopyCodeButton } from "@/components/copy-code-button";
 import { ItemQuickActions } from "@/components/item-quick-actions";
 import { AskAiAboutItem } from "@/components/ask-ai-about-item";
+import { ReanalyzeAiButton } from "@/components/reanalyze-ai-button";
 
 export const dynamic = "force-dynamic";
 
@@ -104,6 +105,18 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
               )}
               <div className="sm:col-span-2">
                 <AskAiAboutItem itemName={item.name} />
+                <ReanalyzeAiButton
+                  item={{
+                    id: item.id,
+                    name: item.name,
+                    category: item.category,
+                    type: item.type,
+                    unit: item.unit,
+                    quantity: item.quantity,
+                    notes: item.notes,
+                    expiryDate: item.expiryDate ? new Date(item.expiryDate).toISOString() : null,
+                  }}
+                />
               </div>
               {showRemaining && <Stat icon={<Droplets size={14} />} label="当前剩余量" value={`${Math.round(item.remainingPercent)}%`} tone={item.remainingPercent <= 20 ? "var(--danger)" : undefined} />}
             </div>
