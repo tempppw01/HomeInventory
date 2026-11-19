@@ -11,6 +11,28 @@ const USER = process.env.PROBE_USER || "bgs";
 const PASS = process.env.PROBE_PASS || "GuiWu-2026-Home";
 const NARROW = { width: 320, height: 568 };
 
+// 首页的 AI 建议卡片是异步加载的:不等它渲染完就测量,会把卡片里的按钮全漏掉
+// (上一轮人工扫描就是这样漏掉的)。这里等它进入「有结论」或「明确的空/错误状态」。
+async function waitForAsyncCards(page) {
+  for (let i = 0; i < 15; i += 1) {
+    const state = await page.evaluate(() => {
+      const card = document.querySelector('[aria-label="AI 本周建议"]');
+      if (!card) return "missing";
+      const text = card.innerText || "";
+      if (text.includes("正在看家里的情况")) return "loading";
+      const items = card.querySelectorAll("li b").length;
+      if (items > 0) return "ready";
+      // 明确的终态:没有建议了 / 未配置 / 出错
+      if (/不需要了|已经收起来|暂不可用|没有可用|去设置/.test(text)) return "ready";
+      return "loading";
+    });
+    if (state === "ready") return true;
+    if (state === "missing") return false;
+    await page.waitForTimeout(2000);
+  }
+  return false;
+}
+
 const results = [];
 const check = (name, ok, detail = "") => {
   results.push({ name, ok, detail });
@@ -117,6 +139,7 @@ for (let i = 0; i < 5; i += 1) {
   for (const route of routes) {
     await page.goto(BASE + route);
     await page.waitForTimeout(2200);
+    if (route === "/") await waitForAsyncCards(page); // 异步卡片就绪后再测
     const small = await page.evaluate(() => {
       const main = document.querySelector("main");
       if (!main) return [];
@@ -133,6 +156,12 @@ for (let i = 0; i < 5; i += 1) {
     if (small.length) offenders.push(`${route}: ${small.join("/")}`);
   }
   check("窄屏下各页面可点元素都 ≥40px", offenders.length === 0, offenders.join(" | "));
+
+  // 防止「空跑」:如果卡片一直没渲染,上面的触摸目标检查等于没测到卡片里的按钮。
+  await page.goto(BASE + "/");
+  await page.waitForTimeout(2000);
+  const cardReady = await waitForAsyncCards(page);
+  check("首页 AI 建议卡片已渲染(触摸目标检查没有空跑)", cardReady, `ready=${cardReady}`);
 }
 
 // ============ 4. 主要弹窗内部触摸目标与溢出 ============
