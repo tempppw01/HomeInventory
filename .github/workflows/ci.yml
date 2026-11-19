@@ -85,6 +85,17 @@ jobs:
       - run: node scripts/auth-matrix-test.mjs
       - run: node scripts/backup-roundtrip-test.mjs
       - run: node scripts/edge-input-test.mjs
+
+      # 界面级检查:CI 里已经装了 Chromium、也起了服务(账号由上面的初始化步骤创建),
+      # 这两条正是「人工点才发现的故障」——月报页 500、手机端触摸目标过小。
+      # 界面级断言与中文排版相关:runner 默认没有中文字体,缺字时文字会渲染成方块,
+      # 行数与宽度都会失真。装一份 Noto CJK 让测量结果和真实设备一致。
+      - name: 安装中文字体(排版测量需要)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk
+      - name: 打印月报页检查
+        run: node scripts/verify-report-page.mjs
+      - name: 窄屏(320px)布局检查
+        run: node scripts/verify-narrow-layout.mjs
       - name: 失败时打印服务日志
         if: failure()
         run: tail -100 server.log
