@@ -177,7 +177,7 @@ export function AiChat({ onClose, items = [], onOpenItem, seed }: { onClose: () 
         key={entry.id}
         type="button"
         onClick={() => onOpenItem?.(entry.id)}
-        className="rounded-full px-2 py-1 text-[11px] font-bold transition-colors"
+        className="min-h-11 rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors md:min-h-8"
         style={{ background: "var(--surface-soft)", color: "var(--primary)" }}
         aria-label={`打开「${entry.name}」`}
       >
@@ -186,9 +186,9 @@ export function AiChat({ onClose, items = [], onOpenItem, seed }: { onClose: () 
     ))}
   </div>
   <div className="mt-1 flex items-center gap-1">
-    <button type="button" onClick={() => copyReply(message.content)} className="grid size-8 place-items-center rounded-lg transition-colors hover:bg-[var(--surface-soft)]" aria-label="复制这条回答" title="复制"><Copy size={13} /></button>
+    <button type="button" onClick={() => copyReply(message.content)} className="grid size-11 place-items-center rounded-lg transition-colors hover:bg-[var(--surface-soft)] md:size-8" aria-label="复制这条回答" title="复制"><Copy size={13} /></button>
     {index === messages.length - 1 && !loading && (
-      <button type="button" onClick={() => { void regenerate(); }} className="grid size-8 place-items-center rounded-lg transition-colors hover:bg-[var(--surface-soft)]" aria-label="重新生成这条回答" title="重新生成"><RotateCcw size={13} /></button>
+      <button type="button" onClick={() => { void regenerate(); }} className="grid size-11 place-items-center rounded-lg transition-colors hover:bg-[var(--surface-soft)] md:size-8" aria-label="重新生成这条回答" title="重新生成"><RotateCcw size={13} /></button>
     )}
   </div>
 </>)}
@@ -205,7 +205,7 @@ export function AiChat({ onClose, items = [], onOpenItem, seed }: { onClose: () 
         key={prompt}
         type="button"
         onClick={() => setInput(prompt)}
-        className="rounded-full px-3 py-1.5 text-xs font-bold transition-colors"
+        className="min-h-11 rounded-full px-3 py-1.5 text-xs font-bold transition-colors md:min-h-8"
         style={{ background: "var(--surface-soft)", color: "var(--primary)" }}
       >
         {prompt}
