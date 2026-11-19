@@ -182,6 +182,37 @@ const baseItem = { name: "T-基础物品", category: "日用", type: "CONSUMABLE
   if (manual.body?.id) created.shopping.push(manual.body.id);
 }
 
+// ============ 5b. 采购完成 → 入库(精确核对数量)============
+// 真实踩过的坑:服务端曾经只在采购项来源为 restock-suggestion 时才入库,
+// 手动创建的采购项即使传了 replenishItemId 也被静默忽略 —— 界面提示「已入库」而库存没变。
+// 原来的断言只要求 quantity >= 1,抓不到这种问题,这里精确核对「原数量 + 采购数量」。
+{
+  const target = await call("POST", "/api/items", { ...baseItem, name: "T-入库核对", quantity: 2, unit: "瓶" });
+  const targetId = target.body?.id;
+  if (targetId) created.items.push(targetId);
+
+  const purchase = await call("POST", "/api/shopping", { name: "T-入库核对", quantity: 3, unit: "瓶" });
+  // POST /api/shopping 返回的是 { item, merged },不是直接的采购项
+  const purchaseId = purchase.body?.item?.id ?? purchase.body?.id;
+  if (purchaseId) created.shopping.push(purchaseId);
+
+  // 用「改前 + 采购数量」做相对断言:库里可能已有同名物品(接口会合并),绝对值不可靠。
+  const beforePatch = await call("GET", `/api/items/${targetId}`);
+  const startQty = Number(beforePatch.body?.quantity ?? 0);
+
+  const done = await call("PATCH", `/api/shopping/${purchaseId}`, { status: "PURCHASED", replenishItemId: targetId });
+  record("shopping", "手动采购项标记已购可成功", done.status === 200, `status=${done.status}`);
+
+  const after = await call("GET", `/api/items/${targetId}`);
+  record("shopping", "采购完成应把采购数量加进库存物品", Number(after.body?.quantity) === startQty + 3, `quantity=${after.body?.quantity}(期望 ${startQty + 3})`);
+
+  // 撤销:只把采购项改回待采购,不回收已入库的数量(界面上也是这个语义)。
+  const undo = await call("PATCH", `/api/shopping/${purchaseId}`, { status: "PENDING" });
+  record("shopping", "撤销采购完成应回到待采购", undo.status === 200 && undo.body?.status === "PENDING", `status=${undo.status} state=${undo.body?.status}`);
+  const afterUndo = await call("GET", `/api/items/${targetId}`);
+  record("shopping", "撤销后库存数量保持不变(只回退采购状态)", Number(afterUndo.body?.quantity) === startQty + 3, `quantity=${afterUndo.body?.quantity}(期望 ${startQty + 3})`);
+}
+
 // ============ 6. tasks ============
 {
   const r = await call("POST", "/api/tasks", { title: "T-任务", description: "", dueAt: new Date(Date.now() + 86400000).toISOString(), recurrence: "NONE" });
