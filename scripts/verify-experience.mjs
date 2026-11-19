@@ -3,6 +3,7 @@
 //
 //   BASE_URL=http://127.0.0.1:3001 PROBE_PASS=... node scripts/verify-experience.mjs
 import { launchChromium } from "./lib/browser.mjs";
+import { loginAndConfirm } from "./lib/probe-auth.mjs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 
 const BASE = process.env.BASE_URL || "http://127.0.0.1:3001";
@@ -687,6 +688,27 @@ viewerChecks: {
 }
 
 await writeFile(`${OUT}/verify-experience.json`, JSON.stringify(results, null, 2));
+// ============ 桌面端:紧凑化不能删掉文字标签 ============
+// 「用掉 1 盒」在小屏改成图标是为省空间;桌面必须保留文字,否则语义丢失。
+{
+  // 这一步需要自己的 context:上面的 page 已经随清理块一起关掉了。
+  const desktopContext = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const desktopPage = await desktopContext.newPage();
+  const desktopAuth = await loginAndConfirm(desktopPage, BASE, USER, PASS);
+  check("桌面端紧凑化检查已登录", desktopAuth.ok, desktopAuth.detail);
+  if (desktopAuth.ok) {
+    await desktopPage.goto(`${BASE}/items`, { waitUntil: "domcontentloaded" });
+    await desktopPage.waitForTimeout(2200);
+    const consume = await desktopPage.evaluate(() => {
+      const btn = Array.from(document.querySelectorAll("main button")).find((b) => (b.getAttribute("aria-label") || "").startsWith("用掉"));
+      if (!btn) return null;
+      return { text: (btn.innerText || "").trim(), width: Math.round(btn.getBoundingClientRect().width) };
+    });
+    check("桌面端保留「用掉 N 单位」文字", Boolean(consume && consume.text.includes("用掉")), JSON.stringify(consume));
+  }
+  await desktopContext.close();
+}
+
 const failed = results.filter((entry) => !entry.ok);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
 console.log(`report -> ${OUT}/verify-experience.json`);

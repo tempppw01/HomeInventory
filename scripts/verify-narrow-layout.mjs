@@ -239,6 +239,19 @@ for (let i = 0; i < 5; i += 1) {
     await page.waitForTimeout(2000);
     const cardReady = await waitForAsyncCards(page);
     check("首页 AI 建议卡片已渲染(触摸目标检查没有空跑)", cardReady, `ready=${cardReady}`);
+
+    // 忽略按钮是绝对定位到右上角的(为了给正文腾出宽度),必须确认它没有压住文字。
+    const overlap = await page.evaluate(() => {
+      const li = document.querySelector('[aria-label="AI 本周建议"] li');
+      if (!li) return null;
+      const dismiss = li.querySelector('button[aria-label^="忽略这条建议"]');
+      const textNode = li.querySelector('b')?.parentElement;
+      if (!dismiss || !textNode) return null;
+      const d = dismiss.getBoundingClientRect();
+      const t = textNode.getBoundingClientRect();
+      return !(d.right < t.left || d.left > t.right || d.bottom < t.top || d.top > t.bottom);
+    });
+    check("建议的忽略按钮不压住正文", overlap === false, `overlap=${overlap}`);
   }
 }
 
