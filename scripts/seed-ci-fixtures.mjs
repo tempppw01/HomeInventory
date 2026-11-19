@@ -49,10 +49,25 @@ try {
     },
   });
 
+  // 再放一件「按个数消耗、非液体」的物品:
+  // 「用掉 1 包」这类按钮只对这种物品出现,而桌面端有断言要检查它的文字标签。
+  const tissue = await prisma.item.create({
+    data: {
+      name: "界面检查·抽纸",
+      category: "日用",
+      type: "CONSUMABLE",
+      unit: "包",
+      quantity: 4,
+      autoTags: "日用,消耗品",
+      storage: "ROOM",
+    },
+  });
+
   const records = [
     { item: milk, qty: 2, price: 12.5, at: monthStart(0, 8) },
     { item: water, qty: 12, price: 2, at: monthStart(1, 12) },
     { item: milk, qty: 3, price: 12.5, at: monthStart(2, 15) },
+    { item: tissue, qty: 6, price: 3.5, at: monthStart(0, 3) },
   ];
   for (const record of records) {
     await prisma.priceRecord.create({
