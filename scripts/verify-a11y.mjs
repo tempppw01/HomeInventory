@@ -1,10 +1,13 @@
-// 键盘可访问性检查:焦点可见、弹窗焦点不逃逸、图片有替代文本、表单控件有名称。
+// 键盘可访问性检查:焦点可见、弹窗焦点不逃逸、图标按钮有名字、图片有替代文本。
 //
 // 为什么补这块:此前所有断言都在验「鼠标/触摸下能不能用」,
 // 键盘与读屏用户看到的却是另一个界面 —— 焦点不可见会让人彻底迷路,
-// 弹窗不困住焦点会一路 Tab 到背后的页面。
+// 弹窗不困住焦点会一路 Tab 到背后的页面,纯图标按钮没有名字只会被念成「按钮」。
 //
 // 每条检查都带「确实测到了东西」的守卫:空页面上「没有不合格的图片」没有意义。
+//
+// 环境差异:未配置 AI 时,「批量识别」入口会提示并跳去设置页(设计如此),
+// 弹窗根本不会出现 —— 所以图片相关的检查按 aiAvailable 跳过,而不是判失败。
 //
 // 用法:PROBE_USER=bgs PROBE_PASS=... node scripts/verify-a11y.mjs
 
@@ -24,13 +27,15 @@ const check = (name, ok, detail = "") => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok ? "" : "  → " + detail}`);
 };
 
-// 1×1 红色 PNG:用于让「图片预览」这类纯客户端渲染的 <img> 真的出现
-const TINY_PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-  "base64",
-);
+// 1×1 红色 PNG:让「图片预览」这类纯客户端渲染的 <img> 真的出现
 const pngPath = join(tmpdir(), "a11y-probe.png");
-writeFileSync(pngPath, TINY_PNG);
+writeFileSync(
+  pngPath,
+  Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "base64",
+  ),
+);
 
 const browser = await launchChromium();
 const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
@@ -43,6 +48,18 @@ if (!auth.ok) {
   await browser.close();
   process.exit(1);
 }
+
+// 未配置 AI 时「批量识别」会跳去设置页,先探测一下,后面的图片检查据此决定是否执行
+const aiAvailable = await page.evaluate(async () => {
+  try {
+    const response = await fetch("/api/dashboard", { cache: "no-store" });
+    if (!response.ok) return false;
+    const body = await response.json();
+    return Boolean(body.aiAvailable);
+  } catch {
+    return false;
+  }
+});
 
 await page.goto(`${BASE}/items`);
 await page.waitForTimeout(2600);
@@ -103,7 +120,6 @@ await dismissBlockingDialogs(page);
 }
 
 // ============ 2.5 图标按钮必须有可访问名 ============
-// 纯图标按钮(看不见文字)如果连 aria-label 都没有,读屏只会念「按钮」。
 {
   const nameless = await page.evaluate(() => {
     return Array.from(document.querySelectorAll("button"))
@@ -119,13 +135,13 @@ await dismissBlockingDialogs(page);
   check("图标按钮都有可访问名", nameless.length === 0, nameless.slice(0, 4).join(" | "));
 }
 
-// ============ 3. 图片预览有替代文本(批量识别弹窗,纯客户端渲染)============
-{
-  // 用 Playwright 的可操作性等待,而不是「DOM 里 click + 固定等待」:
-  // 后者在较慢的机器上可能点击早于 React 挂载,事件没接上,弹窗自然打不开(CI 上就这么红过一次)。
+// ============ 3. 弹窗:图片替代文本 + 焦点不逃逸 + Esc 可关 ============
+if (!aiAvailable) {
+  console.log("      跳过图片替代文本检查:本环境未配置 AI,「批量识别」入口会引导去设置页");
+} else {
   const trigger = page.locator('button[aria-label="AI 批量识别物品"]').first();
   let dialogOpen = false;
-  let triggerDetail = "";
+  let detail = "点击后弹窗未出现";
   try {
     await trigger.waitFor({ state: "visible", timeout: 20000 });
     for (let attempt = 0; attempt < 2 && !dialogOpen; attempt += 1) {
@@ -134,20 +150,15 @@ await dismissBlockingDialogs(page);
       dialogOpen = await page.evaluate(() => Array.from(document.querySelectorAll('[role="dialog"]')).some((node) => node.getBoundingClientRect().height > 0));
     }
   } catch (error) {
-    triggerDetail =
-      `按钮数=${await page.locator('button[aria-label="AI 批量识别物品"]').count()}` +
-      ` 弹窗数=${await page.locator('[role="dialog"]').count()}` +
-      ` 原因=${error instanceof Error ? error.message.split("\n")[0].slice(0, 80) : error}`;
+    detail = error instanceof Error ? error.message.split("\n")[0].slice(0, 100) : String(error);
   }
-  check("能打开「AI 批量识别」弹窗", dialogOpen, triggerDetail || "点击后弹窗未出现");
+  check("能打开「AI 批量识别」弹窗", dialogOpen, detail);
 
   if (dialogOpen) {
     const fileInput = page.locator('[role="dialog"] input[type="file"]').first();
     const hasFileInput = (await fileInput.count()) > 0;
     check("批量识别弹窗里有文件选择框", hasFileInput);
 
-    let images = 0;
-    let missingAlt = [];
     if (hasFileInput) {
       await fileInput.setInputFiles(pngPath);
       await page.waitForTimeout(1200);
@@ -161,19 +172,15 @@ await dismissBlockingDialogs(page);
               return alt === null || alt.trim() === "";
             })
             .map((img) => (img.getAttribute("src") || "").slice(0, 24)),
-          removeButtons: Array.from(document.querySelectorAll('[role="dialog"] button'))
-            .filter((button) => (button.getAttribute("aria-label") || "").includes("移除"))
-            .map((button) => button.getAttribute("aria-label")),
+          removeNamed: Array.from(document.querySelectorAll('[role="dialog"] button'))
+            .filter((button) => (button.getAttribute("aria-label") || "").includes("移除")).length,
         };
       });
-      images = state.total;
-      missingAlt = state.missing;
-      check("图片预览确实渲染出来了(防止空跑)", images > 0, `img=${images}`);
-      check("图片预览都有替代文本(alt)", missingAlt.length === 0, missingAlt.slice(0, 3).join(" | "));
-      check("预览上的移除按钮有可访问名", state.removeButtons.length > 0, `命中=${state.removeButtons.length}`);
+      check("图片预览确实渲染出来了(防止空跑)", state.total > 0, `img=${state.total}`);
+      check("图片预览都有替代文本(alt)", state.missing.length === 0, state.missing.slice(0, 3).join(" | "));
+      check("预览上的移除按钮有可访问名", state.removeNamed > 0, `命中=${state.removeNamed}`);
     }
 
-    // ============ 4. 弹窗内 Tab 焦点不逃逸 ============
     let escaped = null;
     for (let index = 0; index < 12; index += 1) {
       await page.keyboard.press("Tab");
