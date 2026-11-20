@@ -25,6 +25,15 @@ export const ACTIVITY_LABELS: Record<string, string> = {
   PASSWORD_RESET: "重置密码",
   RECOVERY_CODE_CREATE: "生成恢复码",
   ACCOUNT_SETUP: "初始化账号",
+  // 下面这些是服务端**确实会写**、但此前没有中文名的动作 ——
+  // 界面直接渲染 activityLabel(),缺一条就会把英文枚举名暴露给用户。
+  ACCOUNT_CREATE: "创建账号",
+  ACCOUNT_UPDATE: "更新账号",
+  ACCOUNT_DELETE: "删除账号",
+  SESSION_REVOKE: "踢出登录",
+  AI_ANALYZE: "AI 分析",
+  MERGE: "合并物品",
+  SHOPPING_UPDATE: "更新采购项",
 };
 
 export function activityLabel(action: string) {
