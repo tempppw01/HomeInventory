@@ -282,7 +282,7 @@ export function ItemCard({ item, onEdit, onOpenDetail, onImageUpload, onDuplicat
   <button
     type="button"
     onClick={(event) => { event.stopPropagation(); event.preventDefault(); onAi(); }}
-    className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold transition-transform active:scale-95"
+    className="flex min-h-11 shrink-0 items-center rounded-full px-2 text-[10px] font-bold transition-transform active:scale-95 sm:min-h-0 sm:px-1.5 sm:py-0.5"
     style={{ background: "var(--warning-soft, #fff4dc)", color: "#8a571c" }}
     title="物品信息改过,点这里让 AI 重新看一遍"
     aria-label={`重新分析「${item.name}」`}

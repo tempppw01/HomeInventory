@@ -83,6 +83,24 @@ try {
     });
   }
 
+  // 再补一件「AI 结论已过时」的物品:列表卡片会因此出现「建议重新分析」这个胶囊按钮。
+  // 这个按钮在窄屏下曾经只有约 18px 高(点击目标不合格),但 CI 数据里没有这种物品,
+  // 于是窄屏检查一直覆盖不到它 —— 本地却因为演示数据里有而过不去。
+  const stale = new Date();
+  stale.setDate(stale.getDate() - 10);
+  await prisma.item.create({
+    data: {
+      name: "界面检查·AI 结论已过时",
+      category: "日用",
+      type: "CONSUMABLE",
+      unit: "瓶",
+      quantity: 2,
+      aiSummary: "这是旧的 AI 结论,用于让列表显示「建议重新分析」入口",
+      aiAnalyzedAt: stale,
+      updatedAt: new Date(),
+    },
+  });
+
   console.log(`已播种:物品 ${await prisma.item.count()} 件,消费记录 ${await prisma.priceRecord.count()} 条`);
 } finally {
   await prisma.$disconnect();
