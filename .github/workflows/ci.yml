@@ -195,6 +195,8 @@ jobs:
         run: node scripts/verify-modals-a11y.mjs
       - name: 菜单无障碍检查
         run: node scripts/verify-menus-a11y.mjs
+      - name: 颜色对比度检查(明暗两套主题)
+        run: node scripts/verify-contrast.mjs
       - name: 界面体验检查
         env:
           PROBE_USER: leadcheck

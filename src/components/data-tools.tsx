@@ -69,7 +69,13 @@ export function DataTools({ onToast }: { onToast: (message: string) => void }) {
       title="家庭成员"
       stacked
       control={<div className="flex w-full flex-wrap items-center gap-2">
-        {members.map((member) => <span key={member.id} className="rounded-xl px-2.5 py-1.5 text-xs font-bold" style={{ background: "var(--surface-soft)", color: member.color }}>{member.name}</span>)}
+        {members.map((member) => <span key={member.id} className="rounded-xl px-2.5 py-1.5 text-xs font-bold" style={{
+            background: "var(--surface-soft)",
+            // 成员颜色是固定值(默认 #7c3aed),直接当文字色时,深色背景下对比度只有 2.4 左右。
+            // 这里按主题把成员色向「前景色」混一档:浅色主题下变深、深色主题下变亮,两种主题都能达标。
+            "--member-ink": member.color,
+            color: "color-mix(in srgb, var(--member-ink) 68%, var(--foreground))",
+          } as React.CSSProperties}>{member.name}</span>)}
         <div className="ml-auto flex gap-2">
           <input className="input h-11 min-h-11 w-28 py-1 text-xs" aria-label="成员名称" value={name} onChange={(e) => setName(e.target.value)} placeholder="成员名称" />
           <button type="button" onClick={addMember} aria-label="添加成员" title="添加成员" className="btn-ghost grid size-11 min-h-11 place-items-center p-0"><UserPlus size={14} /></button>
