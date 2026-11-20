@@ -119,9 +119,18 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-      # CDN 偶发失败(exit code 100),重试一次
-      - name: 安装 Chromium
-        run: npx playwright install --with-deps chromium || (sleep 10 && npx playwright install --with-deps chromium)
+      # GitHub 的 ubuntu runner 自带 Google Chrome。直接用它可以把
+      # 「下载浏览器 + apt 装依赖」这 ~4 分钟的步骤整个省掉;
+      # 没有系统 Chrome 时才回退到 Playwright 自带的 Chromium(CDN 偶发失败,重试一次)。
+      - name: 准备浏览器
+        run: |
+          if [ -x /usr/bin/google-chrome ]; then
+            echo "使用系统 Chrome:/usr/bin/google-chrome"
+            echo "PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/google-chrome" >> "$GITHUB_ENV"
+          else
+            echo "系统没有 Chrome,安装 Playwright Chromium"
+            npx playwright install --with-deps chromium || (sleep 10 && npx playwright install --with-deps chromium)
+          fi
       # runner 默认没有中文字体,缺字时文字渲染成方块、行数与宽度都会失真。
       - name: 安装中文字体(排版测量需要)
         run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk
