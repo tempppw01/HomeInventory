@@ -86,6 +86,8 @@ jobs:
     outputs:
       version: ${{ steps.meta.outputs.version }}
     steps:
+      # 冒烟脚本在仓库里,需要先 checkout
+      - uses: actions/checkout@v5
       - name: Download digests
         uses: actions/download-artifact@v4
         with:
@@ -127,17 +129,12 @@ jobs:
           set -e
           TAG="${{ steps.meta.outputs.version }}"
           docker run -d --name smoke -p 3199:3000 "${{ env.IMAGE }}:$TAG"
-          ok=0
-          for i in $(seq 1 40); do
-            if curl -fsS http://127.0.0.1:3199/api/health > /dev/null 2>&1; then ok=1; break; fi
-            sleep 3
-          done
           echo '--- 容器日志 ---'
-          docker logs smoke 2>&1 | tail -25 || true
-          curl -fsS http://127.0.0.1:3199/api/health || true
+          docker logs smoke 2>&1 | tail -20 || true
+          # 不只查健康:初始化管理员 → 登录 → 建物品 → 读回来,证明这个镜像是真能用的。
+          node scripts/smoke-test-image.mjs --base http://127.0.0.1:3199 --user smoke --pass "Smoke#2026x"
           docker rm -f smoke > /dev/null 2>&1 || true
-          test "$ok" = "1"
-          echo "冒烟测试通过:${{ env.IMAGE }}:$TAG 可以启动并响应健康检查"
+          echo "冒烟测试通过:${{ env.IMAGE }}:$TAG 可以启动并完成一次完整的读写"
 
       - name: Inspect published manifest
         run: |
@@ -153,6 +150,8 @@ jobs:
     runs-on: ubuntu-24.04-arm
     needs: merge
     steps:
+      # 冒烟脚本在仓库里,需要先 checkout
+      - uses: actions/checkout@v5
       - name: Pull multi-arch image and run
         run: |
           set -e
@@ -160,16 +159,11 @@ jobs:
           if [ -z "$TAG" ]; then echo "拿不到标签版本,使用 latest"; TAG=latest; fi
           echo "runner 架构:$(uname -m)"
           docker run -d --name smoke-arm -p 3198:3000 "${{ env.IMAGE }}:$TAG"
-          ok=0
-          for i in $(seq 1 40); do
-            if curl -fsS http://127.0.0.1:3198/api/health > /dev/null 2>&1; then ok=1; break; fi
-            sleep 3
-          done
           echo '--- 容器日志 ---'
-          docker logs smoke-arm 2>&1 | tail -25 || true
+          docker logs smoke-arm 2>&1 | tail -20 || true
+          node scripts/smoke-test-image.mjs --base http://127.0.0.1:3198 --user smoke --pass "Smoke#2026x"
           docker rm -f smoke-arm > /dev/null 2>&1 || true
-          test "$ok" = "1"
-          echo "arm64 冒烟测试通过"
+          echo "arm64 冒烟测试通过(原生 ARM 上完成一次完整读写)"
 
   release:
     needs: [merge, smoke-arm64]
