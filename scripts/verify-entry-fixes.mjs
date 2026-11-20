@@ -470,7 +470,10 @@ const expiredFixture = await page.evaluate(async () => {
     body: JSON.stringify({ name: "ENT2-过期检查", category: "食品", type: "CONSUMABLE", quantity: 2, minQuantity: 0, remainingPercent: 100, unit: "盒", price: null, purchaseDate: null, expiryDate: yesterday, locationId: null, notes: null, imageUrl: null, recordPurchase: false, purchaseStore: null }),
   });
   const item = await response.json().catch(() => null);
-  localStorage.removeItem(`home-inventory-expiry-notice-${new Date().toISOString().slice(0, 10)}`);
+  // 应用用的是**本地**日期(见 src/components/app/app-provider.tsx),
+  // 这里若按 UTC 日期删,凌晨时段(本地已是次日、UTC 还在当天)会删错键 ——
+  // 于是应用认为「今天已经弹过」,断言就假失败了。干脆把这类键全清掉。
+  Object.keys(localStorage).filter((key) => key.startsWith("home-inventory-expiry-notice-")).forEach((key) => localStorage.removeItem(key));
   return { id: item?.id ?? null, ok: response.ok };
 });
 check("已过期探针物品创建成功", expiredFixture.ok && Boolean(expiredFixture.id), JSON.stringify(expiredFixture));

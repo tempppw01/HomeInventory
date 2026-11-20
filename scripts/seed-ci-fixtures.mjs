@@ -110,6 +110,84 @@ try {
     },
   });
 
+  // 下面这些物品专门用来覆盖「只有特定数据状态才会出现」的界面元素:
+  // 已过期 / 低库存 / 余量见底 / 回收站有东西 / 采购清单非空 / 有任务。
+  // 背景:此前种子数据只有健康状态的物品,于是这些状态的元素在 CI 里从未被对比度、
+  // 窄屏点击目标、无障碍这些检查看到 —— 补上之后第一次就抓到了真问题(深色下表头对比度 2.03)。
+  const past = new Date();
+  past.setDate(past.getDate() - 3);
+  await prisma.item.create({
+    data: {
+      name: "界面检查·已过期酸奶",
+      category: "食品",
+      type: "CONSUMABLE",
+      unit: "盒",
+      quantity: 1,
+      expiryDate: past,
+      storage: "COLD",
+    },
+  });
+
+  await prisma.item.create({
+    data: {
+      name: "界面检查·低库存抽纸",
+      category: "日用",
+      type: "CONSUMABLE",
+      unit: "包",
+      quantity: 1,
+      minQuantity: 5,
+    },
+  });
+
+  await prisma.item.create({
+    data: {
+      name: "界面检查·余量见底洗洁精",
+      category: "清洁",
+      type: "CONSUMABLE",
+      unit: "瓶",
+      quantity: 1,
+      remainingPercent: 8,
+    },
+  });
+
+  // 回收站里放一件,让「回收站」弹窗有内容可渲染
+  const discarded = new Date();
+  discarded.setDate(discarded.getDate() - 1);
+  await prisma.item.create({
+    data: {
+      name: "界面检查·回收站里的旧物",
+      category: "日用",
+      type: "DURABLE",
+      unit: "个",
+      quantity: 1,
+      deletedAt: discarded,
+    },
+  });
+
+  // 采购清单与任务各留一条,让对应视图不是空状态
+  await prisma.shoppingItem.create({
+    data: {
+      name: "界面检查·待采购物品",
+      quantity: 2,
+      unit: "瓶",
+      category: "日用",
+      priority: 2,
+      source: "manual",
+      status: "PENDING",
+    },
+  });
+
+  const due = new Date();
+  due.setDate(due.getDate() + 2);
+  await prisma.householdTask.create({
+    data: {
+      title: "界面检查·换滤芯",
+      dueAt: due,
+      status: "OPEN",
+      recurrence: "NONE",
+    },
+  });
+
   console.log(`已播种:物品 ${await prisma.item.count()} 件,消费记录 ${await prisma.priceRecord.count()} 条`);
 } finally {
   await prisma.$disconnect();
