@@ -34,7 +34,7 @@ export function ItemModal({ locations, allItems, item, onClose, onSaved, aiAvail
       return Array.isArray(parsed) ? parsed.filter((entry): entry is SavedItemTemplate => Boolean(entry && typeof entry.id === "string" && typeof entry.name === "string")).slice(0, 8) : [];
     } catch { return []; }
   });
-  const [saving, setSaving] = useState(false); const [uploading, setUploading] = useState(false); const [aiLoading, setAiLoading] = useState(false); const [moreOpen, setMoreOpen] = useState(false); const [imagePreviewOpen, setImagePreviewOpen] = useState(false); const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false); const [uploading, setUploading] = useState(false); const [aiLoading, setAiLoading] = useState(false); const [moreOpen, setMoreOpen] = useState(false); const [imagePreviewOpen, setImagePreviewOpen] = useState(false); const [error, setError] = useState(""); const [hint, setHint] = useState("");
   const [imageMode, setImageMode] = useState<"upload" | "link">(item?.imageUrl ? "link" : "upload");
   const [imageUrlDraft, setImageUrlDraft] = useState(item?.imageUrl ?? "");
   const [recordPurchase, setRecordPurchase] = useState(!item);
@@ -93,12 +93,14 @@ export function ItemModal({ locations, allItems, item, onClose, onSaved, aiAvail
     });
   };
   const saveAsTemplate = () => {
-    if (!draft.name.trim()) { setError("先填写物品名称，再保存模板"); return; }
+    if (!draft.name.trim()) { setHint(""); setError("先填写物品名称,再保存模板"); return; }
     const template: SavedItemTemplate = { id: crypto.randomUUID(), name: draft.name.trim(), category: draft.category, type: draft.type, quantity: draft.quantity, minQuantity: draft.minQuantity, remainingPercent: draft.remainingPercent, unit: draft.unit, expiryDate: draft.expiryDate, locationId: draft.locationId, notes: draft.notes, usedAt: Date.now() };
     const next = [template, ...savedTemplates.filter((entry) => normalizedItemName(entry.name) !== normalizedItemName(template.name))].slice(0, 8);
     setSavedTemplates(next);
     localStorage.setItem(itemTemplateStorageKey, JSON.stringify(next));
-    setError("模板已保存，下次录入时可以直接使用");
+    // 成功提示不要走 error 通道:那一栏是红字粉底,用户会以为自己操作失败了。
+    setError("");
+    setHint("模板已保存,下次录入时可以直接使用");
   };
   const set = (key: keyof ItemDraft, value: string | number) => setDraft((old) => ({ ...old, [key]: value }));
   const changeQuantityText = (raw: string) => {
@@ -359,7 +361,8 @@ export function ItemModal({ locations, allItems, item, onClose, onSaved, aiAvail
         <button type="button" onClick={focusExpiry} className="min-h-10 shrink-0 font-bold underline">填写有效期</button>
       </div>
     )}
-    {error && <p className="m-0 rounded-xl p-2.5 text-sm text-red-500" style={{ background: "#ffe8eb" }}>{error}</p>}<div className="sticky bottom-0 -mx-5 flex gap-2.5 border-t bg-[var(--surface-solid)] px-5 pb-1 pt-3 sm:-mx-6 sm:px-6" style={{ borderColor: "var(--hairline)" }}><button type="button" onClick={requestClose} className="btn-ghost min-h-11 flex-1">取消</button>{!item && <button type="button" onClick={saveAsTemplate} className="btn-ghost min-h-11 shrink-0 px-3" title="保存名称、分类、单位和常用设置">存为模板</button>}<button disabled={saving || uploading || aiLoading} className="btn-primary min-h-11 flex-1 disabled:opacity-60">{saving ? "保存中…" : item ? "保存修改" : "快速保存"}</button></div>
+    {error && <p className="m-0 rounded-xl p-2.5 text-sm text-red-500" style={{ background: "#ffe8eb" }}>{error}</p>}
+    {hint && !error && <p className="m-0 rounded-xl p-2.5 text-sm font-bold" style={{ background: "var(--success-soft)", color: "var(--success)" }}>{hint}</p>}<div className="sticky bottom-0 -mx-5 flex gap-2.5 border-t bg-[var(--surface-solid)] px-5 pb-1 pt-3 sm:-mx-6 sm:px-6" style={{ borderColor: "var(--hairline)" }}><button type="button" onClick={requestClose} className="btn-ghost min-h-11 flex-1">取消</button>{!item && <button type="button" onClick={saveAsTemplate} className="btn-ghost min-h-11 shrink-0 px-3" title="保存名称、分类、单位和常用设置">存为模板</button>}<button disabled={saving || uploading || aiLoading} className="btn-primary min-h-11 flex-1 disabled:opacity-60">{saving ? "保存中…" : item ? "保存修改" : "快速保存"}</button></div>
   </form></Modal><AnimatePresence>{imagePreviewOpen && draft.imageUrl && <ImageLightbox src={draft.imageUrl} alt={draft.name || "物品图片"} onClose={() => setImagePreviewOpen(false)} />}</AnimatePresence><AnimatePresence>{quickLocationOpen && <QuickLocationDialog onClose={() => setQuickLocationOpen(false)} onCreated={addLocation} />}</AnimatePresence></>;
 }
 
