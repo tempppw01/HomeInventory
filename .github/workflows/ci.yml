@@ -43,6 +43,8 @@ jobs:
     needs: static
     env:
       DATABASE_URL: file:../data/ci.db
+      # 图片上传默认写本地目录;CI 里默认路径(/app/data/uploads)不可写,所以显式指定
+      LOCAL_UPLOAD_DIR: ${{ github.workspace }}/data/uploads
       PROBE_USER: bgs
       PROBE_PASS: Ci#Bootstrap2026
       BASE_URL: http://127.0.0.1:3001
@@ -93,6 +95,8 @@ jobs:
         run: git fetch --depth 1 origin tag v0.0.7 || true
       - name: 跨版本升级演练
         run: node scripts/verify-upgrade-path.mjs
+      - name: 图片上传检查(本地存储)
+        run: node scripts/verify-image-upload.mjs
       - name: 并发行为检查
         run: node scripts/verify-concurrency.mjs
       - name: 补货暂停行为检查
