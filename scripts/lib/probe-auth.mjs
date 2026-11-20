@@ -14,11 +14,21 @@ export async function loginAndConfirm(page, base, user, pass) {
 
   const needsLogin = (await page.locator("#auth-username").count()) > 0;
   if (needsLogin) {
-    await page.fill("#auth-username", user);
-    await page.fill("#auth-password", pass);
-    await page.click('button[type="submit"]');
-    // 登录成功后应用会跳到概览并可能弹出欢迎引导,给足时间
-    await page.waitForTimeout(3200);
+    // 登录接口限速 12 次/分钟/IP:连续跑多个套件时很容易撞上(实测过一次),
+    // 这时页面会停在登录页、看起来像「账号失效」。这里识别出限速就等一等再试。
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await page.fill("#auth-username", user);
+      await page.fill("#auth-password", pass);
+      await page.click('button[type="submit"]');
+      // 登录成功后应用会跳到概览并可能弹出欢迎引导,给足时间
+      await page.waitForTimeout(3200);
+      const stillLogin = (await page.locator("#auth-username").count()) > 0;
+      if (!stillLogin) break;
+      const limited = await page.evaluate(() => /频繁|稍后再试|too many/i.test(document.body.innerText || ""));
+      if (!limited) break;
+      console.log("      登录被限速,等待 20 秒后重试");
+      await page.waitForTimeout(20000);
+    }
   }
 
   const state = await page.evaluate(() => ({
