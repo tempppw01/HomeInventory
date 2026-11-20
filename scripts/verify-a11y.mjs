@@ -86,7 +86,9 @@ await dismissBlockingDialogs(page);
         const rect = node.getBoundingClientRect();
         if (rect.width < 4 || rect.height < 4) return false;
         const id = node.getAttribute("id");
-        return !(node.getAttribute("aria-label") || node.getAttribute("aria-labelledby") || (id && labelFor.has(id)) || node.getAttribute("placeholder"));
+        // labels 包含显式(label[for])与隐式(label 包裹)两种关联,漏掉后者会误报
+        const hasLabel = Boolean(node.labels && node.labels.length);
+        return !(hasLabel || node.getAttribute("aria-label") || node.getAttribute("aria-labelledby") || (id && labelFor.has(id)) || node.getAttribute("placeholder"));
       })
       .map((node) => `${node.tagName.toLowerCase()}[${node.getAttribute("type") || ""}]`);
   });

@@ -56,7 +56,11 @@ function mergeMessages(remote: ChatMessage[], local: ChatMessage[]) {
 export function AiChat({ onClose, items = [], onOpenItem, seed }: { onClose: () => void; items?: Array<{ id: string; name: string }>; onOpenItem?: (id: string) => void; seed?: string | null }) {
   const [messages, setMessages] = useState<ChatMessage[]>([welcome]);
   const [input, setInput] = useState(seed ?? ""); const [attachments, setAttachments] = useState<Attachment[]>([]); const [loading, setLoading] = useState(false); const [webSearch, setWebSearch] = useState(false); const [ready, setReady] = useState(false); const [savingItem, setSavingItem] = useState<number | null>(null); const [recordedItems, setRecordedItems] = useState<Set<number>>(() => new Set());
-  const fileInput = useRef<HTMLInputElement>(null); const scrollRef = useRef<HTMLDivElement>(null); const messagesRef = useRef(messages); const savingHistory = useRef(false); const historyUpdatedAt = useRef<string | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  // 这个面板带模态遮罩(点遮罩即关闭),因此键盘焦点也应当被「关进」面板里:
+  // 否则打开助手后,焦点仍停在背后的页面上 —— Tab 能走到遮罩后面看不见的按钮并误触。
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
+const fileInput = useRef<HTMLInputElement>(null); const scrollRef = useRef<HTMLDivElement>(null); const messagesRef = useRef(messages); const savingHistory = useRef(false); const historyUpdatedAt = useRef<string | null>(null);
   useEscapeClose(onClose);
   const askConfirm = useConfirm();
   useEffect(() => { messagesRef.current = messages; }, [messages]);
@@ -88,7 +92,32 @@ export function AiChat({ onClose, items = [], onOpenItem, seed }: { onClose: () 
     document.addEventListener("visibilitychange", onVisibility);
     return () => { stop(); document.removeEventListener("visibilitychange", onVisibility); };
   }, [ready, loading]);
-  const addFiles = async (files: FileList | File[]) => { const selected = Array.from(files).slice(0, 4); try { const next = await Promise.all(selected.map(readFile)); const stored = await Promise.all(next.map(async (attachment, index) => { if (attachment.kind !== "image") return attachment; const form = new FormData(); form.append("file", selected[index]); const response = await fetch("/api/upload", { method: "POST", body: form }); const body = await response.json(); if (!response.ok || !body.url) throw new Error(body.error || "图片保存失败"); return { ...attachment, url: body.url }; })); setAttachments((current) => [...current, ...stored].slice(0, 4)); } catch (error) { setMessages((current) => [...current, { role: "assistant", content: error instanceof Error ? error.message : "附件读取失败" }]); } };
+
+  // 打开时把焦点移进面板(输入框),关闭时还回触发它的元素。
+  useEffect(() => {
+    const active = document.activeElement;
+    restoreFocusRef.current = active instanceof HTMLElement ? active : null;
+    const focusTarget = panelRef.current?.querySelector<HTMLElement>("textarea, input, button");
+    focusTarget?.focus();
+    return () => { restoreFocusRef.current?.focus?.(); };
+  }, []);
+
+  // 焦点围栏:Tab / Shift+Tab 到边界时回到面板另一端,不逃到遮罩背后。
+  const trapFocus = (event: React.KeyboardEvent) => {
+    if (event.key !== "Tab") return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const focusables = Array.from(panel.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'))
+      .filter((node) => {
+        const rect = node.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+    if (!focusables.length) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+  };  const addFiles = async (files: FileList | File[]) => { const selected = Array.from(files).slice(0, 4); try { const next = await Promise.all(selected.map(readFile)); const stored = await Promise.all(next.map(async (attachment, index) => { if (attachment.kind !== "image") return attachment; const form = new FormData(); form.append("file", selected[index]); const response = await fetch("/api/upload", { method: "POST", body: form }); const body = await response.json(); if (!response.ok || !body.url) throw new Error(body.error || "图片保存失败"); return { ...attachment, url: body.url }; })); setAttachments((current) => [...current, ...stored].slice(0, 4)); } catch (error) { setMessages((current) => [...current, { role: "assistant", content: error instanceof Error ? error.message : "附件读取失败" }]); } };
   const clearContext = async () => { if (!(await askConfirm("清空归物助手的聊天记录和上下文？", { title: "清空聊天记录", confirmLabel: "清空", tone: "danger" }))) return; setMessages([welcome]); setAttachments([]); setRecordedItems(new Set()); localStorage.removeItem(historyKey); };
   // 真正的提交逻辑(表单提交与 Enter 直发都走这里)。
   const submitQuestion = async (questionOverride?: string, options: { skipUserMessage?: boolean } = {}) => { const question = (questionOverride ?? input).trim(); if ((!question && !attachments.length) || loading) return; const userMessage: ChatMessage = { role: "user", content: question || "请识别图片中的物品，并整理成可直接录入家庭库存的信息。", attachments }; const next = options.skipUserMessage ? [...messagesRef.current] : [...messagesRef.current, userMessage]; setMessages(next); setInput(""); setAttachments([]); setLoading(true); try { const payload = next.map((message) => ({ ...message, attachments: message.attachments?.map((attachment) => attachment.kind === "image" && !attachment.dataUrl && attachment.url ? { ...attachment, dataUrl: attachment.url } : attachment) })); const response = await fetch("/api/ai/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: payload, webSearch }) }); const result = await response.json(); setMessages((current) => [...current, { role: "assistant", content: response.ok ? result.answer : result.error || "AI 暂时无法回答", itemDraft: response.ok ? result.itemDraft : undefined }]); } catch { setMessages((current) => [...current, { role: "assistant", content: "网络连接失败，请稍后重试。" }]); } finally { setLoading(false); } };
@@ -138,7 +167,7 @@ export function AiChat({ onClose, items = [], onOpenItem, seed }: { onClose: () 
   };
 
   const paste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => { const files = Array.from(event.clipboardData.files); if (files.length) { event.preventDefault(); void addFiles(files); } };
-  return <><div aria-hidden="true" className="fixed inset-0 z-[95] bg-black/35 backdrop-blur-sm" onMouseDown={onClose} /><div role="dialog" aria-label="归物助手" className="ai-chat-panel fixed bottom-4 right-4 z-[100] flex h-[min(720px,calc(100vh-32px))] w-[min(460px,calc(100vw-32px))] flex-col overflow-hidden rounded-3xl border shadow-2xl" style={{ background: "var(--surface-solid)", borderColor: "var(--hairline)" }}><header className="flex items-center gap-3 border-b p-4" style={{ borderColor: "var(--hairline)" }}><div className="hidden size-10 shrink-0 place-items-center rounded-2xl sm:grid" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><Bot size={20} /></div><div className="min-w-0 flex-1"><h2 className="m-0 truncate whitespace-nowrap text-base font-black leading-snug sm:text-lg">归物助手</h2><p className="mb-0 mt-1 truncate whitespace-nowrap text-xs muted">库存问答、图片识别和联网资料查询</p></div>{askedQuestions.length >= 2 && (
+  return <><div aria-hidden="true" className="fixed inset-0 z-[95] bg-black/35 backdrop-blur-sm" onMouseDown={onClose} /><div ref={panelRef} onKeyDown={trapFocus} role="dialog" aria-label="归物助手" className="ai-chat-panel fixed bottom-4 right-4 z-[100] flex h-[min(720px,calc(100vh-32px))] w-[min(460px,calc(100vw-32px))] flex-col overflow-hidden rounded-3xl border shadow-2xl" style={{ background: "var(--surface-solid)", borderColor: "var(--hairline)" }}><header className="flex items-center gap-3 border-b p-4" style={{ borderColor: "var(--hairline)" }}><div className="hidden size-10 shrink-0 place-items-center rounded-2xl sm:grid" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><Bot size={20} /></div><div className="min-w-0 flex-1"><h2 className="m-0 truncate whitespace-nowrap text-base font-black leading-snug sm:text-lg">归物助手</h2><p className="mb-0 mt-1 truncate whitespace-nowrap text-xs muted">库存问答、图片识别和联网资料查询</p></div>{askedQuestions.length >= 2 && (
   <button
     type="button"
     onClick={() => setShowOutline((value) => !value)}

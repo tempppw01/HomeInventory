@@ -31,6 +31,7 @@ run "打印月报" node scripts/verify-report-page.mjs
 run "窄屏布局" node scripts/verify-narrow-layout.mjs
 run "布局预算" node scripts/verify-layout-budget.mjs
 run "键盘无障碍" node scripts/verify-a11y.mjs
+run "弹窗无障碍" node scripts/verify-modals-a11y.mjs
 run "规模性能" node scripts/scale-perf-test.mjs
 
 printf '\n'

@@ -87,6 +87,18 @@ export function AccountSettings({ onToast }: { onToast: (message: string) => voi
   // 「密码与恢复码」面向所有已登录账号,与下面的管理员面板互不影响。
   const [recovery, setRecovery] = useState<{ loading: boolean; hasCode: boolean; generatedAt: string | null }>({ loading: true, hasCode: false, generatedAt: null });
   const [recoveryOpen, setRecoveryOpen] = useState(false);
+
+  // 这两个弹窗(重置密码 / 恢复码)是手写的,没有用共享 Modal 组件 ——
+  // 所以 Esc 关闭要自己接,否则键盘用户按 Esc 没有任何反应(其余弹窗都支持)。
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (resetTarget) { setResetTarget(null); return; }
+      if (recoveryOpen) setRecoveryOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [resetTarget, recoveryOpen]);
   const [recoveryPassword, setRecoveryPassword] = useState("");
   const [showRecoveryPassword, setShowRecoveryPassword] = useState(false);
   const [recoveryError, setRecoveryError] = useState("");
