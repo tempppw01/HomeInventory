@@ -254,6 +254,25 @@ const baseItem = { name: "T-基础物品", category: "日用", type: "CONSUMABLE
   record("audits", "确认数超过总数应被夹到总数", clamp.body?.confirmed === 4, `confirmed=${clamp.body?.confirmed}`);
 }
 
+// ============ 5d. AI 批量识别的坏输入 ============
+// 真实踩到的坑:传一张解不开的图片(8MB 垃圾数据)时返回 **500「服务器暂时开小差了」**,
+// 而 ai-image 里其实有很明确的中文原因(格式不支持 / 太大 / 无法处理),
+// 只是 apiError 不认识 AiImageError,给吞成了 500。
+// 这里守住:坏图片必须是 4xx + 可读原因,不能是 5xx。
+{
+  const empty = await call("POST", "/api/ai/batch-identify", { images: [] });
+  record("ai", "批量识别:没有图片应 400 并说明原因", empty.status === 400 && String(empty.body?.error ?? "").includes("图片"), `status=${empty.status} error=${empty.body?.error ?? "-"}`);
+
+  const wrongType = await call("POST", "/api/ai/batch-identify", { images: [{ dataUrl: "data:text/plain;base64,aGVsbG8=" }] });
+  record("ai", "批量识别:非图片内容应 400", wrongType.status === 400, `status=${wrongType.status} error=${wrongType.body?.error ?? "-"}`);
+
+  const garbage = await call("POST", "/api/ai/batch-identify", { images: [{ dataUrl: `data:image/jpeg;base64,${"A".repeat(512 * 1024)}` }] });
+  record("ai", "批量识别:解不开的图片应是 4xx 而不是 500", garbage.status >= 400 && garbage.status < 500, `status=${garbage.status} error=${garbage.body?.error ?? "-"}`);
+
+  const message = String(garbage.body?.error ?? "");
+  record("ai", "批量识别:坏图片要给出可读的中文原因", message.includes("图片"), `error=${message}`);
+}
+
 // ============ 6. tasks ============
 {
   const r = await call("POST", "/api/tasks", { title: "T-任务", description: "", dueAt: new Date(Date.now() + 86400000).toISOString(), recurrence: "NONE" });

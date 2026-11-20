@@ -3,7 +3,10 @@ import sharp from "sharp";
 const maxSourceBytes = 12 * 1024 * 1024;
 const maxImageEdge = 1600;
 
-export class AiImageError extends Error {}
+export class AiImageError extends Error {
+  // 显式命名:apiError 靠这个名字把它映射成 400,而不必 import 本模块(否则 sharp 会被拖进每个路由)。
+  override readonly name = "AiImageError";
+}
 
 function imageBufferFromDataUrl(dataUrl: string) {
   const match = /^data:(image\/(?:jpeg|png|webp|gif));base64,([\s\S]+)$/i.exec(dataUrl);
