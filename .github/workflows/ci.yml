@@ -167,6 +167,8 @@ jobs:
         run: node scripts/verify-narrow-layout.mjs
       - name: 布局预算检查(阅读区占比)
         run: node scripts/verify-layout-budget.mjs
+      - name: 键盘无障碍检查
+        run: node scripts/verify-a11y.mjs
       - name: 界面体验检查
         env:
           PROBE_USER: leadcheck
