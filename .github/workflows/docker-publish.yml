@@ -57,6 +57,9 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
+      # 必须 checkout:发布说明来自仓库里的 .github/release-notes/<tag>.md,
+      # 没有这一步工作区是空的,文件判断永远为假(踩过:v0.0.8 发出去只有 Full Changelog)。
+      - uses: actions/checkout@v5
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
