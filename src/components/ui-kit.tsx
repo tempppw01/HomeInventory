@@ -1,6 +1,8 @@
 "use client";
 
+import { cloneElement, isValidElement } from "react";
 import type { ButtonHTMLAttributes, HTMLAttributes, LabelHTMLAttributes, ReactNode } from "react";
+import type { ReactElement } from "react";
 import type { LucideIcon } from "lucide-react";
 import { ChevronRight } from "lucide-react";
 
@@ -81,6 +83,18 @@ export function Chip({ children, active = false, tone = "neutral", onClick, titl
   );
 }
 
+// 行内控件(下拉、数字输入这类)没有可见文字,单靠旁边的标题读屏是读不到关联的。
+// 这里在「控件自身没有可访问名、也没有文字子节点」时,用行标题给它补一个 aria-label。
+// 有文字的按钮(如「设位置」)不动,免得把它的名字覆盖成行标题。
+function trailingNeedsLabel(node: ReactNode): ReactElement<{ "aria-label"?: string }> | null {
+  if (!isValidElement(node)) return null;
+  const element = node as ReactElement<{ "aria-label"?: string; "aria-labelledby"?: string; children?: ReactNode }>;
+  const props = element.props;
+  if (props["aria-label"] || props["aria-labelledby"]) return null;
+  if (typeof element.type === "string") return ["select", "input", "textarea"].includes(element.type) ? element : null;
+  return props.children == null ? element : null;
+}
+
 export function ListRow({ icon: Icon, title, meta, trailing, onClick, active = false, onContextMenu }: {
   icon?: LucideIcon;
   title: ReactNode;
@@ -102,7 +116,14 @@ export function ListRow({ icon: Icon, title, meta, trailing, onClick, active = f
         <span className="block truncate text-sm font-bold">{title}</span>
         {meta && <span className="mt-0.5 block truncate text-xs leading-5 muted">{meta}</span>}
       </span>
-      {trailing ?? (onClick && <ChevronRight size={16} className="shrink-0 muted" />)}
+      {(() => {
+        const labelable = trailingNeedsLabel(trailing);
+        if (labelable && typeof title === "string" && title.trim()) {
+          return cloneElement(labelable, { "aria-label": title.trim() });
+        }
+        return trailing;
+      })()}
+      
     </>
   );
   const className = "flex w-full min-w-0 items-center gap-3 border-t px-1 py-3 text-left transition-colors first:border-t-0 first:pt-0 first:pb-3";

@@ -164,7 +164,22 @@ export function PrintStudio({ items, onClose }: { items: Item[]; onClose: () => 
   };
 
   useEscapeClose(onClose);
-  return <div role="dialog" aria-modal="true" aria-label="二维码打印" className="print-studio-root fixed inset-0 z-[80] flex flex-col bg-black/45 backdrop-blur-sm lg:flex-row">
+
+  // 这个面板会压在二维码弹窗之上(嵌套弹窗),打开时要把焦点移进打印面板 ——
+  // 否则键盘焦点还留在下层弹窗里,Tab 会穿过看不见的控件。
+  const panelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const target = panelRef.current?.querySelector<HTMLElement>("select, input, button");
+    target?.focus();
+    return () => {
+      const restore = opener && opener.isConnected
+        ? opener
+        : (opener?.getAttribute("aria-label") ? document.querySelector<HTMLElement>(`[aria-label="${CSS.escape(opener.getAttribute("aria-label") ?? "")}"]`) : null);
+      restore?.focus?.();
+    };
+  }, []);
+  return <div ref={panelRef} role="dialog" aria-modal="true" aria-label="二维码打印" className="print-studio-root fixed inset-0 z-[80] flex flex-col bg-black/45 backdrop-blur-sm lg:flex-row">
     <style>{printCss}</style>
     <aside className="print-controls z-10 w-full overflow-y-auto p-4 sm:p-5 lg:h-screen lg:w-[380px]" style={{ background: "var(--surface-solid)" }}>
       <div className="flex items-start gap-3"><div className="flex-1"><h2 className="m-0 flex items-center gap-2 text-xl font-black"><Printer size={20} />二维码打印</h2><p className="mb-0 mt-1 text-xs muted">已选择 {items.length} 件物品，共 {printableItems.length} 个标签。</p></div><button onClick={onClose} aria-label="关闭二维码打印" className="btn-ghost grid size-11 min-h-11 shrink-0 place-items-center p-0"><X size={17} /></button></div>
@@ -210,11 +225,11 @@ export function PrintStudio({ items, onClose }: { items: Item[]; onClose: () => 
   </div>;
 }
 
-function NumberInput({ value, min, max, step = "1", integer = false, onChange, className = "" }: { value: number; min: number; max: number; step?: string; integer?: boolean; onChange: (value: number) => void; className?: string }) {
+function NumberInput({ value, min, max, step = "1", integer = false, onChange, className = "", ...inputProps }: { "aria-label"?: string; "aria-labelledby"?: string; value: number; min: number; max: number; step?: string; integer?: boolean; onChange: (value: number) => void; className?: string }) {
   const [draft, setDraft] = useState(String(value));
   const focused = useRef(false);
   useEffect(() => { if (!focused.current) setDraft(String(value)); }, [value]);
   const commit = (raw: string) => { const parsed = Number(raw); if (!Number.isFinite(parsed)) { setDraft(String(value)); return; } const next = Math.min(max, Math.max(min, integer ? Math.floor(parsed) : parsed)); setDraft(String(next)); onChange(next); };
-  return <input className={`input ${className}`.trim()} type="text" inputMode={integer ? "numeric" : "decimal"} autoComplete="off" value={draft} onChange={(event) => { const next = event.target.value; if (next === "" || (integer ? /^\d*$/.test(next) : /^\d*(?:\.\d*)?$/.test(next))) setDraft(next); }} onBlur={() => { focused.current = false; commit(draft); }} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit(draft); event.currentTarget.blur(); } }} onFocus={() => { focused.current = true; }} role="spinbutton" aria-valuemin={min} aria-valuemax={max} aria-valuenow={Number.isFinite(Number(draft)) && draft !== "" ? Number(draft) : min} aria-valuetext={draft || String(min)} step={step} />;
+  return <input {...inputProps} className={`input ${className}`.trim()} type="text" inputMode={integer ? "numeric" : "decimal"} autoComplete="off" value={draft} onChange={(event) => { const next = event.target.value; if (next === "" || (integer ? /^\d*$/.test(next) : /^\d*(?:\.\d*)?$/.test(next))) setDraft(next); }} onBlur={() => { focused.current = false; commit(draft); }} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit(draft); event.currentTarget.blur(); } }} onFocus={() => { focused.current = true; }} role="spinbutton" aria-valuemin={min} aria-valuemax={max} aria-valuenow={Number.isFinite(Number(draft)) && draft !== "" ? Number(draft) : min} aria-valuetext={draft || String(min)} step={step} />;
 }
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (value: boolean) => void; label: string }) { return <button type="button" onClick={() => onChange(!checked)} className="inline-flex min-h-11 items-center rounded-2xl px-3.5 text-xs font-bold" style={checked ? { background: "var(--primary)", color: "var(--on-primary)" } : { background: "var(--surface-soft)", color: "var(--muted)" }}>{label}</button>; }
