@@ -96,6 +96,7 @@ jobs:
   # 代价是重复一次 npm ci / build / 起服务 —— 换来的是反馈更快。
   ui:
     name: 界面检查(月报 / 窄屏 / 体验 / 录入修复 / P2 功能)
+    timeout-minutes: 25
     runs-on: ubuntu-latest
     needs: static
     env:
@@ -132,8 +133,27 @@ jobs:
             npx playwright install --with-deps chromium || (sleep 10 && npx playwright install --with-deps chromium)
           fi
       # runner 默认没有中文字体,缺字时文字渲染成方块、行数与宽度都会失真。
+      #
+      # 这里不用 apt:实测 `apt-get install fonts-noto-cjk` 会偶发卡住(某次卡了 20 分钟
+      # 把整个作业拖死)。改成直接下载一个字体文件 + fc-cache,并缓存下载结果;
+      # 再给步骤加超时,卡住就快速失败而不是挂着。
+      - name: 缓存中文字体
+        uses: actions/cache@v4
+        with:
+          path: ~/.fonts-noto
+          key: noto-sans-sc-v1
       - name: 安装中文字体(排版测量需要)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk
+        timeout-minutes: 5
+        run: |
+          mkdir -p ~/.fonts-noto
+          if [ ! -s ~/.fonts-noto/NotoSansSC-Regular.otf ]; then
+            curl -fsSL --max-time 120 --retry 2 -o ~/.fonts-noto/NotoSansSC-Regular.otf \
+              https://raw.githubusercontent.com/googlefonts/noto-cjk/main/Sans/SubsetOTF/SC/NotoSansSC-Regular.otf
+          fi
+          fc-cache -f ~/.fonts-noto > /dev/null
+          count=$(fc-list | grep -ci "Noto Sans SC" || true)
+          echo "检测到 Noto Sans SC 字体数:$count"
+          test "$count" -ge 1
       - run: npm run build
       - name: 初始化数据库与账号
         run: |
