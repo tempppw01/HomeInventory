@@ -1,5 +1,6 @@
 // 验证 P2 新增功能:详情页变更记录、CSV 导出、批量改数量、到期日历、SW 注册。
 import { launchChromium } from "./lib/browser.mjs";
+import { dismissBlockingDialogs } from "./lib/probe-auth.mjs";
 
 const BASE = process.env.BASE_URL || "http://127.0.0.1:3001";
 const results = [];
@@ -36,6 +37,15 @@ await page.waitForTimeout(1800);
 
 // 1) 到期日历
 {
+  // 新建「今天到期」的物品后,应用会按天自动弹出「提醒中心」,先关掉再操作日历。
+  await dismissBlockingDialogs(page);
+  // 再兜一层:任何仍然可见的弹层都关掉,避免它挡住日历的点击(CI 上出过这种超时)。
+  for (let guard = 0; guard < 4; guard += 1) {
+    const stillOpen = await page.evaluate(() => Array.from(document.querySelectorAll('[role="dialog"]')).some((node) => node.getBoundingClientRect().height > 0));
+    if (!stillOpen) break;
+    await page.keyboard.press("Escape").catch(() => {});
+    await page.waitForTimeout(400);
+  }
   const details = page.locator("summary:has-text('到期日历')").first();
   const visible = await details.count();
   if (visible) {

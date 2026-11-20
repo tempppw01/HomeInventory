@@ -33,13 +33,28 @@ export async function loginAndConfirm(page, base, user, pass) {
 }
 
 /** 关掉欢迎引导等阻塞性弹层(最多试几次)。 */
+// 关掉「会自动出现」的弹层。目前有两个:
+//   · 欢迎引导(首次进入应用时弹)
+//   · 提醒中心(库里有到期物品时每天自动弹一次)
+// 只针对这两类,不会误关测试自己打开的对话框。
 export async function dismissBlockingDialogs(page) {
-  for (let i = 0; i < 5; i += 1) {
+  for (let i = 0; i < 6; i += 1) {
     const welcome = page.locator('[role="dialog"][aria-label="欢迎使用"]:visible');
-    if ((await welcome.count()) === 0) return;
-    const skip = page.locator('[aria-label="暂时跳过欢迎引导"]:visible');
-    if (await skip.count()) await skip.first().click({ timeout: 3000 }).catch(() => {});
-    else await page.keyboard.press("Escape").catch(() => {});
-    await page.waitForTimeout(400);
+    if ((await welcome.count()) > 0) {
+      const skip = page.locator('[aria-label="暂时跳过欢迎引导"]:visible');
+      if (await skip.count()) await skip.first().click({ timeout: 3000 }).catch(() => {});
+      else await page.keyboard.press("Escape").catch(() => {});
+      await page.waitForTimeout(400);
+      continue;
+    }
+    const reminders = page.locator('[role="dialog"][aria-label="提醒中心"]:visible');
+    if ((await reminders.count()) > 0) {
+      const close = page.locator('[role="dialog"]:visible button[aria-label="关闭提醒中心"]');
+      if (await close.count()) await close.first().click({ timeout: 3000 }).catch(() => {});
+      else await page.keyboard.press("Escape").catch(() => {});
+      await page.waitForTimeout(400);
+      continue;
+    }
+    return;
   }
 }
