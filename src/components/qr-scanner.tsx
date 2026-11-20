@@ -34,17 +34,65 @@ type BarcodeDetectorCtor = {
 
 const barcodeDetectorCtor = () => (globalThis as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector;
 
+/**
+ * 纯 JS 的兜底解码器(jsQR)。
+ *
+ * 为什么需要:原生 BarcodeDetector 只有 Chromium 系支持 —— Firefox / Safari 一直没有,
+ * 部分桌面版 Chrome 上也不可用。没有兜底时,「扫码盘点」在这些浏览器上等于不存在,
+ * 用户只能在「手动」里敲物品编号。
+ *
+ * 解码器**按需加载**:只有真的要用到扫描(且没有原生能力)时才下载这段代码,不影响首屏。
+ * 返回的对象与原生 BarcodeDetector 形状一致,调用方无需分支。
+ */
+async function createJsQrDetector(): Promise<BarcodeDetectorLike | null> {
+  try {
+    // 变量名不能叫 module:Next 的 lint 规则禁止给叫 module 的变量赋值
+    const imported = (await import("jsqr")) as unknown as { default?: unknown };
+    const decode = (imported.default ?? imported) as (
+      data: Uint8ClampedArray, width: number, height: number, options?: { inversionAttempts?: string },
+    ) => { data?: string } | null;
+    if (typeof decode !== "function") return null;
+
+    return {
+      detect: async (source) => {
+        const element = source as HTMLVideoElement & HTMLImageElement;
+        const naturalWidth = element.videoWidth || element.naturalWidth || element.width || 0;
+        const naturalHeight = element.videoHeight || element.naturalHeight || element.height || 0;
+        if (!naturalWidth || !naturalHeight) return [];
+
+        // 缩小到最长边 640px 再解码:相机帧本来就有 1080p,直接全尺寸解码会明显吃 CPU,
+        // 而二维码在这个尺寸下依然清晰可辨。
+        const scale = Math.min(1, 640 / Math.max(naturalWidth, naturalHeight));
+        const width = Math.max(1, Math.round(naturalWidth * scale));
+        const height = Math.max(1, Math.round(naturalHeight * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        if (!context) return [];
+        context.drawImage(source as CanvasImageSource, 0, 0, width, height);
+        const image = context.getImageData(0, 0, width, height);
+        const result = decode(image.data, image.width, image.height, { inversionAttempts: "attemptBoth" });
+        return result?.data ? [{ rawValue: result.data } as DetectedBarcode] : [];
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function createDetector(): Promise<BarcodeDetectorLike | null> {
   const Ctor = barcodeDetectorCtor();
-  if (typeof Ctor !== "function") return null;
+  // 没有原生能力,或原生能力不支持二维码 → 用随包携带的纯 JS 解码器兜底
+  if (typeof Ctor !== "function") return createJsQrDetector();
   try {
     if (typeof Ctor.getSupportedFormats === "function") {
       const formats = await Ctor.getSupportedFormats();
-      if (!Array.isArray(formats) || !formats.includes("qr_code")) return null;
+      if (!Array.isArray(formats) || !formats.includes("qr_code")) return createJsQrDetector();
     }
     return new Ctor({ formats: ["qr_code"] });
   } catch {
-    return null;
+    return createJsQrDetector();
   }
 }
 

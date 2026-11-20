@@ -450,6 +450,11 @@ jobs:
           PROBE_USER: leadcheck
           PROBE_PASS: Lead#2026
         run: node scripts/verify-offline.mjs
+      - name: 扫码识别检查(图片模式,不需要摄像头)
+        env:
+          PROBE_USER: leadcheck
+          PROBE_PASS: Lead#2026
+        run: node scripts/verify-qr-scan.mjs
       - name: 打印排版检查
         env:
           PROBE_USER: leadcheck
