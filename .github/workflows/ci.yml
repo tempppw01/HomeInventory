@@ -85,6 +85,8 @@ jobs:
         run: node scripts/verify-account-ops.mjs
       - name: 备份往返日期核对
         run: node scripts/verify-backup-dates.mjs
+      - name: 搜索历史与自动备份检查
+        run: node scripts/verify-search-history-and-backup.mjs
       - name: 任务周期核对(读库确认)
         run: node scripts/verify-task-recurrence.mjs
 
