@@ -27,7 +27,8 @@
     "test:scale": "node scripts/scale-perf-test.mjs",
     "test:ui": "node scripts/verify-experience.mjs && node scripts/verify-entry-fixes.mjs && node scripts/verify-report-page.mjs && node scripts/verify-narrow-layout.mjs && node scripts/verify-layout-budget.mjs && node scripts/verify-a11y.mjs && node scripts/verify-modals-a11y.mjs && node scripts/verify-menus-a11y.mjs && node scripts/verify-contrast.mjs && node scripts/verify-bundle-budget.mjs",
     "test:all": "sh scripts/run-all-tests.sh",
-    "test:p2": "node scripts/verify-p2-features.mjs"
+    "test:p2": "node scripts/verify-p2-features.mjs",
+    "test:perf": "SCALE_TARGET=80 node scripts/scale-perf-test.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",

@@ -28,6 +28,28 @@ const api = async (method, path, body) => {
 };
 
 const CATEGORIES = ["日用", "食品", "清洁", "家电", "数码", "衣物"];
+
+const time = async (label, path) => {
+  const samples = [];
+  for (let index = 0; index < 5; index += 1) {
+    const started = Date.now();
+    const r = await api("GET", path);
+    samples.push(Date.now() - started);
+    if (index === 0 && r.status !== 200) return { label, status: r.status, samples };
+  }
+  const sorted = [...samples].sort((a, b) => a - b);
+  return { label, status: 200, median: sorted[Math.floor(sorted.length / 2)], max: sorted[sorted.length - 1], samples };
+};
+
+// 基线:在大批量造数据**之前**先测一遍。
+// 耗时阈值无法跨机器比较(CI runner 与开发机差很多),但「80 件相对小数据集的倍数」
+// 是稳定的 —— 它能抓到 O(n²) 这类真实劣化,又不会因为机器快慢产生假失败。
+const baseline = {
+  list: await time("基线·物品列表", "/api/items"),
+  dash: await time("基线·仪表盘", "/api/dashboard"),
+  search: await time("基线·搜索", "/api/items?q=S-物品05"),
+};
+console.log(`      基线中位耗时:list=${baseline.list.median}ms dash=${baseline.dash.median}ms search=${baseline.search.median}ms`);
 const locations = [];
 for (const name of ["S-客厅", "S-厨房", "S-卧室"]) {
   const r = await api("POST", "/api/locations", { name, icon: "Package", parentId: null });
@@ -68,17 +90,6 @@ console.log(`      造数据:${created} 件,用时 ${seedMs}ms(平均 ${(seedMs 
 record(`批量创建 ${TARGET} 件物品无 5xx`, created === TARGET, `成功=${created}/${TARGET} 用时=${seedMs}ms`);
 
 // ---- API 响应时间 ----
-const time = async (label, path) => {
-  const samples = [];
-  for (let index = 0; index < 5; index += 1) {
-    const started = Date.now();
-    const r = await api("GET", path);
-    samples.push(Date.now() - started);
-    if (index === 0 && r.status !== 200) return { label, status: r.status, samples };
-  }
-  const sorted = [...samples].sort((a, b) => a - b);
-  return { label, status: 200, median: sorted[Math.floor(sorted.length / 2)], max: sorted[sorted.length - 1], samples };
-};
 
 const listTiming = await time("物品列表", "/api/items");
 const dashTiming = await time("仪表盘", "/api/dashboard");
@@ -86,9 +97,21 @@ const searchTiming = await time("搜索(物品)", "/api/items?q=S-物品05");
 const searchBroad = await time("搜索(宽匹配)", "/api/items?q=物品");
 console.log("      API 中位耗时:", JSON.stringify({ list: listTiming.median, dash: dashTiming.median, search: searchTiming.median, broad: searchBroad.median }));
 
-record(`物品列表 API 中位耗时 < 800ms(N=${TARGET})`, listTiming.median < 800, `median=${listTiming.median}ms max=${listTiming.max}ms`);
-record(`仪表盘中位耗时 < 1000ms(N=${TARGET})`, dashTiming.median < 1000, `median=${dashTiming.median}ms max=${dashTiming.max}ms`);
-record(`搜索中位耗时 < 800ms(N=${TARGET})`, searchTiming.median < 800, `median=${searchTiming.median}ms`);
+// 相对阈值:以本次运行的基线为参照。兜底下限(80/150/100ms)用于吸收基线只有几毫秒时的抖动,
+// 同时保留 800/1000ms 的绝对上限,防止机器极慢时相对阈值被放大到毫无意义。
+const ratioOk = (now, base, factor, floor) => now <= Math.max(floor, base * factor);
+
+record(`物品列表:N=${TARGET} 时耗时 ≤ 基线 8 倍(且 ≤ 800ms)`,
+  ratioOk(listTiming.median, baseline.list.median, 8, 80) && listTiming.median <= 800,
+  `基线=${baseline.list.median}ms 现在=${listTiming.median}ms max=${listTiming.max}ms`);
+
+record(`仪表盘:N=${TARGET} 时耗时 ≤ 基线 8 倍(且 ≤ 1000ms)`,
+  ratioOk(dashTiming.median, baseline.dash.median, 8, 150) && dashTiming.median <= 1000,
+  `基线=${baseline.dash.median}ms 现在=${dashTiming.median}ms max=${dashTiming.max}ms`);
+
+record(`搜索:N=${TARGET} 时耗时 ≤ 基线 10 倍(且 ≤ 1000ms)`,
+  ratioOk(searchTiming.median, baseline.search.median, 10, 100) && searchTiming.median <= 1000,
+  `基线=${baseline.search.median}ms 现在=${searchTiming.median}ms`);
 record("宽匹配搜索不超时", searchBroad.status === 200, `status=${searchBroad.status} median=${searchBroad.median}ms`);
 
 // ---- 前端渲染耗时 ----

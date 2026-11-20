@@ -189,6 +189,12 @@ jobs:
         run: node scripts/verify-narrow-layout.mjs
       - name: 传输体积预算检查
         run: node scripts/verify-bundle-budget.mjs
+      # 规模性能:阈值是**相对**的(与本次运行的基线比较),所以可以进 CI ——
+      # 耗时的绝对值随机器变化,但「80 件相对小数据集的倍数」是稳定的。
+      - name: 规模性能检查(相对基线)
+        env:
+          SCALE_TARGET: 80
+        run: node scripts/scale-perf-test.mjs
       - name: 布局预算检查(阅读区占比)
         run: node scripts/verify-layout-budget.mjs
       - name: 失败时打印服务日志
