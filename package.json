@@ -25,7 +25,7 @@
     "test:backup": "node scripts/backup-roundtrip-test.mjs",
     "test:edge": "node scripts/edge-input-test.mjs",
     "test:scale": "node scripts/scale-perf-test.mjs",
-    "test:ui": "node scripts/verify-experience.mjs && node scripts/verify-entry-fixes.mjs && node scripts/verify-report-page.mjs && node scripts/verify-narrow-layout.mjs && node scripts/verify-layout-budget.mjs && node scripts/verify-a11y.mjs && node scripts/verify-modals-a11y.mjs && node scripts/verify-menus-a11y.mjs && node scripts/verify-contrast.mjs && node scripts/verify-bundle-budget.mjs && node scripts/verify-item-template.mjs && node scripts/verify-item-detail.mjs && node scripts/verify-item-merge.mjs && node scripts/verify-restock-pause-ui.mjs && node scripts/verify-weekly-review.mjs && node scripts/verify-empty-states.mjs && node scripts/verify-offline.mjs",
+    "test:ui": "node scripts/verify-experience.mjs && node scripts/verify-entry-fixes.mjs && node scripts/verify-report-page.mjs && node scripts/verify-narrow-layout.mjs && node scripts/verify-layout-budget.mjs && node scripts/verify-a11y.mjs && node scripts/verify-modals-a11y.mjs && node scripts/verify-menus-a11y.mjs && node scripts/verify-contrast.mjs && node scripts/verify-bundle-budget.mjs && node scripts/verify-item-template.mjs && node scripts/verify-item-detail.mjs && node scripts/verify-item-merge.mjs && node scripts/verify-restock-pause-ui.mjs && node scripts/verify-weekly-review.mjs && node scripts/verify-empty-states.mjs && node scripts/verify-offline.mjs && node scripts/verify-print-layout.mjs",
     "test:all": "sh scripts/run-all-tests.sh",
     "test:p2": "node scripts/verify-p2-features.mjs"
   },
