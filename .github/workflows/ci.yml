@@ -140,19 +140,21 @@ jobs:
       - name: 缓存中文字体
         uses: actions/cache@v4
         with:
-          path: ~/.fonts-noto
-          key: noto-sans-sc-v1
+          # 放到 fontconfig 默认就会扫描的目录,自定义目录需要额外写配置
+          path: ~/.local/share/fonts
+          key: noto-sans-sc-v2
       - name: 安装中文字体(排版测量需要)
         timeout-minutes: 5
         run: |
-          mkdir -p ~/.fonts-noto
-          if [ ! -s ~/.fonts-noto/NotoSansSC-Regular.otf ]; then
-            curl -fsSL --max-time 120 --retry 2 -o ~/.fonts-noto/NotoSansSC-Regular.otf \
+          mkdir -p ~/.local/share/fonts
+          if [ ! -s ~/.local/share/fonts/NotoSansSC-Regular.otf ]; then
+            curl -fsSL --max-time 120 --retry 2 -o ~/.local/share/fonts/NotoSansSC-Regular.otf \
               https://raw.githubusercontent.com/googlefonts/noto-cjk/main/Sans/SubsetOTF/SC/NotoSansSC-Regular.otf
           fi
-          fc-cache -f ~/.fonts-noto > /dev/null
-          count=$(fc-list | grep -ci "Noto Sans SC" || true)
-          echo "检测到 Noto Sans SC 字体数:$count"
+          fc-cache -f > /dev/null
+          count=$(fc-list 2>/dev/null | grep -ci "noto sans" || true)
+          echo "检测到 Noto 字体数:$count"
+          fc-list 2>/dev/null | grep -i "noto sans" | head -3 || true
           test "$count" -ge 1
       - run: npm run build
       - name: 初始化数据库与账号
