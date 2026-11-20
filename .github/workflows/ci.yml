@@ -94,8 +94,8 @@ jobs:
 
   # 界面检查单独成作业:与 api 作业并行跑,总时长从 11+ 分钟回到 ~6 分钟。
   # 代价是重复一次 npm ci / build / 起服务 —— 换来的是反馈更快。
-  ui:
-    name: 界面检查(月报 / 窄屏 / 体验 / 录入修复 / P2 功能)
+  ui-layout:
+    name: 界面检查·布局(月报 / 窄屏 / 布局预算)
     timeout-minutes: 25
     runs-on: ubuntu-latest
     needs: static
@@ -189,6 +189,99 @@ jobs:
         run: node scripts/verify-narrow-layout.mjs
       - name: 布局预算检查(阅读区占比)
         run: node scripts/verify-layout-budget.mjs
+      - name: 失败时打印服务日志
+        if: failure()
+        run: tail -100 server.log
+
+  ui-a11y:
+    name: 界面检查·无障碍(键盘 / 弹窗 / 菜单 / 对比度)
+    timeout-minutes: 25
+    runs-on: ubuntu-latest
+    needs: static
+    env:
+      # 这套检查必须有真实浏览器:装不上就该失败,而不是跳过之后显示「通过」
+      REQUIRE_BROWSER: "1"
+      DATABASE_URL: file:../data/ci.db
+      PROBE_USER: bgs
+      PROBE_PASS: Ci#Bootstrap2026
+      BASE_URL: http://127.0.0.1:3001
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate --schema prisma/schema.prisma
+      # 浏览器缓存:省时间,也减少对 Playwright CDN 的依赖次数
+      - name: 缓存 Playwright 浏览器
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      # GitHub 的 ubuntu runner 自带 Google Chrome。直接用它可以把
+      # 「下载浏览器 + apt 装依赖」这 ~4 分钟的步骤整个省掉;
+      # 没有系统 Chrome 时才回退到 Playwright 自带的 Chromium(CDN 偶发失败,重试一次)。
+      - name: 准备浏览器
+        run: |
+          if [ -x /usr/bin/google-chrome ]; then
+            echo "使用系统 Chrome:/usr/bin/google-chrome"
+            echo "PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/google-chrome" >> "$GITHUB_ENV"
+          else
+            echo "系统没有 Chrome,安装 Playwright Chromium"
+            npx playwright install --with-deps chromium || (sleep 10 && npx playwright install --with-deps chromium)
+          fi
+      # runner 默认没有中文字体,缺字时文字渲染成方块、行数与宽度都会失真。
+      #
+      # 这里不用 apt:实测 `apt-get install fonts-noto-cjk` 会偶发卡住(某次卡了 20 分钟
+      # 把整个作业拖死)。改成直接下载一个字体文件 + fc-cache,并缓存下载结果;
+      # 再给步骤加超时,卡住就快速失败而不是挂着。
+      - name: 缓存中文字体
+        uses: actions/cache@v4
+        with:
+          # 放到 fontconfig 默认就会扫描的目录,自定义目录需要额外写配置
+          path: ~/.local/share/fonts
+          key: noto-sans-sc-v2
+      - name: 安装中文字体(排版测量需要)
+        timeout-minutes: 5
+        run: |
+          mkdir -p ~/.local/share/fonts
+          if [ ! -s ~/.local/share/fonts/NotoSansSC-Regular.otf ]; then
+            curl -fsSL --max-time 120 --retry 2 -o ~/.local/share/fonts/NotoSansSC-Regular.otf \
+              https://raw.githubusercontent.com/googlefonts/noto-cjk/main/Sans/SubsetOTF/SC/NotoSansSC-Regular.otf
+          fi
+          fc-cache -f > /dev/null
+          count=$(fc-list 2>/dev/null | grep -ci "noto sans" || true)
+          echo "检测到 Noto 字体数:$count"
+          fc-list 2>/dev/null | grep -i "noto sans" | head -3 || true
+          test "$count" -ge 1
+      - run: npm run build
+      - name: 初始化数据库与账号
+        run: |
+          mkdir -p data
+          npx prisma db push --schema prisma/schema.prisma --skip-generate
+          node -e "
+            const { PrismaClient } = require('@prisma/client');
+            const { randomBytes, scryptSync } = require('node:crypto');
+            const salt = randomBytes(16).toString('hex');
+            const hash = salt + ':' + scryptSync(process.env.PROBE_PASS, salt, 64).toString('hex');
+            (async () => {
+              const prisma = new PrismaClient();
+              await prisma.user.create({ data: { username: process.env.PROBE_USER, displayName: 'CI', passwordHash: hash, role: 'ADMIN' } });
+              await prisma.\$disconnect();
+            })();
+          "
+          node scripts/make-probe-accounts.mjs
+      - name: 启动服务
+        run: |
+          PORT=3001 node node_modules/next/dist/bin/next start > server.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3001/api/health > /dev/null; then echo "ready"; break; fi
+            sleep 2
+          done
+      # 月报图表依赖消费记录:空库下页面没问题,但「图表必须渲染」的断言就失去意义。
+      - name: 播种界面检查数据
+        run: node scripts/seed-ci-fixtures.mjs
       - name: 键盘无障碍检查
         run: node scripts/verify-a11y.mjs
       - name: 弹窗无障碍检查
@@ -197,6 +290,99 @@ jobs:
         run: node scripts/verify-menus-a11y.mjs
       - name: 颜色对比度检查(明暗两套主题)
         run: node scripts/verify-contrast.mjs
+      - name: 失败时打印服务日志
+        if: failure()
+        run: tail -100 server.log
+
+  ui-flows:
+    name: 界面检查·流程(体验 / 录入修复 / P2)
+    timeout-minutes: 25
+    runs-on: ubuntu-latest
+    needs: static
+    env:
+      # 这套检查必须有真实浏览器:装不上就该失败,而不是跳过之后显示「通过」
+      REQUIRE_BROWSER: "1"
+      DATABASE_URL: file:../data/ci.db
+      PROBE_USER: bgs
+      PROBE_PASS: Ci#Bootstrap2026
+      BASE_URL: http://127.0.0.1:3001
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate --schema prisma/schema.prisma
+      # 浏览器缓存:省时间,也减少对 Playwright CDN 的依赖次数
+      - name: 缓存 Playwright 浏览器
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      # GitHub 的 ubuntu runner 自带 Google Chrome。直接用它可以把
+      # 「下载浏览器 + apt 装依赖」这 ~4 分钟的步骤整个省掉;
+      # 没有系统 Chrome 时才回退到 Playwright 自带的 Chromium(CDN 偶发失败,重试一次)。
+      - name: 准备浏览器
+        run: |
+          if [ -x /usr/bin/google-chrome ]; then
+            echo "使用系统 Chrome:/usr/bin/google-chrome"
+            echo "PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/google-chrome" >> "$GITHUB_ENV"
+          else
+            echo "系统没有 Chrome,安装 Playwright Chromium"
+            npx playwright install --with-deps chromium || (sleep 10 && npx playwright install --with-deps chromium)
+          fi
+      # runner 默认没有中文字体,缺字时文字渲染成方块、行数与宽度都会失真。
+      #
+      # 这里不用 apt:实测 `apt-get install fonts-noto-cjk` 会偶发卡住(某次卡了 20 分钟
+      # 把整个作业拖死)。改成直接下载一个字体文件 + fc-cache,并缓存下载结果;
+      # 再给步骤加超时,卡住就快速失败而不是挂着。
+      - name: 缓存中文字体
+        uses: actions/cache@v4
+        with:
+          # 放到 fontconfig 默认就会扫描的目录,自定义目录需要额外写配置
+          path: ~/.local/share/fonts
+          key: noto-sans-sc-v2
+      - name: 安装中文字体(排版测量需要)
+        timeout-minutes: 5
+        run: |
+          mkdir -p ~/.local/share/fonts
+          if [ ! -s ~/.local/share/fonts/NotoSansSC-Regular.otf ]; then
+            curl -fsSL --max-time 120 --retry 2 -o ~/.local/share/fonts/NotoSansSC-Regular.otf \
+              https://raw.githubusercontent.com/googlefonts/noto-cjk/main/Sans/SubsetOTF/SC/NotoSansSC-Regular.otf
+          fi
+          fc-cache -f > /dev/null
+          count=$(fc-list 2>/dev/null | grep -ci "noto sans" || true)
+          echo "检测到 Noto 字体数:$count"
+          fc-list 2>/dev/null | grep -i "noto sans" | head -3 || true
+          test "$count" -ge 1
+      - run: npm run build
+      - name: 初始化数据库与账号
+        run: |
+          mkdir -p data
+          npx prisma db push --schema prisma/schema.prisma --skip-generate
+          node -e "
+            const { PrismaClient } = require('@prisma/client');
+            const { randomBytes, scryptSync } = require('node:crypto');
+            const salt = randomBytes(16).toString('hex');
+            const hash = salt + ':' + scryptSync(process.env.PROBE_PASS, salt, 64).toString('hex');
+            (async () => {
+              const prisma = new PrismaClient();
+              await prisma.user.create({ data: { username: process.env.PROBE_USER, displayName: 'CI', passwordHash: hash, role: 'ADMIN' } });
+              await prisma.\$disconnect();
+            })();
+          "
+          node scripts/make-probe-accounts.mjs
+      - name: 启动服务
+        run: |
+          PORT=3001 node node_modules/next/dist/bin/next start > server.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3001/api/health > /dev/null; then echo "ready"; break; fi
+            sleep 2
+          done
+      # 月报图表依赖消费记录:空库下页面没问题,但「图表必须渲染」的断言就失去意义。
+      - name: 播种界面检查数据
+        run: node scripts/seed-ci-fixtures.mjs
       - name: 界面体验检查
         env:
           PROBE_USER: leadcheck
