@@ -426,6 +426,11 @@ jobs:
           PROBE_USER: leadcheck
           PROBE_PASS: Lead#2026
         run: node scripts/verify-weekly-review.mjs
+      - name: 空状态检查
+        env:
+          PROBE_USER: leadcheck
+          PROBE_PASS: Lead#2026
+        run: node scripts/verify-empty-states.mjs
       - name: 录入与交互修复检查
         env:
           PROBE_USER: leadcheck
