@@ -61,7 +61,42 @@ export function AppChrome({ children }: { children?: React.ReactNode }) {
     const next = window.location.pathname + (params.toString() ? `?${params.toString()}` : "");
     window.history.replaceState(null, "", next);
   }, [setChatSeed, setChatOpen]);
-  // Keeps keyboard focus inside whichever modal is open, returns it to the
+
+  // 焦点兜底:任何弹窗关闭后,如果焦点掉到了 body,就还回它打开前的那个元素。
+  //
+  // 为什么放在这里而不是每个弹窗组件里:弹窗有十来个(共享 Modal 与各自手写的都有),
+  // 逐个维护必然漏;而「关闭后焦点掉到 body」这个现象是统一的 ——
+  // 键盘用户遇到它就得从页面开头重新 Tab 一遍。
+  // 只在「焦点确实丢了」时才动手,避免和组件自己更精确的焦点管理打架。
+  useEffect(() => {
+    let lastFocused: HTMLElement | null = null;
+    const onFocusIn = (event: FocusEvent) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      // 只记弹窗之外的元素:那才是「打开弹窗之前」用户所在的位置。
+      if (target.closest('[role="dialog"]')) return;
+      lastFocused = target;
+    };
+    document.addEventListener("focusin", onFocusIn);
+    // 全局观察器会非常频繁地触发,用 rAF 去抖:每帧最多判断一次,避免拖慢渲染。
+    let scheduled = false;
+    const observer = new MutationObserver(() => {
+      if (scheduled) return;
+      scheduled = true;
+      requestAnimationFrame(() => {
+        scheduled = false;
+        const hasDialog = Boolean(document.querySelector('[role="dialog"]'));
+        if (hasDialog) return;
+        if (document.activeElement && document.activeElement !== document.body) return;
+        if (lastFocused && lastFocused.isConnected) lastFocused.focus();
+      });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      document.removeEventListener("focusin", onFocusIn);
+      observer.disconnect();
+    };
+  }, []);  // Keeps keyboard focus inside whichever modal is open, returns it to the
   // trigger on close, and stops the page behind from scrolling.
   useModalFocusManagement();
 

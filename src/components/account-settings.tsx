@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { useRef, FormEvent, useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Check, ClipboardCopy, Eye, EyeOff, History, KeyRound, Loader2, LogOut, MonitorX, ShieldCheck, UserPlus, Users, X } from "lucide-react";
 import { generatePassword, PASSWORD_MIN_LENGTH } from "@/lib/password";
@@ -87,6 +87,25 @@ export function AccountSettings({ onToast }: { onToast: (message: string) => voi
   // 「密码与恢复码」面向所有已登录账号,与下面的管理员面板互不影响。
   const [recovery, setRecovery] = useState<{ loading: boolean; hasCode: boolean; generatedAt: string | null }>({ loading: true, hasCode: false, generatedAt: null });
   const [recoveryOpen, setRecoveryOpen] = useState(false);
+
+  // 关闭弹窗后把焦点还给触发它的按钮(否则会掉到 body,键盘用户得从头 Tab)。
+  const openerRef = useRef<HTMLElement | null>(null);
+  const anyDialogOpen = Boolean(resetTarget) || recoveryOpen;
+  useEffect(() => {
+    if (anyDialogOpen) {
+      if (document.activeElement instanceof HTMLElement) openerRef.current = document.activeElement;
+      return;
+    }
+    const opener = openerRef.current;
+    // 原节点可能已被 React 替换,这时按可访问名重新找回来(直接 focus 一个脱离文档的节点是无效的)。
+    const target = opener && opener.isConnected
+      ? opener
+      : (opener?.getAttribute("aria-label")
+          ? document.querySelector<HTMLElement>(`[aria-label="${CSS.escape(opener.getAttribute("aria-label") ?? "")}"]`)
+          : null);
+    target?.focus?.();
+    openerRef.current = null;
+  }, [anyDialogOpen]);
 
   // 这两个弹窗(重置密码 / 恢复码)是手写的,没有用共享 Modal 组件 ——
   // 所以 Esc 关闭要自己接,否则键盘用户按 Esc 没有任何反应(其余弹窗都支持)。

@@ -25,6 +25,20 @@ import { ClipboardCopy, ExternalLink } from "lucide-react";
 const dialogPanelStyle = { background: "var(--surface-solid)" } as const;
 const dialogPanelClass = "w-full overflow-y-auto rounded-[28px] p-5 shadow-2xl sm:p-6";
 export function Modal({ title, subtitle, onClose, children }: { title: string; subtitle?: string; onClose: () => void; children: React.ReactNode }) {
+  // 关闭时把焦点还给触发它的元素。
+  // 不做这件事的话,键盘用户关掉弹窗后焦点会掉到 body 上,再按 Tab 就从页面开头重新走一遍。
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    return () => {
+      // 原节点可能已被 React 替换,这时按可访问名重新找回来(直接 focus 一个脱离文档的节点是无效的)。
+      const target = opener && opener.isConnected
+        ? opener
+        : (opener?.getAttribute("aria-label")
+            ? document.querySelector<HTMLElement>(`[aria-label="${CSS.escape(opener.getAttribute("aria-label") ?? "")}"]`)
+            : null);
+      target?.focus?.();
+    };
+  }, []);
   useEscapeClose(onClose);
   // 手机上软键盘只缩小 visualViewport、不缩小布局视口,固定 88dvh 的弹层会把
   // 底部(含保存按钮)留在键盘后面。跟随 visualViewport 收一次高度即可。

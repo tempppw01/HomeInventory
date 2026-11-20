@@ -124,6 +124,8 @@ for (const surface of SURFACES) {
     continue;
   }
 
+  // 记住触发它的元素,关闭后焦点应当回到这里(否则键盘用户会「掉」到页面开头)。
+  await trigger.evaluate((node) => { node.dataset.a11yTrigger = "1"; }).catch(() => {});
   try {
     await trigger.click({ timeout: 10000 });
   } catch (error) {
@@ -167,6 +169,21 @@ for (const surface of SURFACES) {
   await page.waitForTimeout(700);
   const stillOpen = await page.evaluate(() => Array.from(document.querySelectorAll('[role="dialog"]')).some((node) => node.getBoundingClientRect().height > 0));
   check(`${prefix}:Esc 能关闭`, !stillOpen, "按 Esc 后弹窗仍在");
+
+  // 关闭后焦点应回到触发它的按钮(至少不能掉到 body 上)
+  const focusAfterClose = await page.evaluate(() => {
+    const active = document.activeElement;
+    return {
+      tag: active ? active.tagName : null,
+      isBody: !active || active === document.body,
+      isTrigger: Boolean(active instanceof HTMLElement && active.dataset && active.dataset.a11yTrigger === "1"),
+    };
+  });
+  check(
+    `${prefix}:关闭后焦点回到触发它的按钮`,
+    focusAfterClose.isTrigger,
+    `焦点在 ${focusAfterClose.isBody ? "body" : focusAfterClose.tag}(不是触发按钮)`,
+  );
 
   // 兜底:万一没关掉,别把状态带到下一个弹窗
   for (let index = 0; index < 3; index += 1) {
