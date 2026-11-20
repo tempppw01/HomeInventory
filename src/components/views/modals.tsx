@@ -7,7 +7,7 @@
 import { motion } from "motion/react";
 import { QRCodeSVG } from "qrcode.react";
 import {
-  Check, ChevronRight, MapPin, Package, Pencil, Printer, ShoppingBasket, X } from "lucide-react";
+  CalendarCheck, Check, ChevronRight, MapPin, Package, Pencil, Printer, ShoppingBasket, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import type { Item, Location } from "@/types";
 import { isLiquidConsumable } from "@/lib/item-metrics";
@@ -19,6 +19,7 @@ import { units, request } from "../shared";
 import { ContextMenu, useContextMenu, type ContextMenuItem } from "@/components/context-menu";
 import { copyToClipboard } from "@/lib/clipboard";
 import { ClipboardCopy, ExternalLink } from "lucide-react";
+import { isWeeklyReviewDay, weekdayLabel } from "@/lib/weekly-review";
 
 // 弹窗统一语言:28px 圆角 + 暖面(--surface-solid)+ 柔和 scrim。
 // 面板样式集中在这里,避免各个弹窗各写一套背景与圆角造成割裂。
@@ -56,13 +57,22 @@ export function Modal({ title, subtitle, onClose, children }: { title: string; s
   return <motion.div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 p-0 backdrop-blur-sm sm:items-center sm:p-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(e) => e.target === e.currentTarget && onClose()} onFocusCapture={(event) => { if (window.innerWidth >= 768) return; const target = event.target as HTMLElement; window.setTimeout(() => target.scrollIntoView({ block: "nearest" }), 220); }}><motion.div role="dialog" aria-modal="true" aria-label={title} initial={{ y: 12, opacity: 0, scale: .98 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: 12, opacity: 0, scale: .98, transition: { duration: .18, ease: [0.23, 1, 0.32, 1] } }} transition={{ type: "spring", damping: 28, stiffness: 340 }} className="max-h-[min(92vh,88dvh)] w-full max-w-lg overflow-y-auto rounded-t-[28px] rounded-b-none p-5 shadow-2xl sm:rounded-[28px] sm:p-6" style={keyboardInset ? { background: "var(--surface-solid)", maxHeight: `${Math.max(240, viewportHeight - 16)}px` } : { background: "var(--surface-solid)" }}><div className="mb-5 flex items-start gap-3 sm:mb-6"><div className="min-w-0 flex-1"><h2 className="m-0 text-xl font-black leading-snug">{title}</h2><p className="mb-0 mt-1 text-xs muted">{subtitle}</p></div><button type="button" onClick={onClose} className="btn-ghost grid size-11 min-h-11 shrink-0 place-items-center p-0" aria-label={`关闭${title}`} title="关闭"><X size={17} /></button></div>{children}</motion.div></motion.div>;
 }
 
-export function NotificationsModal({ lowStock, expiring, expired, onClose, onOpenItem, onOpenDetail, onDispose, onShopping }: { lowStock: Item[]; expiring: Item[]; expired: Item[]; onClose: () => void; onOpenItem: (item: Item) => void; onOpenDetail: (item: Item) => void; onDispose: (item: Item) => void; onShopping: () => void }) {
+export function NotificationsModal({ lowStock, expiring, expired, onClose, onOpenItem, onOpenDetail, onDispose, onShopping, weeklyReview, onStartReview }: { lowStock: Item[]; expiring: Item[]; expired: Item[]; onClose: () => void; onOpenItem: (item: Item) => void; onOpenDetail: (item: Item) => void; onDispose: (item: Item) => void; onShopping: () => void; weeklyReview?: { weeklyReviewEnabled: boolean; weeklyReviewDay: number } | null; onStartReview?: () => void }) {
   const alerts = [
     ...expired.map((item) => ({ item, label: `${["食品", "饮品"].includes(item.category) ? "食品" : "物品"}已过期 · ${new Date(item.expiryDate!).toLocaleDateString("zh-CN")}`, color: "var(--danger)" })),
     ...expiring.filter((item) => !expired.some((old) => old.id === item.id)).map((item) => ({ item, label: `${["食品", "饮品"].includes(item.category) ? "食品即将到期" : "即将到期"} · ${new Date(item.expiryDate!).toLocaleDateString("zh-CN")}`, color: "var(--warning)" })),
     ...lowStock.filter((item) => !expired.some((old) => old.id === item.id)).map((item) => ({ item, label: isLiquidConsumable(item) && item.remainingPercent <= 20 ? `剩余量仅 ${Math.round(item.remainingPercent)}%` : `库存仅剩 ${item.quantity} ${item.unit}`, color: "#e37d25" })),
   ];
-  return <Modal title="提醒中心" subtitle={alerts.length ? `${alerts.length} 条待处理事项` : undefined} onClose={onClose}><div className="space-y-1">{alerts.map(({ item, label, color }) => (
+  // 今天是用户设定的每周盘点日 → 给一个直接进入盘点的入口。
+  // (这个偏好以前是死开关:能设、能存、没人用。)
+  const weeklyDue = isWeeklyReviewDay(weeklyReview);
+
+  return <Modal title="提醒中心" subtitle={alerts.length ? `${alerts.length} 条待处理事项` : undefined} onClose={onClose}>
+    {weeklyDue && onStartReview && <div className="mb-2 flex items-center gap-3 rounded-2xl p-3" style={{ background: "var(--primary-soft)" }}>
+      <CalendarCheck size={18} className="shrink-0" style={{ color: "var(--primary)" }} />
+      <span className="min-w-0 flex-1 text-sm font-bold">今天是你设定的每周盘点日({weekdayLabel(weeklyReview?.weeklyReviewDay ?? 0)})</span>
+      <button type="button" onClick={onStartReview} className="btn-primary h-9 shrink-0 px-3 text-xs">开始盘点</button>
+    </div>}<div className="space-y-1">{alerts.map(({ item, label, color }) => (
           <AlertRow
             key={`${item.id}-${label}`}
             item={item}

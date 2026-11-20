@@ -3,6 +3,7 @@
 import { BellRing, CalendarClock } from "lucide-react";
 import { useEffect, useState } from "react";
 import { SettingsBadge, SettingsRow, SettingsSection, SettingsSelect, SettingsSwitch } from "@/components/settings-primitives";
+import { WEEKDAY_LABELS } from "@/lib/weekly-review";
 
 type Preferences = { expiryReminderDays: number; lowStockReminder: boolean; weeklyReviewEnabled: boolean; weeklyReviewDay: number };
 
@@ -10,7 +11,7 @@ type Preferences = { expiryReminderDays: number; lowStockReminder: boolean; week
 // 这样接口 payload(expiryReminderDays / weeklyReviewDay 仍是 number)与改造前完全一致。
 const EXPIRY_OPTIONS = [["3", "3 天"], ["7", "7 天"], ["14", "14 天"], ["30", "30 天"]] as const;
 const WEEKDAY_OPTIONS = [["0", "周日"], ["1", "周一"], ["2", "周二"], ["3", "周三"], ["4", "周四"], ["5", "周五"], ["6", "周六"]] as const;
-const WEEKDAY_LABELS: Record<number, string> = { 0: "周日", 1: "周一", 2: "周二", 3: "周三", 4: "周四", 5: "周五", 6: "周六" };
+
 
 export function HouseholdPreferences({ onToast }: { onToast: (message: string) => void }) {
   const [value, setValue] = useState<Preferences>({ expiryReminderDays: 7, lowStockReminder: true, weeklyReviewEnabled: true, weeklyReviewDay: 0 });
