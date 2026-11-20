@@ -270,7 +270,14 @@ const baseItem = { name: "T-基础物品", category: "日用", type: "CONSUMABLE
   record("ai", "批量识别:解不开的图片应是 4xx 而不是 500", garbage.status >= 400 && garbage.status < 500, `status=${garbage.status} error=${garbage.body?.error ?? "-"}`);
 
   const message = String(garbage.body?.error ?? "");
-  record("ai", "批量识别:坏图片要给出可读的中文原因", message.includes("图片"), `error=${message}`);
+  // 环境差异:没配 AI 时,接口会在压缩图片**之前**返回「请先在设置中配置 AI 接口」,
+  // 这本身是正确行为(总比去处理一张坏图好)。所以:先断言「有可读的中文原因」,
+  // 再按是否配置了 AI 决定要不要断言原因与图片有关。
+  record("ai", "批量识别:坏图片返回了可读的中文原因", message.length > 0, `error=${message}`);
+
+  const aiConfigured = message.length > 0 && !message.includes("配置 AI");
+  record("ai", "批量识别:已配置 AI 时坏图片提示与图片有关", aiConfigured ? message.includes("图片") : true, `aiConfigured=${aiConfigured} error=${message}`);
+  if (!aiConfigured) console.log("      提示:本环境未配置 AI,跳过「提示与图片有关」的断言(配置检查先返回)")
 }
 
 // ============ 6. tasks ============
