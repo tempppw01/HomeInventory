@@ -187,6 +187,8 @@ jobs:
         run: node scripts/verify-report-page.mjs
       - name: 窄屏(320px)布局检查
         run: node scripts/verify-narrow-layout.mjs
+      - name: 传输体积预算检查
+        run: node scripts/verify-bundle-budget.mjs
       - name: 布局预算检查(阅读区占比)
         run: node scripts/verify-layout-budget.mjs
       - name: 失败时打印服务日志
