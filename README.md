@@ -203,7 +203,8 @@ MYSQL_ROOT_PASSWORD=请修改为另一个安全密码
 然后启动：
 
 ```powershell
-docker compose -f docker-compose.yml -f docker-compose.mysql.yml up -d --build
+# 拉取已发布镜像启动(推荐);从源码构建时加 --build
+docker compose -f docker-compose.yml -f docker-compose.mysql.yml up -d
 ```
 
 </details>
