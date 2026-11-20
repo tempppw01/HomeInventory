@@ -11,12 +11,34 @@ const optionalDate = z
   .optional()
   .transform((value, ctx) => {
     if (value == null || value === "") return null;
-    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value).trim());
-    if (!match) {
+    const raw = String(value).trim();
+    // 只认标准 ISO 8601 时间(可带时区)。不能用「JS 能解析就算数」:
+    // 那样 2026/12/31、Dec 31 2026 之类也会被接受,非法输入就漏过去了。
+    const isoDateTime = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:?\d{2})?$/;
+    const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+    let year; let month; let day;
+    if (dateOnly) {
+      [, year, month, day] = dateOnly;
+    } else if (isoDateTime.test(raw)) {
+      // 兼容 ISO 时间戳(旧备份、外部调用):按 **UTC 日历日**取值。
+      //
+      // 为什么不按「本地日」:服务器时区会变(本机 Windows 是 +08,生产 Docker 是 UTC),
+      // 同一份备份在两处会恢复出不同日期。UTC 是唯一机器无关的取法。
+      // 局限:旧备份由 +08 的服务器导出时是「本地零点 → UTC 前一天 16:00」,
+      // 这类记录按 UTC 取值会比原意早一天;新导出的备份已改为 YYYY-MM-DD,不再有歧义。
+      const parsed = new Date(raw);
+      if (Number.isNaN(parsed.getTime())) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "日期格式不正确,应为 2026-11-20" });
+        return z.NEVER;
+      }
+      year = String(parsed.getUTCFullYear());
+      month = String(parsed.getUTCMonth() + 1).padStart(2, "0");
+      day = String(parsed.getUTCDate()).padStart(2, "0");
+    } else {
+      // 既不是 YYYY-MM-DD,也不是标准 ISO 时间 → 明确拒绝(不要落到下面按 NaN 处理)
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "日期格式不正确,应为 2026-11-20" });
       return z.NEVER;
     }
-    const [, year, month, day] = match;
     const date = new Date(Number(year), Number(month) - 1, Number(day));
     // 2026-02-31 这类「格式对但日子不存在」的日期会被自动进位,这里挡掉。
     if (date.getFullYear() !== Number(year) || date.getMonth() !== Number(month) - 1 || date.getDate() !== Number(day)) {

@@ -81,6 +81,8 @@ jobs:
       - run: node scripts/auth-matrix-test.mjs
       - run: node scripts/backup-roundtrip-test.mjs
       - run: node scripts/edge-input-test.mjs
+      - name: 备份往返日期核对
+        run: node scripts/verify-backup-dates.mjs
       - name: 任务周期核对(读库确认)
         run: node scripts/verify-task-recurrence.mjs
 
