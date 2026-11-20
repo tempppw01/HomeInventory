@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import { apiError, requireAdminUser } from "@/lib/api";
+import { localDateString } from "@/lib/local-date";
 
 export const dynamic = "force-dynamic";
 
@@ -10,8 +11,8 @@ export async function POST() {
   try {
     const user = await requireAdminUser();
     const preference = await prisma.householdPreference.upsert({ where: { id: "default" }, create: {}, update: {} });
-    const today = new Date().toISOString().slice(0, 10);
-    if (preference.lastAutoBackupAt?.toISOString().slice(0, 10) === today) return NextResponse.json({ skipped: true });
+    const today = localDateString();
+    if (preference.lastAutoBackupAt && localDateString(preference.lastAutoBackupAt) === today) return NextResponse.json({ skipped: true });
     const [items, locations, shopping, priceRecords, members, activities] = await Promise.all([
       prisma.item.findMany({ orderBy: { createdAt: "asc" } }),
       prisma.location.findMany({ orderBy: { createdAt: "asc" } }),

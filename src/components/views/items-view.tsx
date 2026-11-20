@@ -19,6 +19,7 @@ import { useConfirm } from "@/components/confirm-dialog";
 import { Chip, Empty, ListRow, Panel, Screen, Toolbar } from "@/components/ui-kit";
 import { ReadOnlyContext, ItemQuickFilter, expiryDays, expiryDateLabel, request } from "../shared";
 import { Modal } from "./modals";
+import { localDateString } from "@/lib/local-date";
 
 const TYPE_FILTERS = [["ALL", "全部"], ["DURABLE", "耐用品"], ["CONSUMABLE", "消耗品"], ["MEDICINE", "医药"]] as const;
 
@@ -113,7 +114,7 @@ export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, lo
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `归物-物品清单-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `归物-物品清单-${localDateString()}.csv`;
     link.click();
     URL.revokeObjectURL(url);
     onToast(`已导出 ${items.length} 件物品`);

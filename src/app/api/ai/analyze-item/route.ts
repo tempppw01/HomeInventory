@@ -7,6 +7,7 @@ import { localUploadDataUrl } from "@/lib/oss";
 import { AiImageError, compressAiImageDataUrl } from "@/lib/ai-image";
 import { rateLimit } from "@/lib/rate-limit";
 import { AiRequestError, asRecord, connectionError, extractAnalysis, providerErrorDetail, providerFailure, type JsonRecord } from "@/lib/ai-analyze";
+import { localDateString } from "@/lib/local-date";
 
 export const runtime = "nodejs";
 
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
     const medicineRules = isMedicine
       ? "这是医药物品：summary 请简短说明药品用途；storageAdvice 请写说明书或保存要点；usageAdvice 请写适应症与常见成人用法用量（仅在包装或说明书信息明确时填写）；replenishmentAdvice 请写禁忌、特殊人群、就医或药师提醒。不得根据图片或名称猜测处方剂量、儿童剂量、相互作用或诊断；任何无法确认的信息都必须明确写“请以包装说明书或药师指导为准”。"
       : "";
-    const text = `当前日期：${new Date().toISOString().slice(0, 10)}\n任务：${task}\n现有物品信息：${JSON.stringify(input.item || {})}\n用户补充：${input.hint || "无"}\n${medicineRules}\n请返回严格 JSON，不要 Markdown。字段：name, category, type(DURABLE或CONSUMABLE), unit, suggestedExpiryDate(YYYY-MM-DD或null), shelfLifeDays(数字或null), expiryReason, storageAdvice, usageAdvice, replenishmentAdvice, suggestedNotes, confidence(0到1), summary。耐用品不设置保质期，如果 type 为 DURABLE，suggestedExpiryDate 和 shelfLifeDays 必须返回 null。不能确认时保留现有值或返回 null，不要虚构精确保质期。`;
+    const text = `当前日期：${localDateString()}\n任务：${task}\n现有物品信息：${JSON.stringify(input.item || {})}\n用户补充：${input.hint || "无"}\n${medicineRules}\n请返回严格 JSON，不要 Markdown。字段：name, category, type(DURABLE或CONSUMABLE), unit, suggestedExpiryDate(YYYY-MM-DD或null), shelfLifeDays(数字或null), expiryReason, storageAdvice, usageAdvice, replenishmentAdvice, suggestedNotes, confidence(0到1), summary。耐用品不设置保质期，如果 type 为 DURABLE，suggestedExpiryDate 和 shelfLifeDays 必须返回 null。不能确认时保留现有值或返回 null，不要虚构精确保质期。`;
     // Local uploads are read into memory for the provider; normalize them through
     // the same image pipeline used by chat so oversized photos do not trigger
     // provider 413/context errors. Remote OSS URLs remain remote URLs.
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
       headers: config.protocol === "anthropic"
         ? { "Content-Type": "application/json", "x-api-key": config.apiKey, "anthropic-version": "2023-06-01" }
         : { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(payload),
     }, { attempts: 2, timeoutMs: 45000 });
     let response: Response;
     try {

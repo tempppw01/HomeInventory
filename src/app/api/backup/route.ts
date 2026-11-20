@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiError, requireAdminUser } from "@/lib/api";
+import { localDateString } from "@/lib/local-date";
 
 // 日期字段导出成 YYYY-MM-DD。
 // 直接序列化 Date 会得到 ISO 时间戳(本地零点 → UTC 前一天 16:00),
@@ -37,7 +38,7 @@ export async function GET() {
     return new NextResponse(JSON.stringify(backup, null, 2), {
       headers: {
         "Content-Type": "application/json; charset=utf-8",
-        "Content-Disposition": `attachment; filename=home-inventory-backup-${new Date().toISOString().slice(0, 10)}.json`,
+        "Content-Disposition": `attachment; filename=home-inventory-backup-${localDateString()}.json`,
         "Cache-Control": "no-store",
       },
     });

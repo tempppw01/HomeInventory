@@ -1,3 +1,4 @@
+import { localDateString } from "@/lib/local-date";
 // CSV 导入 —— 让「导出 CSV」的文件能重新导回来。
 //
 // 之前物品页能导出 CSV,但导入只接受应用自己生成的 JSON,导出的表格改完再传回来会失败。
@@ -84,7 +85,7 @@ function toDate(value: string): string | undefined {
   const match = trimmed.match(/^(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})/);
   if (match) return `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
   const parsed = new Date(trimmed);
-  return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString().slice(0, 10);
+  return Number.isNaN(parsed.getTime()) ? undefined : localDateString(parsed);
 }
 
 function toType(value: string): "CONSUMABLE" | "DURABLE" | undefined {

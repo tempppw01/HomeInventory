@@ -9,6 +9,7 @@ import { ReadOnlyContext, View, ThemeMode, ItemQuickFilter, compressImage, retur
 import { pathForTarget, pathForView, viewForPath } from "@/components/app/routes";
 import { isCountUnit, isLiquidConsumable } from "@/lib/item-metrics";
 import { isMedicineCategory } from "@/lib/categories";
+import { localDateString } from "@/lib/local-date";
 
 export type ModalKind = "item" | "shopping" | "location" | "task" | "notifications" | "recycle" | "batch-ai" | null;
 export type Role = "ADMIN" | "MEMBER" | "VIEWER" | null;
@@ -129,8 +130,8 @@ function useAppState() {
   useEffect(() => {
     const key = "home-inventory-auto-backup-check";
     if (role !== "ADMIN") return;
-    if (localStorage.getItem(key) === new Date().toISOString().slice(0, 10)) return;
-    fetch("/api/backup/auto", { method: "POST" }).then(() => localStorage.setItem(key, new Date().toISOString().slice(0, 10))).catch(() => undefined);
+    if (localStorage.getItem(key) === localDateString()) return;
+    fetch("/api/backup/auto", { method: "POST" }).then(() => localStorage.setItem(key, localDateString())).catch(() => undefined);
   }, [role]);
 
   // Real navigation now happens through the URL. The shell still fires the same

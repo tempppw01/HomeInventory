@@ -22,6 +22,7 @@ import { DatePicker, DatePickerPreset } from "@/components/date-picker";
 import { guessItemType, ItemTypeGuess } from "@/lib/item-type-guess";
 import { ItemDraft, SavedItemTemplate, emptyDraft, compressImage, categories, units, itemTemplateStorageKey, dateInputValue, purchaseDatePresets, expiryDatePresets, purchaseAgeLabel, isMoneyInput, moneyValue, normalizedItemName, findCommonItemTemplate, request } from "../shared";
 import { Modal, ImageLightbox } from "./modals";
+import { localDateString } from "@/lib/local-date";
 export function ItemModal({ locations, allItems, item, onClose, onSaved, aiAvailable = true, canConfigureAi = false, onConfigureAi }: { locations: Location[]; allItems: Item[]; item: Item | null; onClose: () => void; onSaved: () => void; aiAvailable?: boolean; canConfigureAi?: boolean; onConfigureAi?: () => void }) {
   // A second click could still fire before the `saving` state renders, so the
   // guard is a ref: the first call wins and the duplicate returns immediately.
@@ -202,9 +203,9 @@ export function ItemModal({ locations, allItems, item, onClose, onSaved, aiAvail
     if (!days) return;
     const base = draft.purchaseDate ? new Date(draft.purchaseDate) : new Date();
     const target = new Date(base.getTime() + days * 86400000);
-    const iso = target.toISOString().slice(0, 10);
+    const iso = localDateString(target);
     set("expiryDate", iso);
-    if (!draft.purchaseDate) set("purchaseDate", new Date().toISOString().slice(0, 10));
+    if (!draft.purchaseDate) set("purchaseDate", localDateString());
     setMoreOpen(true);
   };
   const missingExpiry = isMedicine && draft.type === "CONSUMABLE" && !draft.expiryDate;

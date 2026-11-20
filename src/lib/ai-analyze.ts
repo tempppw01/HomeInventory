@@ -1,6 +1,7 @@
 // AI 分析的共用部分:结果解析、错误文案、以及「后台自动分析」用的精简调用。
 // 这里只放无副作用的纯逻辑与一次模型调用,不碰 cookies / NextRequest,方便被路由与后台队列共用。
 import { aiFetch, chatCompletionsUrl, type AiConfig } from "@/lib/ai";
+import { localDateString } from "@/lib/local-date";
 export type JsonRecord = Record<string, unknown>;
 
 export class AiRequestError extends Error {
@@ -109,7 +110,7 @@ export type AnalyzeInput = {
  * 调用方(队列)负责限流与写库,这里失败直接抛错,由调用方决定是否重试。
  */
 export async function analyzeItemInBackground(config: AiConfig, input: AnalyzeInput) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateString();
   const prompt = [
     `今天是 ${today}。请分析这件家庭物品,给出简短、可执行的结论。`,
     `物品信息:${JSON.stringify(input)}`,

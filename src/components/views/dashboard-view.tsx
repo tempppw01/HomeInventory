@@ -22,6 +22,7 @@ import { useConfirm } from "@/components/confirm-dialog";
 import { ContextMenu, useContextMenu, type ContextMenuItem } from "@/components/context-menu";
 import { copyToClipboard } from "@/lib/clipboard";
 import { ItemCard } from "./items-view";
+import { localDateString } from "@/lib/local-date";
 export function DashboardView({ data, now, lowStock, expiring, expired, pending, totalValue, onNavigate, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onDelete, onAddRestock, onQr, onAi, onAlerts, onCreate, onMerge, aiAvailable = false, onOpenCategory }: { data: DashboardData; now: number; lowStock: Item[]; expiring: Item[]; expired: Item[]; pending: ShoppingItem[]; totalValue: number; onNavigate: (v: View) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onDelete: (i: Item) => void; onAddRestock: (i: Item) => void; onMerge: (keepId: string, mergeIds: string[]) => Promise<unknown> | void; aiAvailable?: boolean; /** 点分类图表后跳到物品页并按该分类筛选 */ onOpenCategory?: (category: string) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onAlerts: () => void; onCreate: () => void }) {
 
   // 后台自动预测:按近期消耗速度算「还能用几天」,并找出可能重复录入的物品。
@@ -229,7 +230,7 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
             {urgentExpiry.length > 0 && <section>
               <SectionHead title="本周到期" action="查看提醒" onClick={onAlerts} />
               <div className="mt-2 space-y-3">{Object.entries(expiryGroups).map(([date, items]) => <div key={date}>
-                <div className="mb-1 flex items-center gap-2 text-xs font-bold muted"><span className="size-1.5 rounded-full" style={{ background: date < new Date().toISOString().slice(0, 10) ? "var(--danger)" : "var(--warning)" }} />{expiryGroupLabel(date, now)}</div>
+                <div className="mb-1 flex items-center gap-2 text-xs font-bold muted"><span className="size-1.5 rounded-full" style={{ background: date < localDateString() ? "var(--danger)" : "var(--warning)" }} />{expiryGroupLabel(date, now)}</div>
                 <div>{items.map((item) => {
                   const isExpired = expired.some((entry) => entry.id === item.id);
                   return <ListRow

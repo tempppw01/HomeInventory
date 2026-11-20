@@ -1,14 +1,9 @@
 // 输入校验与账号相关纯函数的单测。
 //
-// 说明:恢复码哈希(hashRecoveryCode/verifyRecoveryCode)没有纳入这里 ——
-// 它内部用了 @/lib 别名,而单测走 Node 的 strip-types 无法解析别名。
-// 该逻辑由权限矩阵套件(47 项,含找回流程)间接覆盖。
-//
-// 为什么盯这几块:日期校验与账号相关的逻辑我这轮改过两次,而且都真的出过 bug
-// (ISO 一律被拒、`2026-02-31` 被静默进位、日期跨时区挪一天)。
-// 这类规则最适合用单测钉住 —— 跑得快、又不依赖数据库。
-//
-// 运行:npm run test:unit
+// 说明:恢复码哈希没有纳入单测 —— 它依赖 @/lib/account-auth,
+// 而后者会引入 next/headers 这类只能跑在 Next 运行时里的模块。
+// (别名问题本身已经解决:测试侧注册了 scripts/lib/register-alias.mjs。)
+// 这条链路由权限矩阵套件(47 项,含找回流程)覆盖。
 
 import { test } from "node:test";
 import assert from "node:assert/strict";

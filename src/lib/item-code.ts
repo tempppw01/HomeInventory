@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
+import { localDateString } from "@/lib/local-date";
 
 export function createItemCode() {
-  const date = new Date().toISOString().slice(0, 10).replaceAll("-", "");
+  const date = localDateString().replaceAll("-", "");
   return `INV-${date}-${randomBytes(3).toString("hex").toUpperCase()}`;
 }

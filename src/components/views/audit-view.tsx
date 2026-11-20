@@ -14,6 +14,7 @@ import { AUDIT_HEADER, auditCsvRows, auditRows, auditSummaryText } from "@/lib/a
 import { auditTrend, auditTrendText } from "@/lib/audit-trend";
 import { MonthlyBars } from "@/components/charts";
 import { ReadOnlyContext, request } from "../shared";
+import { localDateString } from "@/lib/local-date";
 /** 核对表的一行:右键给出「确认 / 取消确认 / 复制编号」,与物品卡片的交互保持一致。 */
 function AuditRow({ item, checked, onToggle, trailing }: { item: Item; checked: boolean; onToggle: () => void; trailing: React.ReactNode }) {
   const context = useContextMenu();
@@ -108,7 +109,7 @@ export function AuditView({ items, locations, onRefresh, onToast }: { items: Ite
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `归物-盘点结果-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `归物-盘点结果-${localDateString()}.csv`;
     document.body.appendChild(link);
     link.click();
     link.remove();
