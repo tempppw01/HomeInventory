@@ -10,6 +10,7 @@
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
 import { join } from "node:path";
+import { loginCookie } from "./lib/probe-login.mjs";
 
 const BASE = process.env.BASE_URL || "http://127.0.0.1:3001";
 const USER = process.env.PROBE_USER || "bgs";
@@ -22,13 +23,7 @@ const check = (name, ok, detail = "") => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok ? "" : "  → " + detail}`);
 };
 
-const login = await fetch(`${BASE}/api/auth/login`, {
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify({ username: USER, password: PASS }),
-});
-if (!login.ok) throw new Error(`login failed: ${login.status}`);
-const cookie = (login.headers.getSetCookie?.() ?? []).map((entry) => entry.split(";")[0]).join("; ");
+const cookie = await loginCookie(BASE, USER, PASS);
 
 const call = async (method, path, body) => {
   const response = await fetch(BASE + path, {

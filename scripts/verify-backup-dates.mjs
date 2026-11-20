@@ -1,3 +1,4 @@
+import { loginCookie } from "./lib/probe-login.mjs";
 // 备份往返核对:导出的备份能否被自己恢复回去,日期会不会错位。
 //
 // 为什么需要:恢复走同一套 itemSchema 校验,校验失败会**静默 continue** ——
@@ -16,12 +17,7 @@ const USER = process.env.PROBE_USER || "bgs";
 const PASS = process.env.PROBE_PASS;
 if (!PASS) throw new Error("set PROBE_PASS");
 
-const login = await fetch(`${BASE}/api/auth/login`, {
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify({ username: USER, password: PASS }),
-});
-const cookie = (login.headers.getSetCookie?.() ?? []).map((entry) => entry.split(";")[0]).join("; ");
+const cookie = await loginCookie(BASE, USER, PASS);
 
 const call = async (method, path, body) => {
   const response = await fetch(BASE + path, {

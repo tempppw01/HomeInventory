@@ -9,6 +9,7 @@
 //   PROBE_USER=bgs PROBE_PASS=... node scripts/verify-task-recurrence.mjs
 
 import { PrismaClient } from "@prisma/client";
+import { loginCookie } from "./lib/probe-login.mjs";
 
 const BASE = process.env.BASE_URL || "http://127.0.0.1:3001";
 const USER = process.env.PROBE_USER || "bgs";
@@ -21,16 +22,7 @@ const check = (name, ok, detail) => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok ? "" : "  → " + detail}`);
 };
 
-const login = await fetch(`${BASE}/api/auth/login`, {
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify({ username: USER, password: PASS }),
-});
-if (!login.ok) {
-  check("登录成功", false, `status=${login.status}`);
-  process.exit(1);
-}
-const cookie = (login.headers.getSetCookie?.() ?? []).map((entry) => entry.split(";")[0]).join("; ");
+const cookie = await loginCookie(BASE, USER, PASS);
 
 const prisma = new PrismaClient();
 

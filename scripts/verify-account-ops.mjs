@@ -22,13 +22,24 @@ const check = (name, ok, detail) => {
 };
 
 const loginRaw = async (username, password) => {
-  const response = await fetch(`${BASE}/api/auth/login`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ username, password }),
-  });
-  const cookie = (response.headers.getSetCookie?.() ?? []).map((entry) => entry.split(";")[0]).join("; ");
-  return { status: response.status, cookie };
+  // 这个套件本身要反复登录(建号 → 登录 → 停用后再试……),最容易撞上 12 次/分钟的限速;
+  // 遇到 429 按 Retry-After 等待重试,把「被限速」与「登录失败」区分开。
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const response = await fetch(`${BASE}/api/auth/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    if (response.status === 429) {
+      const wait = Number(response.headers.get("retry-after") ?? 10);
+      console.log(`      登录限速,等待 ${wait} 秒后重试(${attempt + 1}/8)`);
+      await new Promise((resolve) => setTimeout(resolve, (wait + 1) * 1000));
+      continue;
+    }
+    const cookie = (response.headers.getSetCookie?.() ?? []).map((entry) => entry.split(";")[0]).join("; ");
+    return { status: response.status, cookie };
+  }
+  return { status: 429, cookie: "" };
 };
 
 const admin = await loginRaw(ADMIN_USER, ADMIN_PASS);
