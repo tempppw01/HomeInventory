@@ -49,9 +49,29 @@ export function normalizeItemQuantity(quantity: number, unit: string) {
   return isCountUnit(unit) ? Math.max(0, Math.round(quantity)) : quantity;
 }
 
-/** Whether a consumable should appear in the purchase suggestions. */
-export function needsRestock(item: Pick<ItemMetricsInput, "type" | "name" | "category" | "unit"> & { quantity: number; minQuantity: number; remainingPercent: number }) {
+/**
+ * 是否应该出现在**采购建议**里(服务端在创建 / 更新 / 消耗物品后据此自动生成)。
+ *
+ * 它与客户端展示用的 isLowStock 有意不同:这里**用完(数量 0)也要建议补货** ——
+ * 东西用完了正是该买的时候;而客户端那个「该补货」角标不重复提示已经用完的。
+ *
+ * 但「暂停补货提醒」两边都必须生效:此前服务端完全没判断这个字段,
+ * 于是用户在客户端暂停了提醒,后台却还在悄悄生成采购项。
+ */
+export function needsRestock(
+  item: Pick<ItemMetricsInput, "type" | "name" | "category" | "unit"> & {
+    quantity: number;
+    minQuantity: number;
+    remainingPercent: number;
+    restockPausedUntil?: Date | string | null;
+  },
+  now: number = Date.now(),
+) {
   if (item.type !== "CONSUMABLE") return false;
+  if (item.restockPausedUntil) {
+    const pausedUntil = new Date(item.restockPausedUntil).getTime();
+    if (Number.isFinite(pausedUntil) && pausedUntil > now) return false;
+  }
   return (item.minQuantity > 0 && item.quantity <= item.minQuantity)
     || (isLiquidConsumable(item) && item.remainingPercent <= 20);
 }

@@ -20,7 +20,7 @@
     "db:normalize": "tsx scripts/normalize-items.ts",
     "db:setup": "npm run db:generate && npm run db:init:sqlite && npm run db:seed && npm run db:backfill && npm run db:normalize",
     "test:unit": "node --experimental-strip-types --import ./scripts/lib/register-alias.mjs --test \"scripts/unit/*.test.mjs\"",
-    "test:api": "node scripts/api-contract-test.mjs && node scripts/verify-task-recurrence.mjs && node scripts/verify-backup-dates.mjs && node scripts/verify-account-ops.mjs && node scripts/verify-search-history-and-backup.mjs",
+    "test:api": "node scripts/api-contract-test.mjs && node scripts/verify-task-recurrence.mjs && node scripts/verify-backup-dates.mjs && node scripts/verify-account-ops.mjs && node scripts/verify-search-history-and-backup.mjs && node scripts/verify-restock-pause.mjs",
     "test:auth": "node scripts/auth-matrix-test.mjs",
     "test:backup": "node scripts/backup-roundtrip-test.mjs",
     "test:edge": "node scripts/edge-input-test.mjs",
