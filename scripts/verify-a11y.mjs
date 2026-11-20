@@ -121,14 +121,25 @@ await dismissBlockingDialogs(page);
 
 // ============ 3. 图片预览有替代文本(批量识别弹窗,纯客户端渲染)============
 {
-  await page.evaluate(() => {
-    const trigger = Array.from(document.querySelectorAll("button")).find((button) => (button.getAttribute("aria-label") || "") === "AI 批量识别物品");
-    if (trigger) trigger.click();
-  });
-  await page.waitForTimeout(1200);
-
-  const dialogOpen = await page.evaluate(() => Array.from(document.querySelectorAll('[role="dialog"]')).some((node) => node.getBoundingClientRect().height > 0));
-  check("能打开「AI 批量识别」弹窗", dialogOpen);
+  // 用 Playwright 的可操作性等待,而不是「DOM 里 click + 固定等待」:
+  // 后者在较慢的机器上可能点击早于 React 挂载,事件没接上,弹窗自然打不开(CI 上就这么红过一次)。
+  const trigger = page.locator('button[aria-label="AI 批量识别物品"]').first();
+  let dialogOpen = false;
+  let triggerDetail = "";
+  try {
+    await trigger.waitFor({ state: "visible", timeout: 20000 });
+    for (let attempt = 0; attempt < 2 && !dialogOpen; attempt += 1) {
+      await trigger.click({ timeout: 10000 });
+      await page.waitForTimeout(900);
+      dialogOpen = await page.evaluate(() => Array.from(document.querySelectorAll('[role="dialog"]')).some((node) => node.getBoundingClientRect().height > 0));
+    }
+  } catch (error) {
+    triggerDetail =
+      `按钮数=${await page.locator('button[aria-label="AI 批量识别物品"]').count()}` +
+      ` 弹窗数=${await page.locator('[role="dialog"]').count()}` +
+      ` 原因=${error instanceof Error ? error.message.split("\n")[0].slice(0, 80) : error}`;
+  }
+  check("能打开「AI 批量识别」弹窗", dialogOpen, triggerDetail || "点击后弹窗未出现");
 
   if (dialogOpen) {
     const fileInput = page.locator('[role="dialog"] input[type="file"]').first();
