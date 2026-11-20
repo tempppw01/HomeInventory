@@ -20,6 +20,7 @@ import { Chip, Empty, ListRow, Panel, Screen, Toolbar } from "@/components/ui-ki
 import { ReadOnlyContext, ItemQuickFilter, expiryDays, expiryDateLabel, request } from "../shared";
 import { Modal } from "./modals";
 import { localDateString } from "@/lib/local-date";
+import { isLowStock } from "@/lib/low-stock";
 
 const TYPE_FILTERS = [["ALL", "全部"], ["DURABLE", "耐用品"], ["CONSUMABLE", "消耗品"], ["MEDICINE", "医药"]] as const;
 
@@ -243,7 +244,7 @@ export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, lo
 }
 
 export function ItemCard({ item, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onRemainingChange, onDelete, onQr, onAi, onCopy, onSelect, selected = false, showSelect = false, compact = false }: { item: Item; onEdit: () => void; onOpenDetail?: () => void; onImageUpload?: (file: File) => void; onDuplicate?: () => void; onConsume: () => void; onRemainingChange?: (remainingPercent: number) => void; onDelete?: () => void; onQr: () => void; onAi: () => void; onCopy?: () => void; onSelect?: () => void; selected?: boolean; showSelect?: boolean; compact?: boolean }) {
-  const low = item.type === "CONSUMABLE" && ((item.minQuantity > 0 && item.quantity <= item.minQuantity) || (isLiquidConsumable(item) && item.remainingPercent <= 20));
+  const low = isLowStock(item);
   const CategoryIcon = isMedicineCategory(item.category) ? Pill : (categoryIconMap[item.category] || Package);
   const readOnly = useContext(ReadOnlyContext);
   const ai = itemAiHighlights(item);

@@ -72,6 +72,8 @@ export function LocationCard({ location, locations, items, index, onOpen, onEdit
   const summary = spaceSummary(items.map((item) => ({
     locationId: item.locationId, type: item.type, quantity: item.quantity, price: item.price,
     expiryDate: item.expiryDate, storage: item.storage ?? null, minQuantity: item.minQuantity,
+    name: item.name, category: item.category, unit: item.unit,
+    remainingPercent: item.remainingPercent, restockPausedUntil: item.restockPausedUntil ?? null,
   })), location.id);
   const summaryText = spaceSummaryText(summary);
   const alert = spaceAlert(summary);

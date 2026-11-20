@@ -1,4 +1,5 @@
 // 家庭月报 —— 把散落在各处的结论汇总成一页纸。
+import { isLowStock } from "@/lib/low-stock";
 //
 // 盘点结果、支出预测、冰箱清单、AI 建议平时分散在不同面板里,
 // 想给家人看一眼「这个家现在什么状况」时没有现成的出口。
@@ -19,6 +20,10 @@ export type ReportInput = {
     price: number | null;
     consumeRate: number | null;
     minQuantity: number;
+    // 「该补货」判定需要的字段
+    category: string;
+    remainingPercent: number;
+    restockPausedUntil?: Date | string | null;
   }>;
   locationCount: number;
   /** 每一项:{ 名称, 还有几天到期(负数=已过期) } —— 由页面按有效期算好 */
@@ -60,7 +65,7 @@ export function buildHouseholdReport(input: ReportInput): HouseholdReport {
     value += (item.price ?? 0) * item.quantity;
     const rate = item.consumeRate ?? 0;
     if (item.type === "CONSUMABLE" && rate >= 0.1 && (item.price ?? 0) > 0) monthlySpend += rate * 30 * (item.price ?? 0);
-    if (item.type === "CONSUMABLE" && item.minQuantity > 0 && item.quantity <= item.minQuantity) lowStock.push(item.name);
+    if (isLowStock(item)) lowStock.push(item.name);
   }
 
   const expiring = [...input.expiring]

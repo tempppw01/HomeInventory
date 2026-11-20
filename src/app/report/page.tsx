@@ -82,6 +82,7 @@ export default async function ReportPage() {
     items: items.map((item) => ({
       name: item.name, type: item.type, quantity: item.quantity, unit: item.unit,
       price: item.price, consumeRate: item.consumeRate ?? null, minQuantity: item.minQuantity,
+      category: item.category, remainingPercent: item.remainingPercent, restockPausedUntil: item.restockPausedUntil ?? null,
     })),
     locationCount: locations.length,
     expiring,

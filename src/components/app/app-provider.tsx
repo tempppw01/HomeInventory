@@ -10,6 +10,7 @@ import { pathForTarget, pathForView, viewForPath } from "@/components/app/routes
 import { isCountUnit, isLiquidConsumable } from "@/lib/item-metrics";
 import { isMedicineCategory } from "@/lib/categories";
 import { localDateString } from "@/lib/local-date";
+import { isLowStock } from "@/lib/low-stock";
 
 export type ModalKind = "item" | "shopping" | "location" | "task" | "notifications" | "recycle" | "batch-ai" | null;
 export type Role = "ADMIN" | "MEMBER" | "VIEWER" | null;
@@ -268,7 +269,7 @@ function useAppState() {
     );
   }, [categoryFilter, data, search, spaceScope, typeFilter]);
 
-  const lowStock = data?.preferences?.lowStockReminder === false ? [] : (data?.items ?? []).filter((item) => item.quantity > 0 && item.type === "CONSUMABLE" && (!item.restockPausedUntil || new Date(item.restockPausedUntil).getTime() <= now) && ((item.minQuantity > 0 && item.quantity <= item.minQuantity) || (isLiquidConsumable(item) && item.remainingPercent <= 20)));
+  const lowStock = data?.preferences?.lowStockReminder === false ? [] : (data?.items ?? []).filter((item) => isLowStock(item, now));
   const pendingShopping = (data?.shopping ?? []).filter((item) => item.status === "PENDING");
   const tasks = data?.tasks ?? [];
   const expiryReminderDays = data?.preferences?.expiryReminderDays ?? 14;

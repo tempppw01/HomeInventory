@@ -1,4 +1,5 @@
 // 空间整理摘要 —— 每个房间/柜子是「什么状态」,一眼能看出来。
+import { isLowStock } from "@/lib/low-stock";
 // 纯函数,零依赖,便于单测。
 
 export type SpaceItemInput = {
@@ -9,6 +10,12 @@ export type SpaceItemInput = {
   expiryDate: string | null;
   storage: string | null;
   minQuantity: number;
+  // 「该补货」的判定需要这些字段(液体见底也算)
+  name: string;
+  category: string;
+  unit: string;
+  remainingPercent: number;
+  restockPausedUntil?: Date | string | null;
 };
 
 export type SpaceSummary = {
@@ -39,7 +46,7 @@ export function spaceSummary(items: readonly SpaceItemInput[], locationId: strin
       if (Number.isFinite(time) && time <= soon) expiring += 1;
     }
     value += (item.price ?? 0) * item.quantity;
-    if (item.type === "CONSUMABLE" && item.minQuantity > 0 && item.quantity <= item.minQuantity) lowStock += 1;
+    if (isLowStock(item)) lowStock += 1;
   }
 
   return {
