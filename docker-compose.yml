@@ -1,6 +1,9 @@
 services:
   home-inventory:
-    image: ${HOME_INVENTORY_IMAGE:-home-inventory:local}
+    # 默认使用已发布镜像:自托管用户 `docker compose pull && docker compose up -d` 即可。
+    # 想固定版本:image 改成 34v0wphix/homeinventory:0.0.8(所有版本见 GitHub Releases)。
+    # 想从源码构建:docker compose up -d --build(下面的 build 段就是为此保留的)。
+    image: ${HOME_INVENTORY_IMAGE:-34v0wphix/homeinventory:latest}
     build:
       context: .
     container_name: home-inventory
