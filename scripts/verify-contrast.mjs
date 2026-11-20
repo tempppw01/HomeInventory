@@ -36,7 +36,7 @@ if (!auth.ok) {
   process.exit(1);
 }
 
-const measure = () => page.evaluate(() => {
+const measure = (target = page) => target.evaluate(() => {
   const parseColor = (value) => {
     const match = /rgba?\(([^)]+)\)/.exec(value || "");
     if (!match) return null;
@@ -150,6 +150,45 @@ for (const theme of THEMES) {
       state.total === 0,
       state.failures.map((item) => `「${item.text}」${item.ratio}(需${item.need})`).join(" | "),
     );
+  }
+}
+
+// 角色视角:只读账号看到的界面与管理员不同(多一条只读提示、少一批写入口),
+// 而容器级检查此前只以管理员身份跑 —— 只读独有的元素从来没被量过。
+{
+  const viewerUser = process.env.PROBE_VIEWER_USER || "viewcheck";
+  const viewerPass = process.env.PROBE_VIEWER_PASS;
+  if (!viewerPass) {
+    console.log("      跳过只读角色视角:未提供 PROBE_VIEWER_PASS");
+  } else {
+    const viewerContext = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const viewerPage = await viewerContext.newPage();
+    const viewerAuth = await loginAndConfirm(viewerPage, BASE, viewerUser, viewerPass);
+    check("只读账号能登录", viewerAuth.ok, viewerAuth.detail);
+
+    if (viewerAuth.ok) {
+      for (const route of ["/", "/items"]) {
+        await viewerPage.goto(BASE + route);
+        await viewerPage.waitForTimeout(2200);
+        await dismissBlockingDialogs(viewerPage);
+        // 只读提示条存在性单独确认一次,避免「量到的是别的文字」
+        const hasNotice = await viewerPage.evaluate(() => document.body.innerText.includes("只读账号"));
+        check(`只读 ${route}:页面上有只读提示`, hasNotice, "没找到只读提示");
+
+        const state = await measure(viewerPage);
+        if (state.checked === 0) {
+          check(`只读 ${route}:测到了文字(防止空跑)`, false, "没有可比对的文字元素");
+          continue;
+        }
+        check(
+          `只读 ${route}:文字对比度达标(共测 ${state.checked} 处)`
+          ,
+          state.total === 0,
+          state.failures.map((item) => `「${item.text}」${item.ratio}(需${item.need})`).join(" | "),
+        );
+      }
+    }
+    await viewerContext.close();
   }
 }
 

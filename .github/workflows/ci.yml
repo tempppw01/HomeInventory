@@ -300,7 +300,9 @@ jobs:
         run: node scripts/verify-modals-a11y.mjs
       - name: 菜单无障碍检查
         run: node scripts/verify-menus-a11y.mjs
-      - name: 颜色对比度检查(明暗两套主题)
+      - name: 颜色对比度检查(明暗两套主题 + 只读角色视角)
+        env:
+          PROBE_VIEWER_PASS: View#2026
         run: node scripts/verify-contrast.mjs
       - name: 失败时打印服务日志
         if: failure()
