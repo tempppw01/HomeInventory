@@ -4,9 +4,10 @@ import { itemSchema } from "@/lib/validation";
 import { apiError, requireWritableUser } from "@/lib/api";
 import { requireUser } from "@/lib/account-auth";
 import { createItemCode } from "@/lib/item-code";
-import { needsRestock, normalizeItemQuantity, restockQuantity } from "@/lib/item-metrics";
+import { normalizeItemQuantity } from "@/lib/item-metrics";
 import { itemInsight } from "@/lib/item-insight";
 import { enqueueItemAnalysis } from "@/lib/ai-queue";
+import { ensureRestockSuggestion } from "@/lib/restock-suggestion";
 
 export async function GET(request: NextRequest) {
   try {
@@ -45,12 +46,8 @@ export async function POST(request: NextRequest) {
       return created;
     });
 
-    if (needsRestock(item)) {
-      const existing = await prisma.shoppingItem.findFirst({ where: { name: item.name, status: "PENDING" } });
-      if (!existing) await prisma.shoppingItem.create({
-        data: { name: item.name, quantity: restockQuantity(item), unit: item.unit, category: item.category, priority: 2, source: "low-stock" },
-      });
-    }
+    // 放进事务里:此前是「先查后建」,并发请求会各建一条(实测 6 个并发 → 6 条重复建议)
+    await prisma.$transaction((tx) => ensureRestockSuggestion(tx, item));
     // 后台自动分析:不 await,保存立刻返回;结果稍后写回 aiSummary 等字段。
     enqueueItemAnalysis(item.id);
     return NextResponse.json(item, { status: 201 });

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiError, requireWritableUser } from "@/lib/api";
-import { isLiquidConsumable, needsRestock, restockQuantity } from "@/lib/item-metrics";
+import { isLiquidConsumable } from "@/lib/item-metrics";
+import { ensureRestockSuggestion } from "@/lib/restock-suggestion";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -20,9 +21,8 @@ export async function POST(_: Request, { params }: Context) {
       const activity = await tx.activityLog.create({ data: { action: "CONSUME", itemId: item.id, itemName: item.name, userId: user.id, detail: `手动消耗 1 ${item.unit}` } });
       const recentUses = await tx.activityLog.count({ where: { itemId: item.id, action: "CONSUME", undoneAt: null, createdAt: { gte: new Date(Date.now() - 30 * 86400000) } } });
       const withRate = await tx.item.update({ where: { id: item.id }, data: { consumeRate: recentUses / 30 } , include: { location: true } });
-      if (needsRestock(item) && !(await tx.shoppingItem.findFirst({ where: { name: item.name, status: "PENDING" } }))) {
-        await tx.shoppingItem.create({ data: { name: item.name, quantity: restockQuantity(item), unit: item.unit, category: item.category, priority: 2, source: "low-stock" } });
-      }
+      await ensureRestockSuggestion(tx, item);
+
       return { item: withRate, activityId: activity.id };
     });
     if ("error" in result) return NextResponse.json({ error: result.error }, { status: result.status });

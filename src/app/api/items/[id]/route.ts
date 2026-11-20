@@ -3,7 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { itemPatchSchema } from "@/lib/validation";
 import { apiError, requireWritableUser } from "@/lib/api";
 import { requireUser } from "@/lib/account-auth";
-import { needsRestock, normalizeItemQuantity, restockQuantity } from "@/lib/item-metrics";
+import { normalizeItemQuantity } from "@/lib/item-metrics";
+import { ensureRestockSuggestion } from "@/lib/restock-suggestion";
 import { itemInsight } from "@/lib/item-insight";
 import { learnConsumeRate } from "@/lib/item-forecast";
 import { deleteStoredImage } from "@/lib/oss";
@@ -70,14 +71,9 @@ export async function PATCH(request: NextRequest, { params }: Context) {
       return updated;
     });
 
-    if (needsRestock(item)) {
-      const existing = await prisma.shoppingItem.findFirst({ where: { name: item.name, status: "PENDING" } });
-      if (!existing) {
-        await prisma.shoppingItem.create({
-          data: { name: item.name, quantity: restockQuantity(item), unit: item.unit, category: item.category, priority: 2, source: "low-stock" },
-        });
-      }
-    }
+    // 放进事务里:此前是「先查后建」,并发请求会各建一条重复的采购建议(实测 6 并发 → 6 条),
+    // 而且历史遗留的重复项会在下次触发时被顺手清掉(见 ensureRestockSuggestion)。
+    await prisma.$transaction((tx) => ensureRestockSuggestion(tx, item));
     return NextResponse.json(item);
   } catch (error) {
     return apiError(error);
