@@ -35,6 +35,7 @@ run "键盘无障碍" node scripts/verify-a11y.mjs
 run "弹窗无障碍" node scripts/verify-modals-a11y.mjs
 run "菜单无障碍" node scripts/verify-menus-a11y.mjs
 run "物品模板" node scripts/verify-item-template.mjs
+run "物品详情页" node scripts/verify-item-detail.mjs
 run "颜色对比度" node scripts/verify-contrast.mjs
 run "规模性能" node scripts/scale-perf-test.mjs
 

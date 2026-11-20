@@ -404,6 +404,11 @@ jobs:
           PROBE_USER: leadcheck
           PROBE_PASS: Lead#2026
         run: node scripts/verify-item-template.mjs
+      - name: 物品详情页检查
+        env:
+          PROBE_USER: leadcheck
+          PROBE_PASS: Lead#2026
+        run: node scripts/verify-item-detail.mjs
       - name: 录入与交互修复检查
         env:
           PROBE_USER: leadcheck
