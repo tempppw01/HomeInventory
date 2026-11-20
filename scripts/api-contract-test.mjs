@@ -158,6 +158,27 @@ const baseItem = { name: "T-基础物品", category: "日用", type: "CONSUMABLE
   record("locations", "删除仍有物品的空间:应拒绝或明确移出", rDel.status >= 400 || rDel.status === 200, `status=${rDel.status}`);
 }
 
+// ============ 4b. 日期字段的写法与错误提示 ============
+// 起因:接口此前只接受 2026-11-20 这种纯日期,传 ISO 时间戳会 400,
+// 而且错误信息是英文的「Invalid date」,调用方不知道该怎么改。
+// 现在两种写法都接受,非法值给出中文提示。
+{
+  const dateOnly = await call("POST", "/api/items", { ...baseItem, name: "T-日期纯日期", expiryDate: "2026-12-31" });
+  record("dates", "日期:接受 2026-12-31", dateOnly.status === 201, `status=${dateOnly.status}`);
+  if (dateOnly.body?.id) created.items.push(dateOnly.body.id);
+
+  const iso = await call("POST", "/api/items", { ...baseItem, name: "T-日期ISO", expiryDate: "2026-12-31T03:00:00.000Z" });
+  record("dates", "日期:接受 ISO 时间戳(此前会被 400 拒掉)", iso.status === 201, `status=${iso.status} error=${iso.body?.error ?? "-"}`);
+  if (iso.body?.id) created.items.push(iso.body.id);
+
+  const garbage = await call("POST", "/api/items", { ...baseItem, name: "T-日期非法", expiryDate: "2026/12/31" });
+  const message = String(garbage.body?.error ?? "");
+  record("dates", "日期:非法格式被拒且提示可读", garbage.status === 400 && message.includes("日期"), `status=${garbage.status} error=${message}`);
+
+  const impossible = await call("POST", "/api/items", { ...baseItem, name: "T-日期不存在", expiryDate: "2026-02-31" });
+  record("dates", "日期:2026-02-31 这类不存在的日子被拒", impossible.status === 400, `status=${impossible.status} error=${impossible.body?.error ?? "-"}`);
+}
+
 // ============ 5. shopping 与低库存联动 ============
 {
   const low = await call("POST", "/api/items", { ...baseItem, name: "T-低库存品", quantity: 1, minQuantity: 5, unit: "瓶" });

@@ -1,9 +1,30 @@
 import { z } from "zod";
 
+// 日期字段接受两种写法:
+//   · 2026-11-20            —— 界面日期控件提交的格式
+//   · 2026-11-20T03:00:00Z  —— 接口调用、脚本、备份数据里的 ISO 写法
+// 之前只允许前者(z.string().date()),传 ISO 会被 400 拒掉,
+// 而错误信息是英文的「Invalid date」,调用方看不出该怎么改。
+// 这里统一按**日期部分**解析(忽略时间与时区),避免 UTC 偏移把日期挪错一天。
 const optionalDate = z
-  .union([z.string().date(), z.literal(""), z.null()])
+  .union([z.string(), z.literal(""), z.null()])
   .optional()
-  .transform((value) => (value ? new Date(value) : null));
+  .transform((value, ctx) => {
+    if (value == null || value === "") return null;
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value).trim());
+    if (!match) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "日期格式不正确,应为 2026-11-20" });
+      return z.NEVER;
+    }
+    const [, year, month, day] = match;
+    const date = new Date(Number(year), Number(month) - 1, Number(day));
+    // 2026-02-31 这类「格式对但日子不存在」的日期会被自动进位,这里挡掉。
+    if (date.getFullYear() !== Number(year) || date.getMonth() !== Number(month) - 1 || date.getDate() !== Number(day)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "这个日期不存在,请检查" });
+      return z.NEVER;
+    }
+    return date;
+  });
 
 // Images can be hosted by OSS (absolute URL) or served by the local upload
 // route. Keep local paths scoped to that route so arbitrary relative paths and
