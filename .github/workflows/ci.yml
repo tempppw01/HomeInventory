@@ -87,6 +87,12 @@ jobs:
         run: node scripts/verify-backup-dates.mjs
       - name: 搜索历史与自动备份检查
         run: node scripts/verify-search-history-and-backup.mjs
+      # 升级演练需要旧版本的 schema(从 git 历史里取),而 CI 默认是浅克隆。
+      # 取不到时脚本会明确跳过并打印原因,不会伪装成通过。
+      - name: 取回历史标签(升级演练用)
+        run: git fetch --depth 1 origin tag v0.0.7 || true
+      - name: 跨版本升级演练
+        run: node scripts/verify-upgrade-path.mjs
       - name: 补货暂停行为检查
         run: node scripts/verify-restock-pause.mjs
       - name: 任务周期核对(读库确认)
