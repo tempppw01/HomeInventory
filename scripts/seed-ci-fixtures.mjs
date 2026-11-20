@@ -88,7 +88,9 @@ try {
   // 于是窄屏检查一直覆盖不到它 —— 本地却因为演示数据里有而过不去。
   const stale = new Date();
   stale.setDate(stale.getDate() - 10);
-  await prisma.item.create({
+  // 注意:aiAnalyzedAt **不是数据库字段** —— 接口是从活动日志里的 AI_ANALYZE 记录推导出来的
+  // (见 src/app/api/dashboard/route.ts)。所以这里要造一条活动记录,而不是写字段。
+  const staleItem = await prisma.item.create({
     data: {
       name: "界面检查·AI 结论已过时",
       category: "日用",
@@ -96,8 +98,15 @@ try {
       unit: "瓶",
       quantity: 2,
       aiSummary: "这是旧的 AI 结论,用于让列表显示「建议重新分析」入口",
-      aiAnalyzedAt: stale,
-      updatedAt: new Date(),
+    },
+  });
+  await prisma.activityLog.create({
+    data: {
+      action: "AI_ANALYZE",
+      itemId: staleItem.id,
+      itemName: staleItem.name,
+      detail: "播种数据:让 AI 结论早于物品更新时间",
+      createdAt: stale,
     },
   });
 
