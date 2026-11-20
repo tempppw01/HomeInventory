@@ -6,6 +6,8 @@
 
 👉 [在线体验 HomeInventory](https://homeinventory-test.up.railway.app/)
 
+📋 各版本变更见 [CHANGELOG.md](./CHANGELOG.md)。
+
 ## v0.0.8 更新
 
 - 医药快捷视图只显示医药分类，不再混入无关分类标签。
