@@ -11,6 +11,7 @@ import { isCountUnit, isLiquidConsumable } from "@/lib/item-metrics";
 import { isMedicineCategory } from "@/lib/categories";
 import { localDateString } from "@/lib/local-date";
 import { isLowStock } from "@/lib/low-stock";
+import { isExpiredDays, isExpiringSoonDays } from "@/lib/expiry-status";
 
 export type ModalKind = "item" | "shopping" | "location" | "task" | "notifications" | "recycle" | "batch-ai" | null;
 export type Role = "ADMIN" | "MEMBER" | "VIEWER" | null;
@@ -273,8 +274,8 @@ function useAppState() {
   const pendingShopping = (data?.shopping ?? []).filter((item) => item.status === "PENDING");
   const tasks = data?.tasks ?? [];
   const expiryReminderDays = data?.preferences?.expiryReminderDays ?? 14;
-  const expiring = (data?.items ?? []).filter((item) => item.quantity > 0 && item.type === "CONSUMABLE" && item.expiryDate && expiryDays(item, now) > 0 && expiryDays(item, now) <= expiryReminderDays);
-  const expired = (data?.items ?? []).filter((item) => item.quantity > 0 && item.type === "CONSUMABLE" && item.expiryDate && expiryDays(item, now) <= 0);
+  const expiring = (data?.items ?? []).filter((item) => item.quantity > 0 && item.type === "CONSUMABLE" && item.expiryDate && isExpiringSoonDays(expiryDays(item, now), expiryReminderDays));
+  const expired = (data?.items ?? []).filter((item) => item.quantity > 0 && item.type === "CONSUMABLE" && item.expiryDate && isExpiredDays(expiryDays(item, now)));
 
   // 辅助信息平时不打扰:只有「已经有东西过期」这种关键时刻才自动弹出提醒,
   // 而且每天最多一次,避免每次打开都被拦住。

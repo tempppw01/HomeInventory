@@ -13,6 +13,7 @@ import { ItemQuickActions } from "@/components/item-quick-actions";
 import { AskAiAboutItem } from "@/components/ask-ai-about-item";
 import { ReanalyzeAiButton } from "@/components/reanalyze-ai-button";
 import { relativeTimeText } from "@/lib/relative-time";
+import { expiryToneFor } from "@/lib/expiry-status";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,7 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
     const end = Date.UTC(target.getFullYear(), target.getMonth(), target.getDate());
     return Math.round((end - start) / 86400000);
   })();
-  const expiryTone = expiryDaysLeft === null ? undefined : expiryDaysLeft < 0 ? "var(--danger)" : expiryDaysLeft <= 30 ? "var(--warning)" : undefined;
+  const expiryTone = expiryDaysLeft === null ? undefined : expiryToneFor(expiryDaysLeft) === "danger" ? "var(--danger)" : expiryToneFor(expiryDaysLeft) === "warning" ? "var(--warning)" : undefined;
   // 这件物品的变更流水:谁在什么时候改过它。此前 ActivityLog 有 itemId 却没有任何界面用到。
   const history = await prisma.activityLog.findMany({
     where: { itemId: item.id },

@@ -21,6 +21,7 @@ import { ReadOnlyContext, ItemQuickFilter, expiryDays, expiryDateLabel, request 
 import { Modal } from "./modals";
 import { localDateString } from "@/lib/local-date";
 import { isLowStock } from "@/lib/low-stock";
+import { isExpiringSoonDays } from "@/lib/expiry-status";
 
 const TYPE_FILTERS = [["ALL", "全部"], ["DURABLE", "耐用品"], ["CONSUMABLE", "消耗品"], ["MEDICINE", "医药"]] as const;
 
@@ -256,7 +257,7 @@ export function ItemCard({ item, onEdit, onOpenDetail, onImageUpload, onDuplicat
   const canConsumeOne = !compact && !readOnly && item.type === "CONSUMABLE" && !isLiquidConsumable(item) && Boolean(onConsume);
   const expiry = item.expiryDate ? expiryDays(item) : null;
   const expired = expiry !== null && expiry <= 0;
-  const expiring = expiry !== null && expiry > 0 && expiry <= 30;
+  const expiring = expiry !== null && isExpiringSoonDays(expiry);
   const context = useContextMenu();
   const contextItems: ContextMenuItem[] = [{ label: "编辑物品", icon: Pencil, onClick: onEdit, disabled: readOnly }, ...(onDuplicate ? [{ label: "复制为新物品", icon: Copy, onClick: onDuplicate, disabled: readOnly }] : []), ...(onCopy ? [{ label: "复制物品编号", icon: Copy, onClick: onCopy }] : []), { label: "显示二维码", icon: QrCode, onClick: onQr }, { label: isMedicine ? "AI 补全药品说明" : "AI 识别与建议", icon: Sparkles, onClick: onAi }];
   if (onDelete) contextItems.push({ label: "移入回收站", icon: Trash2, onClick: onDelete, disabled: readOnly, danger: true, separatorBefore: true });

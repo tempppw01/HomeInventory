@@ -1,5 +1,6 @@
 // 家庭月报 —— 把散落在各处的结论汇总成一页纸。
 import { isLowStock } from "@/lib/low-stock";
+import { isWithinExpiryWindowDays } from "@/lib/expiry-status";
 //
 // 盘点结果、支出预测、冰箱清单、AI 建议平时分散在不同面板里,
 // 想给家人看一眼「这个家现在什么状况」时没有现成的出口。
@@ -69,7 +70,7 @@ export function buildHouseholdReport(input: ReportInput): HouseholdReport {
   }
 
   const expiring = [...input.expiring]
-    .filter((row) => row.days <= 30)
+    .filter((row) => isWithinExpiryWindowDays(row.days))
     .sort((left, right) => left.days - right.days)
     .slice(0, 8)
     .map((row) => ({ ...row, expired: row.days < 0 }));
