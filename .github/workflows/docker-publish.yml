@@ -83,6 +83,8 @@ jobs:
     name: merge multi-arch manifest
     runs-on: ubuntu-latest
     needs: build
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
     steps:
       - name: Download digests
         uses: actions/download-artifact@v4
@@ -117,6 +119,26 @@ jobs:
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf '${{ env.IMAGE }}@sha256:%s ' *)
 
+      # 冒烟测试:把刚推送的镜像真正跑起来。
+      # 之前只验证「构建成功、清单里有几个架构」,但没人验证过它能不能启动 ——
+      # 发布产物是否可用,应该由 CI 回答,而不是等用户 docker run 才发现。
+      - name: Smoke test published image
+        run: |
+          set -e
+          TAG="${{ steps.meta.outputs.version }}"
+          docker run -d --name smoke -p 3199:3000 "${{ env.IMAGE }}:$TAG"
+          ok=0
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:3199/api/health > /dev/null 2>&1; then ok=1; break; fi
+            sleep 3
+          done
+          echo '--- 容器日志 ---'
+          docker logs smoke 2>&1 | tail -25 || true
+          curl -fsS http://127.0.0.1:3199/api/health || true
+          docker rm -f smoke > /dev/null 2>&1 || true
+          test "$ok" = "1"
+          echo "冒烟测试通过:${{ env.IMAGE }}:$TAG 可以启动并响应健康检查"
+
       - name: Inspect published manifest
         run: |
           docker buildx imagetools inspect ${{ env.IMAGE }}:${{ steps.meta.outputs.version }}
@@ -124,8 +146,33 @@ jobs:
           docker buildx imagetools inspect --raw ${{ env.IMAGE }}:${{ steps.meta.outputs.version }} \
             | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const m=JSON.parse(d).manifests||[];const arch=m.map(x=>x.platform&&x.platform.architecture).filter(Boolean);console.log('architectures:',arch.join(', '));if(!arch.includes('amd64')||!arch.includes('arm64'))process.exit(1)})"
 
-  release:
+  # arm64 不能只验证「构建成功」:用原生 ARM runner 拉多架构清单并跑起来,
+  # 才能真正确认 ARM 变体在运行时可用的(这正是之前 QEMU 方案翻车的地方)。
+  smoke-arm64:
+    name: smoke test arm64
+    runs-on: ubuntu-24.04-arm
     needs: merge
+    steps:
+      - name: Pull multi-arch image and run
+        run: |
+          set -e
+          TAG="${{ needs.merge.outputs.version }}"
+          if [ -z "$TAG" ]; then echo "拿不到标签版本,使用 latest"; TAG=latest; fi
+          echo "runner 架构:$(uname -m)"
+          docker run -d --name smoke-arm -p 3198:3000 "${{ env.IMAGE }}:$TAG"
+          ok=0
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:3198/api/health > /dev/null 2>&1; then ok=1; break; fi
+            sleep 3
+          done
+          echo '--- 容器日志 ---'
+          docker logs smoke-arm 2>&1 | tail -25 || true
+          docker rm -f smoke-arm > /dev/null 2>&1 || true
+          test "$ok" = "1"
+          echo "arm64 冒烟测试通过"
+
+  release:
+    needs: [merge, smoke-arm64]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
