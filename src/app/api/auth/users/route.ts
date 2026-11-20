@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { apiError } from "@/lib/api";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { ACCOUNT_COOKIE, canAdmin, hashPassword, requireUser, sessionHash } from "@/lib/account-auth";
@@ -26,7 +27,7 @@ export async function GET() {
     const currentToken = (await cookies()).get(ACCOUNT_COOKIE)?.value;
     const currentSession = currentToken ? await prisma.authSession.findUnique({ where: { tokenHash: sessionHash(currentToken) }, select: { id: true } }) : null;
     return NextResponse.json(users.map(({ loginRecords, ...user }) => ({ ...user, lastLogin: loginRecords[0] || null, sessions: user.sessions.map((session) => ({ ...session, isCurrent: session.id === currentSession?.id })) })));
-  } catch (error) { return NextResponse.json({ error: error instanceof Error && error.message === "UNAUTHORIZED" ? "请先登录" : "服务器暂时开小差了，请稍后重试" }, { status: error instanceof Error && error.message === "UNAUTHORIZED" ? 401 : 500 }); }
+  } catch (error) { return apiError(error); }
 }
 
 export async function POST(request: NextRequest) {
@@ -45,5 +46,10 @@ export async function POST(request: NextRequest) {
       return { user: next, recoveryCode: code };
     });
     return NextResponse.json({ id: created.id, username, displayName, role, active: true, recoveryCode }, { status: 201 });
-  } catch { return NextResponse.json({ error: "用户名可能已存在，或服务器暂时开小差了" }, { status: 400 }); }
+  } catch (error) {
+    // 用统一的 apiError:zod 校验失败时会把具体原因返回给调用方
+    // (例如「新建账号只能是成员或只读;管理员可在创建后再授予」)。
+    // 之前这里一律吞成「用户名可能已存在」,调用方看不出真正的问题。
+    return apiError(error);
+  }
 }

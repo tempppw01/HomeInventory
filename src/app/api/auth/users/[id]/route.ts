@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { apiError } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { canAdmin, hashPassword, requireUser } from "@/lib/account-auth";
 import { generateRecoveryCode } from "@/lib/recovery-code";
@@ -37,7 +38,7 @@ export async function PATCH(request: NextRequest, { params }: Context) {
       return user;
     });
     return NextResponse.json(rotatedRecoveryCode ? { ...updated, recoveryCode: rotatedRecoveryCode } : updated);
-  } catch (error) { return NextResponse.json({ error: error instanceof Error && error.message === "UNAUTHORIZED" ? "请先登录" : "更新账号失败" }, { status: error instanceof Error && error.message === "UNAUTHORIZED" ? 401 : 500 }); }
+  } catch (error) { return apiError(error); }
 }
 
 export async function DELETE(_: NextRequest, { params }: Context) {
@@ -51,5 +52,5 @@ export async function DELETE(_: NextRequest, { params }: Context) {
     if (target.role === "ADMIN" && await prisma.user.count({ where: { role: "ADMIN", active: true } }) <= 1) return NextResponse.json({ error: "至少保留一个启用的管理员" }, { status: 409 });
     await prisma.$transaction(async (tx) => { await tx.user.delete({ where: { id } }); await tx.activityLog.create({ data: { action: "ACCOUNT_DELETE", userId: actor.id, detail: `删除账号：${target.username}` } }); });
     return NextResponse.json({ ok: true });
-  } catch (error) { return NextResponse.json({ error: error instanceof Error && error.message === "UNAUTHORIZED" ? "请先登录" : "删除账号失败" }, { status: error instanceof Error && error.message === "UNAUTHORIZED" ? 401 : 500 }); }
+  } catch (error) { return apiError(error); }
 }

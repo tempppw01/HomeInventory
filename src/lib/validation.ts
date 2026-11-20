@@ -139,7 +139,11 @@ export const userCreateSchema = z.object({
   username: z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9._-]{2,31}$/, "请填写有效用户名、显示名称和至少 8 位密码"),
   displayName: z.string().trim().min(1, "请填写有效用户名、显示名称和至少 8 位密码").max(40),
   password: z.string().min(8, "请填写有效用户名、显示名称和至少 8 位密码").max(200),
-  role: z.enum(["ADMIN", "MEMBER", "VIEWER"]).optional(),
+  // 新建账号只允许「成员 / 只读」:管理员由现有管理员在创建后单独授予(界面流程也是如此)。
+  // 之前这里接受 ADMIN,而服务端会悄悄降级成 MEMBER —— 传 ADMIN 的人拿到普通成员却毫无提示。
+  role: z
+    .enum(["MEMBER", "VIEWER"], { message: "新建账号只能是成员或只读;管理员可在创建后再授予" })
+    .optional(),
 });
 
 /** 管理员对账号的局部更新:停用、改角色、重置密码。 */
