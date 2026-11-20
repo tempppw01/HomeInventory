@@ -5,7 +5,7 @@
 //   也不要给用户看过期的数字(家庭账目最忌讳拿旧数据做决定)。
 // - 导航请求走 network-first:有网时总是最新;断网时回退到缓存过的 shell。
 // - 静态资源(chunk/css/字体)走 cache-first:内容哈希命名,不会过期。
-const CACHE = "guiwu-shell-v1";
+const CACHE = "guiwu-shell-v2";
 const OFFLINE_URL = "/offline";
 
 self.addEventListener("install", (event) => {
@@ -45,10 +45,19 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // 页面导航:网络优先,断网回退离线页。
+  // 页面导航:网络优先;断网时**重定向**到离线页。
+  //
+  // 这里不要图省事把离线页的 HTML 直接当成当前地址的响应返回:那样浏览器仍按原地址
+  // (例如 /items)处理,前端会照常去拉这一页的数据、失败,于是渲染出通用错误边界 ——
+  // 用户看到的是「页面没能加载出来」,而不是离线页里写好的说明。
+  // 重定向之后地址真的变成 /offline,该页本身已在安装时预缓存,离线也能打开。
   if (request.mode === "navigate") {
+    const isOfflineRoute = url.pathname === OFFLINE_URL;
     event.respondWith(
-      fetch(request).catch(async () => (await caches.match(OFFLINE_URL)) ?? (await caches.match(request)) ?? Response.error()),
+      fetch(request).catch(async () => {
+        if (isOfflineRoute) return (await caches.match(OFFLINE_URL)) ?? Response.error();
+        return Response.redirect(OFFLINE_URL, 302);
+      }),
     );
   }
 });

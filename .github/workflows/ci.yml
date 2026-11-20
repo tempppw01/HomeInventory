@@ -433,6 +433,11 @@ jobs:
           PROBE_USER: leadcheck
           PROBE_PASS: Lead#2026
         run: node scripts/verify-empty-states.mjs
+      - name: 离线行为检查(Service Worker)
+        env:
+          PROBE_USER: leadcheck
+          PROBE_PASS: Lead#2026
+        run: node scripts/verify-offline.mjs
       - name: 录入与交互修复检查
         env:
           PROBE_USER: leadcheck
