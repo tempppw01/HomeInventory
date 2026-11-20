@@ -32,7 +32,8 @@
 - 录入物品时可直接新建存放位置，创建后自动选中。
 - 设置页优化为可折叠分组；AI 支持多个官方供应商预设、模型图标与模型列表拉取。
 - GitHub Actions 会构建并发布 Docker 镜像到 `34v0wphix/homeinventory`。
-  - 目前只发布 **`linux/amd64`**:arm64 走 QEMU 模拟构建时会偶发 SIGILL,已暂时下线,待接入原生 ARM runner 后恢复。
+- GitHub Actions 会构建并发布 **`linux/amd64` 与 `linux/arm64`** Docker 镜像到 `34v0wphix/homeinventory`。
+  - 两个架构分别在各自的原生 runner 上构建,再合并成一个多架构清单;早前只有 amd64 是因为 arm64 走 QEMU 模拟构建会偶发 SIGILL。
   - 因此 ARM 架构的 NAS 请用上面的「从源码三步启动」自行构建(原生构建不会有这个问题)。
 - 移除冰箱温度管理功能，物品管理聚焦库存、消耗与补货。
 - 增加可下载的完整 JSON 备份（不包含 AI/OSS 密钥），并增强导入校验与操作记录。
@@ -56,7 +57,7 @@
 
 ## Docker Compose 部署（极空间 / 威联通 NAS）
 
-Docker Hub 镜像 `34v0wphix/homeinventory:latest` 目前发布 `amd64`，可直接用于极空间、威联通等 NAS;ARM 机型请参考下面的「从源码三步启动」自行构建。在 NAS 的 Docker / Container Station 中新建 Compose 项目，粘贴以下内容并部署：
+Docker Hub 镜像 `34v0wphix/homeinventory:latest` 同时支持 `amd64` 与 `arm64`，可直接用于极空间、威联通等 NAS。在 NAS 的 Docker / Container Station 中新建 Compose 项目，粘贴以下内容并部署：
 
 ```yaml
 version: "3.8"
@@ -267,6 +268,6 @@ docker compose up -d
 
 ## 技术说明
 
-项目使用 Next.js、React、TypeScript、Prisma 和 Tailwind CSS，可部署到 `linux/amd64` 与 `linux/arm64` 设备(已发布镜像当前只有 `amd64`;ARM 设备请自行构建)。
+项目使用 Next.js、React、TypeScript、Prisma 和 Tailwind CSS，可部署到 `linux/amd64` 与 `linux/arm64` 设备。
 
 当前版本：`0.0.8`
