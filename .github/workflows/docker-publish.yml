@@ -148,3 +148,10 @@ jobs:
             gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" \
               --title "HomeInventory ${GITHUB_REF_NAME}" --generate-notes
           fi
+
+      # 自托管用户最需要的就是这两份 compose;每次发布自动带上,省得手动传。
+      - name: Attach deployment files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" docker-compose.yml docker-compose.mysql.yml --clobber
