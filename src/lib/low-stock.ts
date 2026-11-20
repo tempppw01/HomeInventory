@@ -28,15 +28,26 @@ export type LowStockInput = {
  * 是否该补货。
  * @param now 传入「现在」用于判断暂停补货是否已过期;不传则忽略暂停(用于纯展示场景)。
  */
+/**
+ * 是否处于「暂停补货提醒」期内。
+ * 抽成函数还有个好处:组件在渲染期调用它不会触发 React 的「不要在 render 里调不纯函数」告警
+ * (直接写 Date.now() 会被拦下),项目里 expiryDays(item) 也是同样的写法。
+ */
+export function isRestockPaused(
+  item: { restockPausedUntil?: Date | string | null },
+  now: number = Date.now(),
+): boolean {
+  if (!item.restockPausedUntil) return false;
+  const pausedUntil = new Date(item.restockPausedUntil).getTime();
+  return Number.isFinite(pausedUntil) && pausedUntil > now;
+}
+
 export function isLowStock(item: LowStockInput, now?: number): boolean {
   if (item.type !== "CONSUMABLE") return false;
   if (item.quantity <= 0) return false;
 
   // 用户主动暂停补货提醒的,期内不再打扰
-  if (now !== undefined && item.restockPausedUntil) {
-    const pausedUntil = new Date(item.restockPausedUntil).getTime();
-    if (Number.isFinite(pausedUntil) && pausedUntil > now) return false;
-  }
+  if (now !== undefined && isRestockPaused(item, now)) return false;
 
   if (item.minQuantity > 0 && item.quantity <= item.minQuantity) return true;
   return isLiquidConsumable(item) && item.remainingPercent <= LIQUID_LOW_PERCENT;

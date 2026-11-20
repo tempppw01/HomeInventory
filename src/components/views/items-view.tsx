@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
-import { Check, CheckSquare, ChevronDown, Copy, Download, ImagePlus, Minus, MoreHorizontal, Package, Pencil, Pill, Printer, QrCode, Search, ShoppingBasket, Sparkles, Trash2, X } from "lucide-react";
+import { BellOff, BellRing, Check, CheckSquare, ChevronDown, Copy, Download, ImagePlus, Minus, MoreHorizontal, Package, Pencil, Pill, Printer, QrCode, Search, ShoppingBasket, Sparkles, Trash2, X } from "lucide-react";
 import { useContext, useEffect, useRef, useState } from "react";
 import { categoryIconMap } from "@/components/shared";
 import type { Item, Location, ShoppingItem } from "@/types";
@@ -20,7 +20,7 @@ import { Chip, Empty, ListRow, Panel, Screen, Toolbar } from "@/components/ui-ki
 import { ReadOnlyContext, ItemQuickFilter, expiryDays, expiryDateLabel, request } from "../shared";
 import { Modal } from "./modals";
 import { localDateString } from "@/lib/local-date";
-import { isLowStock } from "@/lib/low-stock";
+import { isLowStock, isRestockPaused } from "@/lib/low-stock";
 import { isExpiringSoonDays } from "@/lib/expiry-status";
 
 const TYPE_FILTERS = [["ALL", "全部"], ["DURABLE", "耐用品"], ["CONSUMABLE", "消耗品"], ["MEDICINE", "医药"]] as const;
@@ -38,7 +38,8 @@ function TagBadge({ tone, children }: { tone: "warning" | "danger" | "muted"; ch
 // 一屏大约能看到 12-20 张卡片,60 是个「首屏够用、滚动不空窗」的量。
 const PAGE_SIZE = 60;
 
-export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, locations, items, shopping, search, setSearch, filter, setFilter, categoryFilter, setCategoryFilter, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onRemainingChange, onDelete, onQr, onAi, onPrint, onToast, onCopy, onToggleShopping, onFavoriteShopping, onAddShopping, onDeleteShopping, onBatchAi, onToastWithUndo, onCreate }: { allItems: Item[]; locations: Location[]; items: Item[]; shopping: ShoppingItem[]; search: string; setSearch: (s: string) => void; filter: ItemQuickFilter; setFilter: (f: ItemQuickFilter) => void; categoryFilter: string; setCategoryFilter: (f: string) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onRemainingChange: (item: Item, remainingPercent: number) => void; onDelete: (i: Item) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onPrint: (items: Item[]) => void; onToast: (message: string) => void; onCopy: (i: Item) => void; onToggleShopping: (item: ShoppingItem) => void; onFavoriteShopping: (item: ShoppingItem) => void; onAddShopping: () => void; onDeleteShopping: (id: string) => void; onBatchAi: () => void; onToastWithUndo: (message: string, undo: () => Promise<void>) => void; onCreate: () => void; locationFilter?: string; onChangeLocationFilter?: (id: string) => void }) {
+export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, locations, items, shopping, search, setSearch, filter, setFilter, categoryFilter, setCategoryFilter, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onRemainingChange, onPauseRestock, onDelete, onQr, onAi, onPrint, onToast, onCopy, onToggleShopping, onFavoriteShopping, onAddShopping, onDeleteShopping, onBatchAi, onToastWithUndo, onCreate }: { allItems: Item[]; locations: Location[]; items: Item[]; shopping: ShoppingItem[]; search: string; setSearch: (s: string) => void; filter: ItemQuickFilter; setFilter: (f: ItemQuickFilter) => void; categoryFilter: string; setCategoryFilter: (f: string) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onRemainingChange: (item: Item, remainingPercent: number) => void;
+  onPauseRestock?: (item: Item, days: number | null) => void | Promise<unknown>; onDelete: (i: Item) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onPrint: (items: Item[]) => void; onToast: (message: string) => void; onCopy: (i: Item) => void; onToggleShopping: (item: ShoppingItem) => void; onFavoriteShopping: (item: ShoppingItem) => void; onAddShopping: () => void; onDeleteShopping: (id: string) => void; onBatchAi: () => void; onToastWithUndo: (message: string, undo: () => Promise<void>) => void; onCreate: () => void; locationFilter?: string; onChangeLocationFilter?: (id: string) => void }) {
   const askConfirm = useConfirm();
   const readOnly = useContext(ReadOnlyContext);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -209,7 +210,7 @@ export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, lo
         <div className="min-w-0">
           {shownItems.length
             ? <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-              {visibleItems.map((item, index) => <motion.div className="h-full min-w-0" key={item.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index * 0.05, 0.2) }}><ItemCard item={item} selected={selected.has(item.id)} showSelect={selectMode} onSelect={() => toggle(item.id)} onEdit={() => onEdit(item)} onOpenDetail={() => onOpenDetail(item)} onImageUpload={(file) => onImageUpload(item, file)} onDuplicate={() => void onDuplicate(item)} onConsume={() => onConsume(item)} onRemainingChange={(remainingPercent) => onRemainingChange(item, remainingPercent)} onDelete={() => onDelete(item)} onQr={() => onQr(item)} onAi={() => onAi(item)} onCopy={() => onCopy(item)} /></motion.div>)}
+              {visibleItems.map((item, index) => <motion.div className="h-full min-w-0" key={item.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index * 0.05, 0.2) }}><ItemCard item={item} selected={selected.has(item.id)} showSelect={selectMode} onSelect={() => toggle(item.id)} onEdit={() => onEdit(item)} onOpenDetail={() => onOpenDetail(item)} onImageUpload={(file) => onImageUpload(item, file)} onDuplicate={() => void onDuplicate(item)} onConsume={() => onConsume(item)} onRemainingChange={(remainingPercent) => onRemainingChange(item, remainingPercent)} onPauseRestock={onPauseRestock} onDelete={() => onDelete(item)} onQr={() => onQr(item)} onAi={() => onAi(item)} onCopy={() => onCopy(item)} /></motion.div>)}
               {visibleItems.length < shownItems.length && (
                 <div className="col-span-full flex justify-center py-4">
                   <button ref={(node) => { loadMoreRef.current = node; }} type="button" onClick={loadMore} className="btn-ghost min-h-11 px-4 text-xs">
@@ -244,7 +245,8 @@ export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, lo
   </>;
 }
 
-export function ItemCard({ item, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onRemainingChange, onDelete, onQr, onAi, onCopy, onSelect, selected = false, showSelect = false, compact = false }: { item: Item; onEdit: () => void; onOpenDetail?: () => void; onImageUpload?: (file: File) => void; onDuplicate?: () => void; onConsume: () => void; onRemainingChange?: (remainingPercent: number) => void; onDelete?: () => void; onQr: () => void; onAi: () => void; onCopy?: () => void; onSelect?: () => void; selected?: boolean; showSelect?: boolean; compact?: boolean }) {
+export function ItemCard({ item, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onRemainingChange, onPauseRestock, onDelete, onQr, onAi, onCopy, onSelect, selected = false, showSelect = false, compact = false }: { item: Item; onEdit: () => void; onOpenDetail?: () => void; onImageUpload?: (file: File) => void; onDuplicate?: () => void; onConsume: () => void; onRemainingChange?: (remainingPercent: number) => void;
+  onPauseRestock?: (item: Item, days: number | null) => void | Promise<unknown>; onDelete?: () => void; onQr: () => void; onAi: () => void; onCopy?: () => void; onSelect?: () => void; selected?: boolean; showSelect?: boolean; compact?: boolean }) {
   const low = isLowStock(item);
   const CategoryIcon = isMedicineCategory(item.category) ? Pill : (categoryIconMap[item.category] || Package);
   const readOnly = useContext(ReadOnlyContext);
@@ -260,6 +262,14 @@ export function ItemCard({ item, onEdit, onOpenDetail, onImageUpload, onDuplicat
   const expiring = expiry !== null && isExpiringSoonDays(expiry);
   const context = useContextMenu();
   const contextItems: ContextMenuItem[] = [{ label: "编辑物品", icon: Pencil, onClick: onEdit, disabled: readOnly }, ...(onDuplicate ? [{ label: "复制为新物品", icon: Copy, onClick: onDuplicate, disabled: readOnly }] : []), ...(onCopy ? [{ label: "复制物品编号", icon: Copy, onClick: onCopy }] : []), { label: "显示二维码", icon: QrCode, onClick: onQr }, { label: isMedicine ? "AI 补全药品说明" : "AI 识别与建议", icon: Sparkles, onClick: onAi }];
+  // 「暂停补货提醒」此前只有字段与逻辑、界面没有入口:用户根本开不了这个功能。
+  if (!readOnly && item.type === "CONSUMABLE" && onPauseRestock) {
+    const paused = isRestockPaused(item);
+    contextItems.push(paused
+      ? { label: "恢复补货提醒", icon: BellRing, onClick: () => onPauseRestock(item, null) }
+      : { label: "暂停补货提醒 7 天", icon: BellOff, onClick: () => onPauseRestock(item, 7) },
+    );
+  }
   if (onDelete) contextItems.push({ label: "移入回收站", icon: Trash2, onClick: onDelete, disabled: readOnly, danger: true, separatorBefore: true });
   return <><div onContextMenu={context.onContextMenu} className="h-full min-w-0">
     <Panel padded={false} className={`group relative flex h-full min-w-0 flex-col overflow-hidden transition-transform duration-200 active:scale-[.99] ${compact ? "p-3" : "p-3.5"} ${selected ? "shadow-[inset_0_0_0_2px_var(--primary)]" : "hover:-translate-y-0.5"}`}>

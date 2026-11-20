@@ -387,6 +387,23 @@ function useAppState() {
     await refresh();
   };
 
+
+  /**
+   * 暂停 / 恢复某件物品的补货提醒(days 传 null 表示恢复)。
+   * 这个字段一直存在、客户端也尊重它,但此前没有任何入口能设置 —— 用户根本开不了这个功能。
+   */
+  const pauseRestock = async (item: Item, days: number | null) => {
+    try {
+      const until = days === null ? null : new Date(Date.now() + days * 86400000).toISOString();
+      await request(`/api/items/${item.id}`, { method: "PATCH", body: JSON.stringify({ restockPausedUntil: until }) });
+      await refresh();
+      setToast(days === null ? "已恢复补货提醒" : `已暂停补货提醒 ${days} 天`);
+      return true;
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "操作失败");
+      return false;
+    }
+  };
   const addRestockSuggestion = async (item: Item) => {
     const quantity = isLiquidConsumable(item) ? 1 : Math.max(item.minQuantity - item.quantity, 1);
     try {
@@ -451,7 +468,7 @@ function useAppState() {
     chatOpen, setChatOpen, chatSeed, setChatSeed, openChatWith, showWelcome, dismissWelcome,
     toast, toastAction, setToast,
     openEdit, openDetail, uploadItemImage, duplicateItem, copyText, removeShopping, consume,
-    updateRemaining, removeItem, mergeItems, addRestockSuggestion, toggleShopping, toggleFavoriteShopping,
+    updateRemaining, removeItem, mergeItems, pauseRestock, addRestockSuggestion, toggleShopping, toggleFavoriteShopping,
     toggleTask, deleteTask,
   };
 }

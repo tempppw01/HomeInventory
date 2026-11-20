@@ -1,3 +1,4 @@
+import { isRestockPaused } from "@/lib/low-stock";
 type ItemMetricsInput = {
   type: "DURABLE" | "CONSUMABLE";
   name: string;
@@ -68,10 +69,7 @@ export function needsRestock(
   now: number = Date.now(),
 ) {
   if (item.type !== "CONSUMABLE") return false;
-  if (item.restockPausedUntil) {
-    const pausedUntil = new Date(item.restockPausedUntil).getTime();
-    if (Number.isFinite(pausedUntil) && pausedUntil > now) return false;
-  }
+  if (isRestockPaused(item, now)) return false;
   return (item.minQuantity > 0 && item.quantity <= item.minQuantity)
     || (isLiquidConsumable(item) && item.remainingPercent <= 20);
 }
