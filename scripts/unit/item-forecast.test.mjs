@@ -78,6 +78,26 @@ test("同名物品归为重复组,建议保留数量多的", () => {
   assert.equal(groups[0].keepId, "two");
 });
 
+// 包含关系也要算重复(注释里承诺过「洗洁精」与「洗洁精柠檬」这种情形;
+// 带括号的名字靠归一化就能对上,不带括号的必须靠这条规则)。
+test("一方名字包含另一方时也算疑似重复", () => {
+  const groups = duplicateGroups([
+    item({ id: "one", name: "洗洁精", quantity: 1 }),
+    item({ id: "two", name: "洗洁精柠檬", quantity: 2 }),
+  ]);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].items.length, 2);
+  assert.equal(groups[0].keepId, "two");
+});
+
+test("过短的名字不参与包含匹配(避免「盐」把一堆东西拉进同一组)", () => {
+  const groups = duplicateGroups([
+    item({ id: "one", name: "盐" }),
+    item({ id: "two", name: "盐焗坚果" }),
+  ]);
+  assert.deepEqual(groups, []);
+});
+
 test("名字不同不会误判为重复", () => {
   const groups = duplicateGroups([
     item({ id: "one", name: "洗洁精" }),

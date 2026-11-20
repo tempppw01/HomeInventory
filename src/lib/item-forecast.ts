@@ -111,6 +111,7 @@ export type DuplicateGroup = {
 
 /**
  * 找出可能重复的物品:归一化后同名,或一方包含另一方(如「洗洁精」与「洗洁精柠檬」)。
+ * 包含判定要求较短名字至少 3 个字,避免过宽的匹配。
  * 只做提示,不自动合并 —— 合并是不可逆操作,必须由人确认。
  */
 export function duplicateGroups(items: readonly ForecastInput[]): DuplicateGroup[] {
@@ -121,6 +122,21 @@ export function duplicateGroups(items: readonly ForecastInput[]): DuplicateGroup
     const bucket = buckets.get(key) ?? [];
     bucket.push(item);
     buckets.set(key, bucket);
+  }
+
+  // 包含关系也要并组:注释里承诺的「洗洁精」与「洗洁精柠檬」此前**并没有实现** ——
+  // 只在归一化后完全相同才分组,于是最常见的「同一件东西买了不同规格/口味」漏掉了。
+  // 只合并「较短的名字被较长名字包含」这一种情况,并要求较短名字至少 3 个字,
+  // 避免「盐」这种两字以内的通用词把一堆无关物品拉进一组。
+  const keys = [...buckets.keys()].sort((left, right) => left.length - right.length);
+  for (const shorter of keys) {
+    if (shorter.length < 3 || !buckets.has(shorter)) continue;
+    for (const longer of keys) {
+      if (longer === shorter || longer.length <= shorter.length) continue;
+      if (!longer.includes(shorter) || !buckets.has(longer)) continue;
+      buckets.set(shorter, [...(buckets.get(shorter) ?? []), ...(buckets.get(longer) ?? [])]);
+      buckets.delete(longer);
+    }
   }
 
   const groups: DuplicateGroup[] = [];
