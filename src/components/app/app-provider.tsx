@@ -278,7 +278,10 @@ function useAppState() {
   // 而且每天最多一次,避免每次打开都被拦住。
   useEffect(() => {
     if (loading || expired.length === 0 || modal !== null || showWelcome) return;
-    const key = `home-inventory-expiry-notice-${new Date().toISOString().slice(0, 10)}`;
+    // 用**本地**日历日,而不是 UTC:UTC 日界在东八区是早上 8 点,
+    // 那样「每天最多一次」会跨过 8 点被重置 —— 7:50 弹一次、8:10 又弹一次。
+    const localDay = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(new Date().getDate()).padStart(2, "0")}`;
+    const key = `home-inventory-expiry-notice-${localDay}`;
     if (localStorage.getItem(key)) return;
     localStorage.setItem(key, "seen");
     // 通过 rAF 触发,避免在 effect 里同步 setState 造成级联渲染。
