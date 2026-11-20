@@ -60,4 +60,16 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --title "HomeInventory ${GITHUB_REF_NAME}" --generate-notes
+        run: |
+          # 优先用仓库里的发布说明(.github/release-notes/<tag>.md):
+          # --generate-notes 只会列出提交标题,读起来像工作日志,不适合当发布说明。
+          NOTES_FILE=".github/release-notes/${GITHUB_REF_NAME}.md"
+          if [ -f "$NOTES_FILE" ]; then
+            echo "使用发布说明:$NOTES_FILE"
+            gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" \
+              --title "HomeInventory ${GITHUB_REF_NAME}" --notes-file "$NOTES_FILE"
+          else
+            echo "没有找到 $NOTES_FILE,退回自动生成说明"
+            gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" \
+              --title "HomeInventory ${GITHUB_REF_NAME}" --generate-notes
+          fi
