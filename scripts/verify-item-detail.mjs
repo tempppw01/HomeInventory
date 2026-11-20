@@ -90,6 +90,21 @@ await dismissBlockingDialogs(page);
   check("「满上」把余量重置为 100%", reset.percent === 100, `实际=${reset.percent}%`);
 }
 
+// ③ 上次补货:有值时显示相对时间(这个字段此前只写不显示)
+{
+  const stamp = new Date(Date.now() - 3 * 86400000 - 3600000).toISOString(); // 3 天零 1 小时前
+  await page.evaluate(async ({ id, value }) => {
+    await fetch(`/api/items/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ lastRestockedAt: value }) });
+  }, { id: created.id, value: stamp });
+  await page.reload();
+  await page.waitForTimeout(2600);
+
+  const ui = await readUi();
+  const segment = /上次补货 \| ([^|]+)/.exec(ui.text);
+  check("显示了「上次补货」", Boolean(segment), ui.text.slice(0, 160));
+  check("相对时间按时刻算(3 天前,不是 4 天前)", Boolean(segment) && segment[1].trim() === "3 天前", segment ? `实际=${segment[1].trim()}` : "没有这一行");
+}
+
 // ③ 复制编号:要有可见反馈
 {
   await page.locator('button[aria-label="复制物品编号"]').first().click();

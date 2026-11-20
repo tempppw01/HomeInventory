@@ -8,7 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { itemSchema } from "../../src/lib/validation.ts";
+import { itemPatchSchema, itemSchema } from "../../src/lib/validation.ts";
 import { createItemCode } from "../../src/lib/item-code.ts";
 import { activityLabel, ACTIVITY_LABELS } from "../../src/lib/activity-label.ts";
 import { passwordStrength, generatePassword, PASSWORD_MIN_LENGTH, USERNAME_PATTERN } from "../../src/lib/password.ts";
@@ -183,4 +183,25 @@ test("服务端写入的动作都有中文标签", async () => {
   assert.ok(actions.size > 5, `没有扫到动作(防止空跑),扫到 ${actions.size} 个`);
   const missing = [...actions].filter((action) => !(action in ACTIVITY_LABELS)).sort();
   assert.deepEqual(missing, [], `这些动作缺少中文标签:${missing.join(", ")}`);
+});
+
+// ---------- 时间点字段:必须保留时刻 ----------
+// lastRestockedAt 由服务端在补货入库时写成 new Date();如果按「日期」处理,
+// 会被截断到当天零点并在 UTC 取值时挪一天 —— 「3 天前补的货」会显示成「4 天前」。
+
+test("上次补货时间:保留完整时刻,不被截断成日期", () => {
+  const stamp = "2026-11-17T15:56:06.356Z";
+  const parsed = itemPatchSchema.safeParse({ lastRestockedAt: stamp });
+  assert.equal(parsed.success, true, parsed.success ? "" : JSON.stringify(parsed.error.issues));
+  assert.equal(parsed.data.lastRestockedAt.toISOString(), stamp);
+});
+
+test("上次补货时间:可以清空", () => {
+  const parsed = itemPatchSchema.safeParse({ lastRestockedAt: null });
+  assert.equal(parsed.success, true);
+  assert.equal(parsed.data.lastRestockedAt, null);
+});
+
+test("上次补货时间:非法字符串被拒", () => {
+  assert.equal(itemPatchSchema.safeParse({ lastRestockedAt: "昨天下午" }).success, false);
 });

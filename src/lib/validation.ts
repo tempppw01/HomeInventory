@@ -81,7 +81,11 @@ export const itemSchema = z.object({
   purchaseStore: z.union([z.string().trim().max(80), z.literal(""), z.null()]).optional().transform((value) => value || null),
   restockPausedUntil: z.union([z.string().datetime(), z.literal(""), z.null()]).optional().transform((value) => value ? new Date(value) : null),
   consumeRate: z.coerce.number().min(0).max(999999).optional(),
-  lastRestockedAt: optionalDate,
+  // 注意:这个字段是**时间点**,不是日期。
+  // 服务端补货入库时写的是 new Date()(完整时间戳),若按 optionalDate 处理会被截断到当天零点、
+  // 并在 UTC 取值时挪一天 —— 于是「3 天前补的货」会显示成「4 天前」。
+  // 这里与 restockPausedUntil 用同一种处理:保留时刻。
+  lastRestockedAt: z.union([z.string().datetime(), z.literal(""), z.null()]).optional().transform((value) => (value ? new Date(value) : null)),
 });
 
 export const itemPatchSchema = itemSchema.partial();

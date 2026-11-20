@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
-import { Archive, CalendarDays, Droplets, Lightbulb, MapPin, Package, Sparkles, Timer, WalletCards, Warehouse } from "lucide-react";
+import { PackagePlus, Archive, CalendarDays, Droplets, Lightbulb, MapPin, Package, Sparkles, Timer, WalletCards, Warehouse } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { currentUser } from "@/lib/account-auth";
 import { dailyUsageCost, estimatedUseDays, isLiquidConsumable } from "@/lib/item-metrics";
@@ -45,6 +45,8 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
     const end = Date.UTC(target.getFullYear(), target.getMonth(), target.getDate());
     return Math.round((end - start) / 86400000);
   })();
+  // 上次补货:入库(shopping 标记已购买)时由服务端记录,这里用相对时间显示。
+  const restockedText = item.lastRestockedAt ? relativeTimeText(item.lastRestockedAt) : null;
   const expiryTone = expiryDaysLeft === null ? undefined : expiryToneFor(expiryDaysLeft) === "danger" ? "var(--danger)" : expiryToneFor(expiryDaysLeft) === "warning" ? "var(--warning)" : undefined;
   // 这件物品的变更流水:谁在什么时候改过它。此前 ActivityLog 有 itemId 却没有任何界面用到。
   const history = await prisma.activityLog.findMany({
@@ -94,6 +96,8 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
             <div className="space-y-0">
               <KeyValue icon={<MapPin size={18} />} label="存放位置" value={item.location?.name || "未设置"} />
               {item.storage && <KeyValue icon={<Warehouse size={18} />} label="存放建议" value={`${STORAGE_LABEL[item.storage as keyof typeof STORAGE_LABEL] ?? item.storage}${item.storageReason ? ` · ${item.storageReason}` : ""}`} />}
+              {/* 「上次补货」此前只写不显示:入库时记录了时间,界面从不展示,用户看不到它有什么用 */}
+              {restockedText && <KeyValue icon={<PackagePlus size={18} />} label="上次补货" value={restockedText} />}
             </div>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <Stat icon={<Package size={14} />} label="当前数量" value={`${item.quantity} ${item.unit}`} />
