@@ -43,6 +43,9 @@ model User {
   loginRecords LoginRecord[]
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
+  recoveryCodeHash    String?
+  recoveryGeneratedAt DateTime?
+  chatMessages        AiChatMessage[]
 }
 
 model AuthSession {
@@ -249,4 +252,42 @@ model HouseholdTask {
   @@index([status])
   @@index([dueAt])
   @@index([nextDueAt])
+}
+
+model AiChatMessage {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  position    Int
+  role        String
+  content     String
+  attachments String?
+  itemDraft   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, position])
+  @@index([userId, updatedAt])
+}
+
+model AuditRecord {
+  id           String   @id @default(cuid())
+  userId       String?
+  total        Int
+  confirmed    Int
+  locationName String   @default("全部空间")
+  finishedAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  @@index([finishedAt])
+}
+
+model SearchHistory {
+  id        String   @id @default(cuid())
+  query     String
+  userId    String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
 }

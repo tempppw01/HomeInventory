@@ -27,6 +27,12 @@ jobs:
       - name: 写接口守卫检查(静态)
         run: node scripts/verify-api-guards.mjs
       - name: 配置文档一致性检查(静态)
+      - name: 两份 schema 同步检查(静态)
+        run: node scripts/verify-schema-sync.mjs
+      - name: MySQL schema 合法性校验
+        env:
+          DATABASE_URL: mysql://user:pass@localhost:3306/db
+        run: npx prisma validate --schema prisma/schema.mysql.prisma
         run: node scripts/verify-config-docs.mjs
 
   unit:
