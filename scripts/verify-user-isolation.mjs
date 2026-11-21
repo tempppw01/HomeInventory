@@ -41,7 +41,29 @@ const makeClient = (cookie) => async (method, path, body) => {
 };
 
 const a = makeClient(await loginCookie(BASE, USER_A, PASS_A));
-const b = makeClient(await loginCookie(BASE, USER_B, PASS_B));
+
+// 第二个账号:优先用环境变量给的;没给就自己建一个临时成员账号,
+// 用完删掉。(CI 的 api 作业里并没有预置第二个账号 —— 第一次进 CI 就是因此 401)
+let tempUserId = null;
+let userB = USER_B;
+let passB = PASS_B;
+if (!process.env.PROBE_MEMBER_USER) {
+  const probeUsers = await a("GET", "/api/auth/users");
+  const existing = Array.isArray(probeUsers.body) ? probeUsers.body.map((row) => row.username) : [];
+  userB = `isolation-${Date.now().toString(36)}`;
+  passB = "Isolation#2026x";
+  const created = await a("POST", "/api/auth/users", { username: userB, displayName: "隔离检查临时账号", password: passB, role: "MEMBER" });
+  if (created.status === 200 || created.status === 201) {
+    tempUserId = created.body?.id ?? created.body?.user?.id ?? null;
+    console.log(`      第二个账号:临时建了 ${userB}`);
+  } else {
+    console.log(`      第二个账号:建号失败(${created.status}),回退到默认账号(可能不存在)`);
+    userB = USER_B;
+    passB = PASS_B;
+  }
+  if (existing.length === 0) console.log("      提示:当前账号似乎无权建号,必要时请设置 PROBE_MEMBER_USER/PASS");
+}
+const b = makeClient(await loginCookie(BASE, userB, passB));
 
 const chatTexts = (response) => (response.body?.messages ?? []).map((message) => String(message.content ?? ""));
 const searchQueries = (response) => (Array.isArray(response.body) ? response.body : []).map((row) => String(row.query ?? ""));
@@ -97,6 +119,11 @@ await a("PUT", "/api/ai/chat/history", { messages: [] });
 await b("PUT", "/api/ai/chat/history", { messages: [] });
 await a("DELETE", "/api/search-history");
 await b("DELETE", "/api/search-history");
+
+if (tempUserId) {
+  const removed = await a("DELETE", `/api/auth/users/${tempUserId}`, {});
+  console.log(`      清理:临时账号已删除(status=${removed.status})`);
+}
 
 const failed = results.filter((entry) => !entry.ok);
 console.log(`\n${results.length - failed.length}/${results.length} 通过`);
