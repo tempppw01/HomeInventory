@@ -45,3 +45,22 @@ export function expiryToneFor(days: ExpiryDays | null): "danger" | "warning" | u
   if (isExpiringSoonDays(days)) return "warning";
   return undefined;
 }
+
+/**
+ * 把「还有几天」说成人话。
+ *
+ * 为什么需要它:界面里多处自己拼天数,而且习惯性写成 `${Math.max(0, days)} 天后…` ——
+ * 于是出现了「0 天后到期」「还有 0 天」这种句子(概览卡片与月报里都出现过)。
+ * 0 与负数必须单独说:今天到期 / 明天到期 / 已过期 N 天。
+ */
+export function inDaysPhrase(days: number, action: "到期" | "用完" | "" = "到期", approximate = false): string {
+  const prefix = approximate && days > 1 ? "约 " : "";
+  if (days < 0) {
+    if (action === "到期") return `已过期 ${Math.abs(days)} 天`;
+    if (action === "用完") return "已经用完";
+    return `已过去 ${Math.abs(days)} 天`;
+  }
+  if (days === 0) return action ? `今天${action}` : "今天";
+  if (days === 1) return action ? `明天${action}` : "明天";
+  return `${prefix}${days} 天后${action}`;
+}

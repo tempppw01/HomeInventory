@@ -23,7 +23,7 @@ import { ContextMenu, useContextMenu, type ContextMenuItem } from "@/components/
 import { copyToClipboard } from "@/lib/clipboard";
 import { ItemCard } from "./items-view";
 import { localDateString } from "@/lib/local-date";
-import { isExpiringUrgentDays } from "@/lib/expiry-status";
+import { inDaysPhrase, isExpiringUrgentDays } from "@/lib/expiry-status";
 export function DashboardView({ data, now, lowStock, expiring, expired, pending, totalValue, onNavigate, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onDelete, onAddRestock, onQr, onAi, onAlerts, onCreate, onMerge, aiAvailable = false, onOpenCategory }: { data: DashboardData; now: number; lowStock: Item[]; expiring: Item[]; expired: Item[]; pending: ShoppingItem[]; totalValue: number; onNavigate: (v: View) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onDelete: (i: Item) => void; onAddRestock: (i: Item) => void; onMerge: (keepId: string, mergeIds: string[]) => Promise<unknown> | void; aiAvailable?: boolean; /** 点分类图表后跳到物品页并按该分类筛选 */ onOpenCategory?: (category: string) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onAlerts: () => void; onCreate: () => void }) {
 
   // 后台自动预测:按近期消耗速度算「还能用几天」,并找出可能重复录入的物品。
@@ -350,7 +350,7 @@ export function HomeInsightsCompact({ data, onRestock }: { data: DashboardData; 
         <div className="mt-2 space-y-1">
           {spend.nextPurchases.slice(0, 4).map((row) => (
             <div key={row.id} className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 truncate text-xs muted">{row.name} · 约 {Math.max(0, row.daysLeft)} 天后{row.estimatedCost > 0 ? ` · 预计 ¥${Math.round(row.estimatedCost)}` : ""}</span>
+              <span className="min-w-0 flex-1 truncate text-xs muted">{row.name} · {inDaysPhrase(row.daysLeft, "", true)}{row.estimatedCost > 0 ? ` · 预计 ¥${Math.round(row.estimatedCost)}` : ""}</span>
               <button type="button" onClick={() => onRestock(row.id)} className="btn-ghost min-h-11 shrink-0 rounded-full px-2.5 text-xs font-bold md:min-h-9" style={{ color: "var(--primary)" }} aria-label={`把${row.name}加到采购清单`}>加到清单</button>
             </div>
           ))}

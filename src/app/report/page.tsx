@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import { Archive, CalendarDays, Snowflake, ShoppingBasket, Wallet, Sparkles } from "lucide-react";
+import { inDaysPhrase } from "@/lib/expiry-status";
 import { prisma } from "@/lib/prisma";
 import { currentUser } from "@/lib/account-auth";
 import { restockForecast } from "@/lib/item-forecast";
@@ -142,11 +143,11 @@ export default async function ReportPage() {
           ))}
 
           {section(<CalendarDays size={14} />, "要到期了", report.expiring.length
-            ? <ul className="m-0 list-none space-y-1 p-0 text-sm">{report.expiring.map((row) => <li key={row.name}>{row.name} · {row.expired ? `已过期 ${Math.abs(row.days)} 天` : `${row.days} 天后到期`}</li>)}</ul>
+            ? <ul className="m-0 list-none space-y-1 p-0 text-sm">{report.expiring.map((row) => <li key={row.name}>{row.name} · {inDaysPhrase(row.days, "到期")}</li>)}</ul>
             : <p className="m-0 text-sm muted">30 天内没有到期的东西</p>)}
 
           {section(<ShoppingBasket size={14} />, "快用完了", report.runningOut.length
-            ? <ul className="m-0 list-none space-y-1 p-0 text-sm">{report.runningOut.map((row) => <li key={row.name}>{row.name} · 约 {Math.max(0, row.days)} 天后用完</li>)}</ul>
+            ? <ul className="m-0 list-none space-y-1 p-0 text-sm">{report.runningOut.map((row) => <li key={row.name}>{row.name} · {inDaysPhrase(row.days, "用完", true)}</li>)}</ul>
             : <p className="m-0 text-sm muted">按当前用量,暂时没有快用完的</p>)}
 
           {section(<Snowflake size={14} />, "该放冰箱的", report.fridgeMissing.length

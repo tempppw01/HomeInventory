@@ -1,5 +1,6 @@
 // 家庭月报 —— 把散落在各处的结论汇总成一页纸。
 import { isLowStock } from "@/lib/low-stock";
+import { inDaysPhrase } from "@/lib/expiry-status";
 import { isWithinExpiryWindowDays } from "@/lib/expiry-status";
 //
 // 盘点结果、支出预测、冰箱清单、AI 建议平时分散在不同面板里,
@@ -93,7 +94,7 @@ export function reportHeadline(report: HouseholdReport) {
   const expired = report.expiring.filter((row) => row.expired);
   if (expired.length) return `有 ${expired.length} 件已经过期,建议先处理掉`;
   if (report.expiring.length) return `${report.expiring.length} 件在 30 天内到期,注意先用`;
-  if (report.runningOut.length) return `最急的是「${report.runningOut[0].name}」,大约 ${Math.max(0, report.runningOut[0].days)} 天后用完`;
+  if (report.runningOut.length) return `最急的是「${report.runningOut[0].name}」,${inDaysPhrase(report.runningOut[0].days, "用完", true)}`;
   if (report.fridgeMissing.length) return `有 ${report.fridgeMissing.length} 件该冷藏的物品还没放好`;
   return "库存状态良好,暂时没有需要特别处理的事";
 }

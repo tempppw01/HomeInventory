@@ -54,6 +54,7 @@ const state = await page.evaluate(() => {
     shareAria: document.querySelector('[role="img"][aria-label^="本月消费分类占比"]')?.getAttribute("aria-label") ?? null,
     printButton: Array.from(document.querySelectorAll("button")).some((button) => (button.textContent || "").includes("打印")),
     monthLabel: /\d{4} 年 \d{1,2} 月/.test(text),
+    text,
   };
 });
 
@@ -62,6 +63,10 @@ check("月报页显示标题与四个小节", state.title && state.sections === 
 check("月报页有月份标签", state.monthLabel, `monthLabel=${state.monthLabel}`);
 check("月报页图表正常渲染(柱状 + 占比)", state.chartBars > 0 && Boolean(state.shareAria), `bars=${state.chartBars} share=${state.shareAria}`);
 check("月报页有打印按钮", state.printButton, `printButton=${state.printButton}`);
+// 天数叙述必须说人话:今天到期就写「今天到期」,不能出现「0 天后到期」。
+// (这条是全站统一的重灾区:概览卡片、月报、支出预测以前都各自用 Math.max(0, days) 拼天数)
+check("月报里没有「0 天后」这类说法", !/0\s*天后|还有\s*0\s*天/.test(state.text), (state.text.match(/.{0,12}0\s*天后.{0,12}/) ?? [""])[0]);
+check("临期条目用的是「今天到期 / N 天后到期 / 已过期 N 天」的说法", /今天到期|天后到期|已过期/.test(state.text), state.text.slice(0, 100));
 // 外部字体/CDN 拉取失败不算应用错误:字体是第三方 OSS 托管,
 // 网络受限或离线时必然失败,但界面已用 font-display: swap 回退到系统字体,功能不受影响。
 const externalResourceFailure = (text) => text.includes("Failed to load resource") || /font at|ERR_(FAILED|CONNECTION|BLOCKED)/.test(text);

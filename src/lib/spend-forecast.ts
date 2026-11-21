@@ -1,3 +1,4 @@
+import { inDaysPhrase } from "@/lib/expiry-status";
 // 支出预测 —— 把「消耗速度 × 单价」变成家里人能用的两个数字:
 //   1. 按现在的用量,一个月大概花多少钱;
 //   2. 最近该买的是哪几件、大概什么时候买。
@@ -85,7 +86,7 @@ export function spendSummary(forecast: SpendForecast) {
   if (forecast.countedItems) parts.push(`按现在用量,每月约 ¥${Math.round(forecast.monthlyTotal)}`);
   if (forecast.nextPurchases[0]) {
     const next = forecast.nextPurchases[0];
-    parts.push(`最近要买的是「${next.name}」,大约 ${Math.max(0, next.daysLeft)} 天后`);
+    parts.push(`最近要买的是「${next.name}」,${inDaysPhrase(next.daysLeft, "", true)}`);
   }
   if (forecast.missingPrice) parts.push(`${forecast.missingPrice} 件没填单价,补上能算得更准`);
   return parts.join(";");
