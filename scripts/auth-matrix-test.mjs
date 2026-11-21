@@ -201,7 +201,10 @@ if (failed.length) {
 
 // 清理家庭成员:这个套件会为权限核对建一些成员,不清掉的话会一直堆在库里。
 // (只删名字带 核对 的,避免误伤真实数据)
-for (const row of (await call("GET", "/api/members")).body ?? []) {
+const membersBody = (await call("GET", "/api/members")).body;
+// 别对接口返回直接 for...of:这个套件结束时当前会话可能是受限角色,
+// 接口会返回对象而不是数组 —— 迭代对象会 TypeError(CI 上就是这么红的)
+for (const row of Array.isArray(membersBody) ? membersBody : []) {
   if (/核对/.test(String(row.name || ""))) await call("DELETE", `/api/members/${row.id}`);
 }
 process.exit(failed.length ? 1 : 0);

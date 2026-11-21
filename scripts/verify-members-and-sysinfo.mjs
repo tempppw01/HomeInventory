@@ -37,13 +37,24 @@ const call = async (method, path, body, withCookie = cookie) => {
   return { status: response.status, body: parsed, text };
 };
 
-const memberNames = async () => {
+/**
+ * 取成员数组。
+ * 注意别对接口返回直接 for...of —— 出错时它返回的是对象(如 {error:"请先登录"}),
+ * 迭代对象会抛 TypeError(object is not iterable),CI 上就是这么红的。
+ */
+const memberRows = async () => {
   const response = await call("GET", "/api/members");
-  return Array.isArray(response.body) ? response.body.map((row) => String(row.name)) : [];
+  const body = response.body;
+  if (Array.isArray(body)) return body;
+  if (Array.isArray(body?.members)) return body.members;
+  console.log(`      提示:GET /api/members 返回的不是数组(status=${response.status}):${JSON.stringify(body).slice(0, 80)}`);
+  return [];
 };
 
+const memberNames = async () => (await memberRows()).map((row) => String(row.name));
+
 // 先清掉历史残留
-for (const row of (await call("GET", "/api/members")).body ?? []) {
+for (const row of await memberRows()) {
   if (String(row.name || "").startsWith("成员验收")) await call("DELETE", `/api/members/${row.id}`);
 }
 
@@ -140,7 +151,7 @@ for (const row of (await call("GET", "/api/members")).body ?? []) {
 }
 
 // 收尾
-for (const row of (await call("GET", "/api/members")).body ?? []) {
+for (const row of await memberRows()) {
   if (String(row.name || "").startsWith("成员验收")) await call("DELETE", `/api/members/${row.id}`);
 }
 
