@@ -28,7 +28,7 @@ export function SettingsView({ role, onToast, onAbout, theme, onThemeChange, den
       <SettingsRow title="界面密度" description="紧凑模式一屏能看到更多物品。" control={<SettingsSelect ariaLabel="界面密度" value={density} onChange={onDensityChange} options={[["comfortable", "舒适"], ["compact", "紧凑"]] as const} />} />
       <SettingsRow title="动效" description="减少动效会关掉位移与过渡动画。" control={<SettingsSelect ariaLabel="动效" value={motionMode} onChange={onMotionChange} options={[["standard", "标准"], ["reduced", "减少动效"]] as const} />} />
     </SettingsSection>
-    <HouseholdPreferences onToast={onToast} />
+    <HouseholdPreferences onToast={onToast} readOnly={role === "VIEWER"} />
     <DataTools role={role} onToast={onToast} />
     {isAdmin && <OssSettings onToast={onToast} />}
     {!isAdmin && <SettingsSection icon={Info} title="管理员专属设置" summary="账号、AI、图片存储与完整备份">

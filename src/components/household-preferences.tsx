@@ -13,7 +13,9 @@ const EXPIRY_OPTIONS = [["3", "3 天"], ["7", "7 天"], ["14", "14 天"], ["30",
 const WEEKDAY_OPTIONS = [["0", "周日"], ["1", "周一"], ["2", "周二"], ["3", "周三"], ["4", "周四"], ["5", "周五"], ["6", "周六"]] as const;
 
 
-export function HouseholdPreferences({ onToast }: { onToast: (message: string) => void }) {
+// readOnly(只读账号):提醒偏好存在服务端,PATCH 会被 403 拒绝 ——
+// 与其让用户改完才失败,不如直接置灰并说明;显示偏好是纯前端的,不受影响。
+export function HouseholdPreferences({ onToast, readOnly = false }: { onToast: (message: string) => void; readOnly?: boolean }) {
   const [value, setValue] = useState<Preferences>({ expiryReminderDays: 7, lowStockReminder: true, weeklyReviewEnabled: true, weeklyReviewDay: 0 });
   const [saving, setSaving] = useState(false);
   useEffect(() => { fetch("/api/settings/preferences").then((response) => response.ok ? response.json() : null).then((result) => result && setValue(result)).catch(() => undefined); }, []);
@@ -30,7 +32,7 @@ export function HouseholdPreferences({ onToast }: { onToast: (message: string) =
     icon={BellRing}
     title="提醒与盘点"
     summary={summary}
-    badge={<SettingsBadge tone={saving ? "warning" : "muted"}>{saving ? "保存中..." : "自动保存"}</SettingsBadge>}
+    badge={<SettingsBadge tone={readOnly ? "muted" : saving ? "warning" : "muted"}>{readOnly ? "只读账号不可修改" : saving ? "保存中..." : "自动保存"}</SettingsBadge>}
   >
     <SettingsRow
       title="临期提前提醒"
@@ -38,25 +40,28 @@ export function HouseholdPreferences({ onToast }: { onToast: (message: string) =
         ariaLabel="临期提前提醒"
         value={String(value.expiryReminderDays)}
         onChange={(next) => void update({ expiryReminderDays: Number(next) })}
+        disabled={readOnly}
         options={EXPIRY_OPTIONS}
       />}
     />
     <SettingsRow
       title="低库存提醒"
-      onActivate={() => void update({ lowStockReminder: !value.lowStockReminder })}
+      onActivate={readOnly ? undefined : () => void update({ lowStockReminder: !value.lowStockReminder })}
       control={<SettingsSwitch
         label="低库存提醒"
         checked={value.lowStockReminder}
+        disabled={readOnly}
         onChange={(next) => void update({ lowStockReminder: next })}
       />}
     />
     <SettingsRow
       icon={CalendarClock}
       title="每周盘点提醒"
-      onActivate={() => void update({ weeklyReviewEnabled: !value.weeklyReviewEnabled })}
+      onActivate={readOnly ? undefined : () => void update({ weeklyReviewEnabled: !value.weeklyReviewEnabled })}
       control={<SettingsSwitch
         label="每周盘点提醒"
         checked={value.weeklyReviewEnabled}
+        disabled={readOnly}
         onChange={(next) => void update({ weeklyReviewEnabled: next })}
       />}
     />
@@ -65,6 +70,7 @@ export function HouseholdPreferences({ onToast }: { onToast: (message: string) =
       control={<SettingsSelect
         ariaLabel="每周盘点提醒日"
         value={String(value.weeklyReviewDay)}
+        disabled={readOnly}
         onChange={(next) => void update({ weeklyReviewDay: Number(next) })}
         options={WEEKDAY_OPTIONS}
       />}

@@ -21,6 +21,8 @@ const ADMIN_USER = process.env.PROBE_MEMBER_USER ? process.env.PROBE_USER || "le
 const ADMIN_PASS = process.env.PROBE_PASS || "Lead#2026";
 const MEMBER_USER = process.env.PROBE_MEMBER_USER || "rcvlead";
 const MEMBER_PASS = process.env.PROBE_MEMBER_PASS || "Rcv#2026x";
+const VIEWER_USER = process.env.PROBE_VIEWER_USER || "viewcheck";
+const VIEWER_PASS = process.env.PROBE_VIEWER_PASS || "View#2026";
 
 const results = [];
 const check = (name, ok, detail = "") => {
@@ -78,6 +80,26 @@ const settingsState = () => page.evaluate(() => {
   };
 });
 
+/** 只读账号的设置页:哪些控件可改、哪些被置灰/隐藏 */
+const viewerSettingsState = () => page.evaluate(() => {
+  const controlDisabled = (label) => {
+    const node = Array.from(document.querySelectorAll('main select, main button[role="switch"]'))
+      .find((element) => element.getAttribute("aria-label") === label);
+    return node ? Boolean(node.disabled) : false;
+  };
+  const text = document.querySelector("main")?.innerText || "";
+  return {
+    themeEnabled: !controlDisabled("外观主题"),
+    densityEnabled: !controlDisabled("界面密度"),
+    expiryDisabled: controlDisabled("临期提前提醒"),
+    lowStockDisabled: controlDisabled("低库存提醒"),
+    weeklyDayDisabled: controlDisabled("每周盘点提醒日"),
+    importInput: Boolean(document.querySelector('input[type="file"][accept*="json"]')),
+    memberInput: Boolean(document.querySelector('input[aria-label="成员名称"]')),
+    exportLink: Boolean(document.querySelector('a[href="/api/items?export=1"]')),
+    readonlyBadge: text.includes("只读账号不可修改"),
+  };
+});
 // ---------- ① 成员视角:看不到管理员专属控件,也不再卡住 ----------
 {
   const login = await openSettingsAs(MEMBER_USER, MEMBER_PASS);
@@ -89,6 +111,26 @@ const settingsState = () => page.evaluate(() => {
     check("成员看不到 AI 配置字段", !state.aiEndpointField, JSON.stringify(state));
     check("成员看到一句说明(为什么没有这些设置)", state.adminNote, JSON.stringify(state));
     check("成员不再卡在「读取中」", !state.stuck, JSON.stringify(state));
+  }
+}
+
+// ---------- ①b 只读视角:该留的能改、服务端设置置灰、写动作隐藏 ----------
+//
+// 只读账号同样能看到设置页,但里面的「写」控件点下去只会 403:
+//   · 纯前端的显示偏好(主题/密度/动效)该留 —— 它存在浏览器本地,任何人都有权改
+//   · 服务端的提醒设置该置灰(PATCH /api/settings/preferences 对只读是 403)
+//   · 导入物品 / 添加成员该隐藏(POST 一律 403)
+//   · 导出与记录该留(GET 都是 200)
+{
+  const login = await openSettingsAs(VIEWER_USER, VIEWER_PASS);
+  check("只读账号能登录", login.ok, login.detail ?? "");
+  if (login.ok) {
+    const state = await viewerSettingsState();
+    check("只读仍能改纯前端的显示偏好(主题/密度)", state.themeEnabled && state.densityEnabled, JSON.stringify(state));
+    check("只读不能改服务端提醒设置(已置灰)", state.expiryDisabled && state.lowStockDisabled && state.weeklyDayDisabled, JSON.stringify(state));
+    check("只读看不到写动作(导入 / 添加成员)", !state.importInput && !state.memberInput, JSON.stringify(state));
+    check("只读看到「只读账号不可修改」的说明", state.readonlyBadge, JSON.stringify(state));
+    check("只读仍能导出(GET 是允许的)", state.exportLink, JSON.stringify(state));
   }
 }
 

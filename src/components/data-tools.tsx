@@ -44,6 +44,8 @@ export function DataTools({ role, onToast }: { role: "ADMIN" | "MEMBER" | "VIEWE
 
   // 完整备份与恢复备份是管理员专属(接口对成员返回 403),别把按钮摆在成员面前
   const isAdmin = role === "ADMIN";
+  // 只读账号能看能导出,但不能写(导入/加成员都会被 403 拒绝)
+  const isViewer = role === "VIEWER";
 
   return <SettingsSection
     icon={ShieldCheck}
@@ -62,7 +64,7 @@ export function DataTools({ role, onToast }: { role: "ADMIN" | "MEMBER" | "VIEWE
         <a href="/report" target="_blank" rel="noreferrer" className="btn-ghost flex items-center gap-2 text-xs" aria-label="打开家庭月报">
           <History size={14} />家庭月报
         </a>
-<label className="btn-ghost flex cursor-pointer items-center gap-2 text-xs"><Upload size={14} />导入物品<input type="file" accept="application/json,.json,text/csv,.csv" className="hidden" onChange={(e) => importFile(e.target.files?.[0])} /></label>
+{!isViewer && <label className="btn-ghost flex cursor-pointer items-center gap-2 text-xs"><Upload size={14} />导入物品<input type="file" accept="application/json,.json,text/csv,.csv" className="hidden" onChange={(e) => importFile(e.target.files?.[0])} /></label>}
         {isAdmin && <label className="btn-ghost flex cursor-pointer items-center gap-2 text-xs"><History size={14} />合并恢复备份<input type="file" accept="application/json,.json" className="hidden" onChange={(e) => restoreBackup(e.target.files?.[0])} /></label>}
       </div>}
     />
@@ -79,10 +81,10 @@ export function DataTools({ role, onToast }: { role: "ADMIN" | "MEMBER" | "VIEWE
             "--member-ink": member.color,
             color: "color-mix(in srgb, var(--member-ink) 68%, var(--foreground))",
           } as React.CSSProperties}>{member.name}</span>)}
-        <div className="ml-auto flex gap-2">
+        {!isViewer && <div className="ml-auto flex gap-2">
           <input className="input h-11 min-h-11 w-28 py-1 text-xs" aria-label="成员名称" value={name} onChange={(e) => setName(e.target.value)} placeholder="成员名称" />
           <button type="button" onClick={addMember} aria-label="添加成员" title="添加成员" className="btn-ghost grid size-11 min-h-11 place-items-center p-0"><UserPlus size={14} /></button>
-        </div>
+        </div>}
       </div>}
     />
 
