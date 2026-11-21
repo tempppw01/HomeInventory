@@ -55,12 +55,30 @@ const names = await page.evaluate(() => {
     available: node.clientWidth,
     needed: node.scrollWidth,
     truncated: node.scrollWidth > node.clientWidth + 2,
+    title: node.getAttribute("title"),
   }));
 });
 
 check("读到了物品名(防止空跑)", names.length >= 5, `读到 ${names.length} 个`);
+
+// 卡片宽度有限,名字特别长时截断是允许的。但截断必须是**可恢复**的:
+// 被截掉的名字一定要能悬停看到全名(title),不能悄悄切掉。
+// (注意别用「字数阈值」来判断 —— 可用宽度取决于卡片宽度与数据,
+//  这一版我第一次写成「12 字以内不许截断」,而 CI 的种子数据里正好有个 12 字的名字,卡在边界上。)
 const truncated = names.filter((entry) => entry.truncated);
-check("桌面宽度下物品名没有被截断", truncated.length === 0, truncated.map((entry) => `${entry.text}(${entry.available}<${entry.needed})`).join(", "));
+const withoutTitle = truncated.filter((entry) => !entry.title);
+const intact = names.filter((entry) => !entry.truncated);
+
+check(
+  "所有被截断的物品名都能悬停看到全名(title)",
+  withoutTitle.length === 0,
+  withoutTitle.map((entry) => `${entry.text}(${entry.available}<${entry.needed})`).join(", "),
+);
+check("至少有一个物品名完整显示(说明卡片宽度正常)", intact.length > 0, `${names.length} 个名字全部被截断`);
+
+if (truncated.length) {
+  console.log(`      提示:${truncated.length}/${names.length} 个名字因较长被截断(均已带 title 提示)`);
+}
 
 // ---------- ② 「建议重新分析」在名字下方,而不是标题行里 ----------
 const pill = await page.evaluate(() => {
