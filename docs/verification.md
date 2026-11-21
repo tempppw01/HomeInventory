@@ -53,6 +53,7 @@
 | `verify-restock-pause` | 暂停补货期内不生成采购建议 | 6 |
 | `verify-concurrency` | 并发写入不产生重复采购建议(含自愈)、并发消耗是原子的 | 9 |
 | `verify-user-isolation` | 跨用户隔离:聊天记录与搜索历史只属于各自账号,覆盖写入不影响别人 | 10 |
+| `verify-import` | 导入接口:合法数据进库并自动建空间、逐行报错、1000 行截断、只读 403 | 12 |
 | `verify-image-upload` | 图片上传(本地存储):落盘、读回、大小与类型限制、删除物品时清理文件 | 11 |
 | `verify-upgrade-path` | 旧版本库 → `prisma db push` → 数据不丢、新表新字段可用 | 10 |
 
