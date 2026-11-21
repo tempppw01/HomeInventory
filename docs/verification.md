@@ -81,6 +81,7 @@
 | `verify-restock-pause-ui` | 卡片菜单暂停 / 恢复补货提醒 | 6 | 流程 |
 | `verify-print-layout` | 打印排版几何:标签毫米尺寸、纸张边界、每行几列换行 | 13 | 流程 |
 | `verify-qr-scan` | 无 BarcodeDetector 时用 jsQR 兜底解码:应用自己的二维码走「图片」模式能识别并推进盘点 | 7 | 流程 |
+| `verify-about-and-version` | 关于页可打开、显示的版本与 package.json 一致、有 Releases 入口;设置页版本同样一致 | 8 | 流程 |
 | `verify-consume-scan` | 「扫码消耗」页(/consume/[id]):打开即消耗 1 件、重复提交幂等、液体不扣件数、未知编号 404 | 13 | 流程 |
 | `verify-auth-gate` | 未登录时 5 个应用路由只给登录表单且不泄露物品名、6 个数据接口 401、退出后重新被拦住;含阳性对照 | 9 | 流程 |
 | `verify-role-ui` | 成员看不到管理员专属设置(账号/AI/存储/完整备份)且有说明、管理员照旧看得到、成员调管理员接口一律 403 | 12 | 流程 |

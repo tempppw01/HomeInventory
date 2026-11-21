@@ -483,6 +483,11 @@ jobs:
           PROBE_USER: leadcheck
           PROBE_PASS: Lead#2026
         run: node scripts/verify-print-layout.mjs
+      - name: 关于页与版本一致性检查
+        env:
+          PROBE_USER: leadcheck
+          PROBE_PASS: Lead#2026
+        run: node scripts/verify-about-and-version.mjs
       - name: 录入与交互修复检查
         env:
           PROBE_USER: leadcheck

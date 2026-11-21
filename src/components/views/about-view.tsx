@@ -2,7 +2,7 @@
 
 import { Archive, BookOpen, Boxes, Database, Info, Scale, Sparkles } from "lucide-react";
 import { PageTitle } from "@/components/ui-kit";
-import { APP_VERSION } from "@/lib/version";
+import { APP_VERSION, PROJECT_RELEASES_URL } from "@/lib/version";
 import { ListRow, Panel } from "../ui-kit";
 
 
@@ -25,7 +25,14 @@ export function AboutView() {
 
         <Panel title="版本与更新">
           <ListRow icon={Info} title={APP_VERSION} meta="当前版本" trailing={<span className="shrink-0 text-xs font-bold muted">MVP 迭代起点</span>} />
-          <ListRow icon={Sparkles} title="更新说明" meta="维护版本:修正界面密度、交互反馈与若干稳定性问题" />
+          {/* 这里原来是写死的发版说明(「维护版本:修正界面密度…」),发版后不会更新,
+              用户看到的永远是一句过时的话。改为指向 Releases —— 那才是唯一的更新日志。 */}
+          <ListRow
+            icon={Sparkles}
+            title="更新说明"
+            meta="每个版本的改动都记在 GitHub Releases 上"
+            trailing={<a href={PROJECT_RELEASES_URL} target="_blank" rel="noreferrer" className="shrink-0 text-xs font-bold" style={{ color: "var(--primary)" }}>查看</a>}
+          />
         </Panel>
 
         <Panel title="使用提示">
