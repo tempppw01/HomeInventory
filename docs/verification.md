@@ -84,6 +84,7 @@
 | `verify-restock-pause-ui` | 卡片菜单暂停 / 恢复补货提醒 | 6 | 流程 |
 | `verify-print-layout` | 打印排版几何:标签毫米尺寸、纸张边界、每行几列换行 | 13 | 流程 |
 | `verify-qr-scan` | 无 BarcodeDetector 时用 jsQR 兜底解码:应用自己的二维码走「图片」模式能识别并推进盘点 | 7 | 流程 |
+| `verify-item-card-layout` | 物品卡片布局:桌面宽度下物品名不截断、状态胶囊在第二行、窄屏点击区与无横向溢出 | 8 | 流程 |
 | `verify-overview-focus` | 概览首屏「最需要做的事」:文案不重复叙述天数,并随数据状态在「快到期 / 已经过期」间切换 | 10 | 流程 |
 | `verify-about-and-version` | 关于页可打开、显示的版本与 package.json 一致、有 Releases 入口;设置页版本同样一致 | 8 | 流程 |
 | `verify-consume-scan` | 「扫码消耗」页(/consume/[id]):打开即消耗 1 件、重复提交幂等、液体不扣件数、未知编号 404 | 13 | 流程 |

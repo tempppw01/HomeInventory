@@ -278,19 +278,7 @@ export function ItemCard({ item, onEdit, onOpenDetail, onImageUpload, onDuplicat
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2 pr-8">
             <button type="button" onClick={onOpenDetail} className="flex min-h-11 min-w-0 flex-1 items-center text-left md:min-h-10"><span className="min-w-0 truncate text-sm font-extrabold hover:underline">{item.name}</span></button>
-            {ai.hasHighlights && <Sparkles size={12} className="shrink-0" style={{ color: "var(--primary)" }} aria-label="有 AI 信息" />}{aiStale && (
-  <button
-    type="button"
-    onClick={(event) => { event.stopPropagation(); event.preventDefault(); onAi(); }}
-    className="flex min-h-11 shrink-0 items-center rounded-full px-2 text-[10px] font-bold transition-transform active:scale-95 sm:min-h-0 sm:px-1.5 sm:py-0.5"
-    // 文案色用主题变量,不要硬编码:深色模式下写死的 #8a571c 压在深色底板上只有 2.0 对比度。
-    style={{ background: "var(--warning-soft)", color: "var(--warning)" }}
-    title="物品信息改过,点这里让 AI 重新看一遍"
-    aria-label={`重新分析「${item.name}」`}
-  >
-    建议重新分析
-  </button>
-)}
+            {ai.hasHighlights && <Sparkles size={12} className="shrink-0" style={{ color: "var(--primary)" }} aria-label="有 AI 信息" />}{/* 「建议重新分析」移到下面那行状态标签里 —— 它挤在这里会把物品名压到 50px 左右(实测「可口可乐罐装」被截成「可口...」) */}
             <span className="shrink-0 text-sm font-black tabular-nums">{item.quantity}<span className="ml-0.5 text-xs font-normal muted">{item.unit}</span></span>
           </div>
           <div className="mt-1.5 flex min-w-0 items-center gap-1.5 text-xs muted">
@@ -298,6 +286,18 @@ export function ItemCard({ item, onEdit, onOpenDetail, onImageUpload, onDuplicat
             {expired || expiring ? <TagBadge tone={expired ? "danger" : "warning"}>{expiryDateLabel(item)}</TagBadge> : null}
             {low && <TagBadge tone="warning">需补货</TagBadge>}
             {item.storage === "COLD" && <TagBadge tone="muted">需冷藏</TagBadge>}
+            {aiStale && (
+              <button
+                type="button"
+                onClick={(event) => { event.stopPropagation(); event.preventDefault(); onAi(); }}
+                className="flex min-h-11 shrink-0 items-center rounded-full px-2 text-[10px] font-bold transition-transform active:scale-95 sm:min-h-0 sm:px-1.5 sm:py-0.5"
+                style={{ background: "var(--warning-soft)", color: "var(--warning)" }}
+                title="物品信息改过,点这里让 AI 重新看一遍"
+                aria-label={`重新分析「${item.name}」`}
+              >
+                建议重新分析
+              </button>
+            )}
             {item.storage === "COLD_AFTER_OPEN" && <TagBadge tone="muted">开封后冷藏</TagBadge>}
           </div>
           {canConsumeOne && <button type="button" onClick={onConsume} className="tap-target mt-2 inline-flex min-h-10 shrink-0 items-center justify-center gap-1 rounded-full px-2 text-xs font-bold transition-colors md:px-2.5" style={{ background: "var(--primary-soft)", color: "var(--primary-strong)" }} title={`消耗 1 ${item.unit}`} aria-label={`用掉 1 ${item.unit}`}><Minus size={13} /><span className="hidden md:inline">用掉 1 {item.unit}</span></button>}

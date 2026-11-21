@@ -504,6 +504,11 @@ jobs:
           PROBE_USER: leadcheck
           PROBE_PASS: Lead#2026
         run: node scripts/verify-overview-focus.mjs
+      - name: 物品卡片布局检查
+        env:
+          PROBE_USER: leadcheck
+          PROBE_PASS: Lead#2026
+        run: node scripts/verify-item-card-layout.mjs
       - name: 录入与交互修复检查
         env:
           PROBE_USER: leadcheck
