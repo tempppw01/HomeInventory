@@ -50,7 +50,13 @@ export async function DELETE(_: NextRequest, { params }: Context) {
     const target = await prisma.user.findUnique({ where: { id } });
     if (!target) return NextResponse.json({ error: "账号不存在" }, { status: 404 });
     if (target.role === "ADMIN" && await prisma.user.count({ where: { role: "ADMIN", active: true } }) <= 1) return NextResponse.json({ error: "至少保留一个启用的管理员" }, { status: 409 });
-    await prisma.$transaction(async (tx) => { await tx.user.delete({ where: { id } }); await tx.activityLog.create({ data: { action: "ACCOUNT_DELETE", userId: actor.id, detail: `删除账号：${target.username}` } }); });
+    // 建号时会顺带建一条家庭成员(带 userId);删号时也要把它一并清掉,
+    // 否则已删账号的显示名会永远留在「家庭成员」列表里(关系是 onDelete: SetNull,不会自动删)。
+    await prisma.$transaction(async (tx) => {
+      await tx.householdMember.deleteMany({ where: { userId: id } });
+      await tx.user.delete({ where: { id } });
+      await tx.activityLog.create({ data: { action: "ACCOUNT_DELETE", userId: actor.id, detail: `删除账号:${target.username}` } });
+    });
     return NextResponse.json({ ok: true });
   } catch (error) { return apiError(error); }
 }

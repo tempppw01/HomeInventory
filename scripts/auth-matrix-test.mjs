@@ -198,4 +198,10 @@ if (failed.length) {
   console.log("\n=== 失败项 ===");
   for (const row of failed) console.log(`[${row.area}] ${row.name} → ${row.detail}`);
 }
+
+// 清理家庭成员:这个套件会为权限核对建一些成员,不清掉的话会一直堆在库里。
+// (只删名字带 核对 的,避免误伤真实数据)
+for (const row of (await call("GET", "/api/members")).body ?? []) {
+  if (/核对/.test(String(row.name || ""))) await call("DELETE", `/api/members/${row.id}`);
+}
 process.exit(failed.length ? 1 : 0);
