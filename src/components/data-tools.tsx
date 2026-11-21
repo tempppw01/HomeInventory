@@ -9,7 +9,7 @@ import { SettingsBadge, SettingsRow, SettingsSection } from "@/components/settin
 import { ListRow } from "@/components/ui-kit";
 import { useConfirm } from "@/components/confirm-dialog";
 
-export function DataTools({ onToast }: { onToast: (message: string) => void }) {
+export function DataTools({ role, onToast }: { role: "ADMIN" | "MEMBER" | "VIEWER" | null; onToast: (message: string) => void }) {
   const askConfirm = useConfirm();
   const [members, setMembers] = useState<{ id: string; name: string; color: string }[]>([]);
   const [name, setName] = useState("");
@@ -42,6 +42,9 @@ export function DataTools({ onToast }: { onToast: (message: string) => void }) {
 
   const restoreBackup = async (file?: File) => { if (!file) return; try { let backup; try { backup = JSON.parse(await file.text()); } catch { onToast("这个文件不是有效的完整备份 JSON,请选择「导出完整备份」生成的文件"); return; } const counts = { items: Array.isArray(backup.items) ? backup.items.length : 0, locations: Array.isArray(backup.locations) ? backup.locations.length : 0, shopping: Array.isArray(backup.shopping) ? backup.shopping.length : 0, priceRecords: Array.isArray(backup.priceRecords) ? backup.priceRecords.length : 0, members: Array.isArray(backup.members) ? backup.members.length : 0 }; if (!counts.items && !counts.locations && !counts.shopping) throw new Error("备份文件中没有可恢复的数据"); const summary = `将检查 ${counts.items} 件物品、${counts.locations} 个空间、${counts.shopping} 条采购${counts.priceRecords ? `、${counts.priceRecords} 条价格记录` : ""}${counts.members ? `、${counts.members} 位成员` : ""}，重复数据会自动跳过。继续吗？`; if (!(await askConfirm(summary, { title: "恢复完整备份", confirmLabel: "开始恢复" }))) return; const response = await fetch("/api/backup/restore", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(backup) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || "恢复失败"); onToast(`已合并恢复 ${result.items} 件物品、${result.locations} 个空间、${result.priceRecords || 0} 条价格记录`); } catch (error) { onToast(error instanceof Error ? error.message : "恢复失败"); } };
 
+  // 完整备份与恢复备份是管理员专属(接口对成员返回 403),别把按钮摆在成员面前
+  const isAdmin = role === "ADMIN";
+
   return <SettingsSection
     icon={ShieldCheck}
     title="数据安全与家庭成员"
@@ -54,13 +57,13 @@ export function DataTools({ onToast }: { onToast: (message: string) => void }) {
       description="完整备份不包含登录密码和 API 密钥；恢复只添加缺失数据，不会清空当前家庭记录。"
       stacked
       control={<div className="flex w-full flex-wrap gap-2 sm:justify-end">{/* 备份动作按「按钮组右对齐」统一 */}
-        <a className="btn-primary flex items-center gap-2 text-xs" href="/api/backup"><Download size={14} />导出完整备份</a>
+        {isAdmin && <a className="btn-primary flex items-center gap-2 text-xs" href="/api/backup"><Download size={14} />导出完整备份</a>}
         <a className="btn-ghost flex items-center gap-2 text-xs" href="/api/items?export=1"><Download size={14} />导出物品 JSON</a>
         <a href="/report" target="_blank" rel="noreferrer" className="btn-ghost flex items-center gap-2 text-xs" aria-label="打开家庭月报">
           <History size={14} />家庭月报
         </a>
 <label className="btn-ghost flex cursor-pointer items-center gap-2 text-xs"><Upload size={14} />导入物品<input type="file" accept="application/json,.json,text/csv,.csv" className="hidden" onChange={(e) => importFile(e.target.files?.[0])} /></label>
-        <label className="btn-ghost flex cursor-pointer items-center gap-2 text-xs"><History size={14} />合并恢复备份<input type="file" accept="application/json,.json" className="hidden" onChange={(e) => restoreBackup(e.target.files?.[0])} /></label>
+        {isAdmin && <label className="btn-ghost flex cursor-pointer items-center gap-2 text-xs"><History size={14} />合并恢复备份<input type="file" accept="application/json,.json" className="hidden" onChange={(e) => restoreBackup(e.target.files?.[0])} /></label>}
       </div>}
     />
 

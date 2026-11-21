@@ -1,0 +1,137 @@
+// 角色界面验收:成员不该看到管理员专属的设置(它们只会 403)。
+//
+// 起因:MEMBER 的界面此前**原样展示**了「账号与家庭成员 / 新增成员账号 / 登录记录 /
+// 图片存储 / AI 配置 / 完整备份」—— 而接口对成员一律返回 403。
+// 于是用户填完「创建账号」表单点提交,只拿到一个看不懂的失败;
+// 账号列表还会永远停在「正在读取账号... / 读取中」。
+//
+// 现在这些分区对成员/只读不渲染,并给出一句说明。这条检查守住两件事:
+//   · 成员看不到管理员专属控件,也不再卡在读取中
+//   · 管理员**照旧**能看到全部(避免「一刀切藏掉」)
+//
+// 同时补两条接口侧抽查:成员调用管理员接口必须 403(界面藏了,接口也不能松)。
+//
+// 用法:PROBE_USER=bgs PROBE_PASS=... PROBE_MEMBER_PASS=... node scripts/verify-role-ui.mjs
+
+import { launchChromium } from "./lib/browser.mjs";
+import { dismissBlockingDialogs } from "./lib/probe-auth.mjs";
+
+const BASE = process.env.BASE_URL || "http://127.0.0.1:3001";
+const ADMIN_USER = process.env.PROBE_MEMBER_USER ? process.env.PROBE_USER || "leadcheck" : process.env.PROBE_USER || "leadcheck";
+const ADMIN_PASS = process.env.PROBE_PASS || "Lead#2026";
+const MEMBER_USER = process.env.PROBE_MEMBER_USER || "rcvlead";
+const MEMBER_PASS = process.env.PROBE_MEMBER_PASS || "Rcv#2026x";
+
+const results = [];
+const check = (name, ok, detail = "") => {
+  results.push({ name, ok, detail });
+  console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok ? "" : "  → " + detail}`);
+};
+
+const browser = await launchChromium();
+const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+const page = await context.newPage();
+
+const finish = async (code) => {
+  await context.close();
+  await browser.close();
+  process.exit(code);
+};
+
+/** 以指定账号登录,并打开设置页(展开折叠分组) */
+const openSettingsAs = async (user, pass) => {
+  // 先进入应用再登出:在 about:blank 上发 /api/... 会因没有 origin 而报 URL 解析失败
+  await page.goto(BASE);
+  await page.waitForTimeout(1600);
+  await page.evaluate(async () => { await fetch("/api/auth/logout", { method: "POST" }); });
+  await page.goto(BASE);
+  await page.waitForTimeout(2200);
+  if (await page.locator("#auth-username").count()) {
+    await page.fill("#auth-username", user);
+    await page.fill("#auth-password", pass);
+    await page.click('button[type="submit"]');
+    await page.waitForTimeout(3200);
+  } else {
+    const state = await page.evaluate(() => ({ hasForm: Boolean(document.querySelector("#auth-username")) }));
+    if (state.hasForm) return { ok: false, detail: "登录表单未消失" };
+  }
+  await dismissBlockingDialogs(page);
+  await page.goto(`${BASE}/settings`);
+  await page.waitForTimeout(2800);
+  await dismissBlockingDialogs(page);
+  await page.evaluate(() => { document.querySelectorAll("details").forEach((node) => { node.open = true; }); });
+  await page.waitForTimeout(600);
+  return { ok: true };
+};
+
+/** 用结构性标记判断管理员专属內容在不在(别用词语匹配 —— 说明文案里也含这些词) */
+const settingsState = () => page.evaluate(() => {
+  const text = document.querySelector("main")?.innerText || "";
+  return {
+    createAccountButton: Array.from(document.querySelectorAll("main button")).some((button) => (button.textContent || "").trim() === "创建账号"),
+    newRoleSelect: Boolean(document.querySelector('select[aria-label="新账号权限"]')),
+    fullBackupLink: Boolean(document.querySelector('a[href="/api/backup"]')),
+    restoreLabel: text.includes("合并恢复备份"),
+    aiEndpointField: text.includes("接口地址"),
+    adminNote: text.includes("只有管理员可以查看和修改"),
+    stuck: /正在读取账号|读取中/.test(text),
+  };
+});
+
+// ---------- ① 成员视角:看不到管理员专属控件,也不再卡住 ----------
+{
+  const login = await openSettingsAs(MEMBER_USER, MEMBER_PASS);
+  check("成员账号能登录", login.ok, login.detail ?? "");
+  if (login.ok) {
+    const state = await settingsState();
+    check("成员看不到「创建账号」表单", !state.createAccountButton && !state.newRoleSelect, JSON.stringify(state));
+    check("成员看不到完整备份与恢复入口", !state.fullBackupLink && !state.restoreLabel, JSON.stringify(state));
+    check("成员看不到 AI 配置字段", !state.aiEndpointField, JSON.stringify(state));
+    check("成员看到一句说明(为什么没有这些设置)", state.adminNote, JSON.stringify(state));
+    check("成员不再卡在「读取中」", !state.stuck, JSON.stringify(state));
+  }
+}
+
+// ---------- ② 管理员视角:照旧能看到全部(避免一刀切藏掉) ----------
+{
+  const login = await openSettingsAs(ADMIN_USER, ADMIN_PASS);
+  check("管理员账号能登录", login.ok, login.detail ?? "");
+  if (login.ok) {
+    const state = await settingsState();
+    check("管理员仍能看到「创建账号」表单", state.createAccountButton && state.newRoleSelect, JSON.stringify(state));
+    check("管理员仍能看到完整备份与恢复入口", state.fullBackupLink && state.restoreLabel, JSON.stringify(state));
+    check("管理员仍能看到 AI 配置字段", state.aiEndpointField, JSON.stringify(state));
+    check("管理员看不到那条「管理员专属」说明", !state.adminNote, JSON.stringify(state));
+  }
+}
+
+// ---------- ③ 接口侧抽查:界面藏了,接口也不能松 ----------
+{
+  await openSettingsAs(MEMBER_USER, MEMBER_PASS);
+  const codes = await page.evaluate(async () => {
+    const probe = async (method, path, body) => {
+      const response = await fetch(path, {
+        method,
+        headers: body ? { "content-type": "application/json" } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+        cache: "no-store",
+      });
+      return response.status;
+    };
+    return {
+      listUsers: await probe("GET", "/api/auth/users"),
+      createUser: await probe("POST", "/api/auth/users", { username: "roleprobe", displayName: "越权试探", password: "Probe#2026x", role: "MEMBER" }),
+      loginRecords: await probe("GET", "/api/auth/login-records"),
+      fullBackup: await probe("GET", "/api/backup"),
+      ossSettings: await probe("GET", "/api/settings/oss"),
+    };
+  });
+
+  const lax = Object.entries(codes).filter(([, status]) => status !== 403);
+  check("成员调用管理员接口一律 403", lax.length === 0, lax.map(([name, status]) => `${name}=${status}`).join(","));
+}
+
+const failed = results.filter((entry) => !entry.ok);
+console.log(`\n${results.length - failed.length}/${results.length} 通过`);
+if (failed.length) for (const entry of failed) console.log(`[${entry.name}] ${entry.detail}`);
+await finish(failed.length ? 1 : 0);

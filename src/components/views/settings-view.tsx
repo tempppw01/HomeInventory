@@ -13,21 +13,27 @@ import {
   SettingsSection, SettingsRow, SettingsSelect, SettingsBadge,
 } from "@/components/settings-primitives";
 import { ThemeMode, request } from "../shared";
-export function SettingsView({ onToast, onAbout, theme, onThemeChange, density, motionMode, onDensityChange, onMotionChange }: { onToast: (message: string) => void; onAbout: () => void; theme: ThemeMode; onThemeChange: (value: ThemeMode) => void; density: "comfortable" | "compact"; motionMode: "standard" | "reduced"; onDensityChange: (value: "comfortable" | "compact") => void; onMotionChange: (value: "standard" | "reduced") => void }) {
+export function SettingsView({ role, onToast, onAbout, theme, onThemeChange, density, motionMode, onDensityChange, onMotionChange }: { role: "ADMIN" | "MEMBER" | "VIEWER" | null; onToast: (message: string) => void; onAbout: () => void; theme: ThemeMode; onThemeChange: (value: ThemeMode) => void; density: "comfortable" | "compact"; motionMode: "standard" | "reduced"; onDensityChange: (value: "comfortable" | "compact") => void; onMotionChange: (value: "standard" | "reduced") => void }) {
+  const isAdmin = role === "ADMIN";
   const [database, setDatabase] = useState<{ databaseLabel: string; storageMode: string } | null>(null);
   useEffect(() => { let active = true; request<{ databaseLabel: string; storageMode: string }>("/api/system/info").then((result) => { if (active) setDatabase(result); }).catch(() => undefined); return () => { active = false; }; }, []);
   return <Screen title="设置" description="按类别展开需要修改的设置,不常用的选项默认收起。">
     <div className="grid max-w-6xl items-start gap-4 sm:gap-5 lg:grid-cols-2 xl:gap-6">
-    <AccountSettings onToast={onToast} />
-    <AiSettings onToast={onToast} />
+    {/* 这几块只有管理员能改(接口对成员返回 403),对成员/只读直接不渲染 ——
+        否则用户填完「新增成员账号」点创建只会拿到一个看不懂的失败,账号列表还会永远停在「读取中」。 */}
+    {isAdmin && <AccountSettings onToast={onToast} />}
+    {isAdmin && <AiSettings onToast={onToast} />}
     <SettingsSection icon={Monitor} title="显示偏好" summary={[theme === "system" ? "跟随系统" : theme === "light" ? "日间模式" : "夜间模式", density === "compact" ? "紧凑" : "舒适", motionMode === "reduced" ? "减少动效" : "标准动效"].join(" · ")}>
       <SettingsRow title="外观主题" description="跟随系统会随设备的深浅色自动切换。" control={<SettingsSelect ariaLabel="外观主题" value={theme} onChange={onThemeChange} options={[["system", "跟随系统"], ["light", "日间模式"], ["dark", "夜间模式"]] as const} />} />
       <SettingsRow title="界面密度" description="紧凑模式一屏能看到更多物品。" control={<SettingsSelect ariaLabel="界面密度" value={density} onChange={onDensityChange} options={[["comfortable", "舒适"], ["compact", "紧凑"]] as const} />} />
       <SettingsRow title="动效" description="减少动效会关掉位移与过渡动画。" control={<SettingsSelect ariaLabel="动效" value={motionMode} onChange={onMotionChange} options={[["standard", "标准"], ["reduced", "减少动效"]] as const} />} />
     </SettingsSection>
     <HouseholdPreferences onToast={onToast} />
-    <DataTools onToast={onToast} />
-    <OssSettings onToast={onToast} />
+    <DataTools role={role} onToast={onToast} />
+    {isAdmin && <OssSettings onToast={onToast} />}
+    {!isAdmin && <SettingsSection icon={Info} title="管理员专属设置" summary="账号、AI、图片存储与完整备份">
+      <SettingsRow title="这些设置需要管理员权限" description="账号与家庭成员、AI 模型、图片存储、完整备份与恢复——只有管理员可以查看和修改。需要调整时请联系家里的管理员。" />
+    </SettingsSection>}
     <SettingsSection icon={Grid2X2} title="数据与部署" summary={database ? `${database.databaseLabel} · ${database.storageMode}` : "正在读取运行环境"}>
       <SettingsRow icon={Grid2X2} title={`当前数据库:${database?.databaseLabel || "检测中..."}`} description={database ? `${database.storageMode} · 可通过 DATABASE_PROVIDER 切换` : "正在读取运行环境"} control={<SettingsBadge tone="primary">{database?.databaseLabel || "检测中"}</SettingsBadge>} />
       <SettingsRow icon={Info} title="关于归物" description={`版本 ${APP_VERSION} · 更新说明与使用提示`} control={<button onClick={onAbout} className="btn-ghost h-11 min-h-11 px-4 text-sm">查看</button>} />

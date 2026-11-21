@@ -450,6 +450,11 @@ jobs:
           PROBE_USER: leadcheck
           PROBE_PASS: Lead#2026
         run: node scripts/verify-offline.mjs
+      - name: 角色界面检查(成员看不到管理员专属设置)
+        env:
+          PROBE_USER: leadcheck
+          PROBE_PASS: Lead#2026
+        run: node scripts/verify-role-ui.mjs
       - name: 登录门禁检查(未登录不该看到数据)
         env:
           PROBE_USER: leadcheck
