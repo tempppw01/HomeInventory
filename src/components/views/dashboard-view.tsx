@@ -77,7 +77,7 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
     : expired[0]
       ? { headline: `「${expired[0].name}」已经过期`, detail: `${expiryDateLabel(expired[0], now)} —— 处理掉,或者更新保质期。`, action: "处理这件", run: () => onEdit(expired[0]) }
       : expiring[0]
-        ? { headline: `「${expiring[0].name}」快到期了`, detail: `${expiryDateLabel(expiring[0], now)} · 还有 ${Math.max(expiryDays(expiring[0], now), 0)} 天,先用掉它。`, action: "现在处理", run: () => onEdit(expiring[0]) }
+        ? { headline: `「${expiring[0].name}」快到期了`, detail: `${expiryDateLabel(expiring[0], now)} · ${expiryAdvice(expiring[0])}`, action: "现在处理", run: () => onEdit(expiring[0]) }
         : lowStock[0]
           ? { headline: `「${lowStock[0].name}」需要补货`, detail: isLiquidConsumable(lowStock[0]) ? `余量只剩 ${Math.round(lowStock[0].remainingPercent)}%,低于你设的提醒线。` : `还剩 ${lowStock[0].quantity} ${lowStock[0].unit},提醒线是 ${lowStock[0].minQuantity} ${lowStock[0].unit}。`, action: "加入采购清单", run: () => onAddRestock(lowStock[0]) }
           : { headline: "今天没有需要处理的事", detail: `${data.items.length} 件物品都在保质期内,库存也够用 —— 可以趁现在做一次盘点。`, action: "盘点一次", run: () => onNavigate("audit") };
