@@ -99,6 +99,8 @@ jobs:
         run: node scripts/verify-upgrade-path.mjs
       - name: 图片上传检查(本地存储)
         run: node scripts/verify-image-upload.mjs
+      - name: 跨用户数据隔离检查
+        run: node scripts/verify-user-isolation.mjs
       - name: 并发行为检查
         run: node scripts/verify-concurrency.mjs
       - name: 补货暂停行为检查
