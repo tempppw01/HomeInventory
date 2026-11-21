@@ -16,3 +16,8 @@ npm-debug.log*
 .playwright-cli/
 output/
 *.tsbuildinfo
+
+# 本地存储的图片与上传目录:里面是用户的照片,绝不能被 git 跟进来
+/data/uploads/
+# Prisma 以 schema 为基准解析相对路径,临时库可能落在 prisma/data 下
+/prisma/data/
