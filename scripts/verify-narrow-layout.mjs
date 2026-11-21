@@ -126,6 +126,42 @@ for (let i = 0; i < 5; i += 1) {
     check("搜索框不被挤压(宽度 ≥ 240px)", search.width >= 240, `width=${search.width}`);
     check("搜索框的占位提示看得见", search.placeholder.length > 0 && !search.truncated, `placeholder=${search.placeholder}`);
   }
+
+  // 悬浮的助手按钮是固定定位的,弹窗打开时会压在弹窗内容上(手机上尤其明显)。
+  // 现在用 :has() 在「文档里有 aria-modal 弹窗」时把它隐藏。
+  {
+    const fabState = () => page.evaluate(() => {
+      const fab = document.querySelector('.assistant-fab');
+      if (!fab) return { found: false };
+      const style = getComputedStyle(fab);
+      return { found: true, hidden: style.visibility === 'hidden' || style.opacity === '0' };
+    });
+
+    const idle = await fabState();
+    check("窄屏有悬浮的助手按钮", idle.found, "没找到 .assistant-fab");
+    if (idle.found) {
+      check("平时悬浮按钮是可见的", !idle.hidden, JSON.stringify(idle));
+
+      const addButton = page.locator('button:has-text("录入物品"), button[aria-label*="录入"]').first();
+      if ((await addButton.count()) === 0) {
+        console.log("      跳过「弹窗打开时隐藏悬浮按钮」:没找到录入入口");
+      } else {
+        await addButton.click();
+        await page.waitForTimeout(1500);
+        const during = await fabState();
+        check("弹窗打开时悬浮按钮被隐藏(不压在弹窗上)", during.hidden, JSON.stringify(during));
+
+        // 关掉弹窗(用弹窗自己的关闭按钮,别用 Esc —— 有时会触发浏览器返回)
+        const closeButton = page.locator('[role="dialog"] button[aria-label*="关闭"], [role="dialog"] button[aria-label*="取消"]').first();
+        if (await closeButton.count()) {
+          await closeButton.click();
+          await page.waitForTimeout(1200);
+          const after = await fabState();
+          check("关掉弹窗后悬浮按钮回来了", after.found && !after.hidden, JSON.stringify(after));
+        }
+      }
+    }
+  }
 }
 }
 

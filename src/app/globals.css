@@ -592,3 +592,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .surface { border-radius: var(--radius-card); }
 .btn-ghost, .ds-button-secondary { color: var(--foreground); }
 .ds-button-danger { color: var(--danger); }
+
+/* 悬浮的助手按钮是固定定位的,弹窗打开时会压在弹窗上(手机上尤其明显)。
+   用 :has() 在「文档里有 aria-modal 弹窗」时把它隐藏 —— 不用把弹窗状态一路传下来,
+   而且所有弹窗(录入、详情、助手自己)都统一生效。 */
+body:has([role="dialog"][aria-modal="true"]) .assistant-fab {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
