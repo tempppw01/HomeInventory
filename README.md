@@ -10,6 +10,23 @@
 
 🔍 自动化检查覆盖了什么、以及**哪些还没覆盖**,见 [验证覆盖地图](./docs/verification.md)。
 
+## 环境变量
+
+绝大多数配置在应用内的**设置页**里填(图片存储、AI 接口、备份等);下面这些只能用环境变量给,
+用得最多的是「把数据放到别处」:
+
+| 变量 | 默认 | 说明 |
+| --- | --- | --- |
+| `DATABASE_URL` | `file:./data/home-inventory.db` | 数据库位置。用 MySQL 时形如 `mysql://用户:密码@主机:3306/库名` |
+| `DATABASE_PROVIDER` | 由 `DATABASE_URL` 推断 | 显式指定 `sqlite` 或 `mysql` |
+| `LOCAL_UPLOAD_DIR` | `./data/uploads`(容器内 `/app/data/uploads`) | 物品照片的存放目录 |
+| `BACKUP_DIR` | 上传目录下的 `backups/` | **自动备份**的存放目录;想把备份放到另一块盘就改这里 |
+| `IMAGE_STORAGE_MODE` | `local` | `local` / `oss` / `both` |
+| `OSS_REGION` `OSS_BUCKET` `OSS_ACCESS_KEY_ID` `OSS_ACCESS_KEY_SECRET` | 空 | 用对象存储时的凭据(也可以只填在设置页) |
+| `OSS_ENDPOINT` `OSS_DIRECTORY` `OSS_PUBLIC_BASE_URL` | 空 / `home-inventory` / 空 | 自建 S3 兼容服务时用 |
+| `OPENAI_BASE_URL` `OPENAI_API_KEY` `OPENAI_MODEL` | 空 | 用环境变量预置 AI 配置(等价于在设置页填写) |
+
+`docker-compose.yml` 里已经把这些变量透传出来了,直接写进 `.env` 即可。
 ## v0.0.8 更新
 
 - 医药快捷视图只显示医药分类，不再混入无关分类标签。
