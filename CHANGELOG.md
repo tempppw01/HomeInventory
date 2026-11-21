@@ -5,6 +5,18 @@
 
 ---
 
+## [v0.1.9] - 2026-11-21
+
+### 修复(用 MySQL 部署务必升级)
+
+- **MySQL 部署下四处功能失效**:`prisma/schema.mysql.prisma`(容器启动时会覆盖正式 schema)落后于 `schema.prisma`,缺 `AuditRecord`、`SearchHistory`、`AiChatMessage` 三张表与 `User.recoveryCodeHash` / `recoveryGeneratedAt`。后果是**盘点历史、搜索历史、AI 聊天记录、恢复码(忘记密码自助重置)全部写不进去**。SQLite 用户不受影响。现已同步为完全一致(16 个模型 / 174 个字段)。
+
+### 新增检查
+
+- 两份 schema 同步(静态):表与字段清单必须一致;CI 另跑 MySQL schema 合法性校验。
+- CI 工作流自检:步骤必须有 run/uses、引用的脚本存在、关键检查不被误删 —— 放在 `npm run test:unit` 最前,因为 `ci.yml` 无效时 CI 根本不会启动。
+
+---
 ## [v0.1.8] - 2026-11-21
 
 ### 修复
