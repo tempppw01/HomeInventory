@@ -140,7 +140,10 @@ export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, lo
       actions={<>{!readOnly && <button onClick={onBatchAi} className="btn-ghost flex items-center gap-1.5 text-xs" aria-label="AI 批量识别物品" title="上传多张照片或小票,AI 生成草稿后批量入库"><Sparkles size={15} /><span className="desktop-only">批量识别</span></button>}{!readOnly && <button onClick={onAddShopping} className="btn-ghost flex items-center gap-1.5 text-xs" aria-label="添加采购项"><ShoppingBasket size={15} /><span className="desktop-only">添加采购项</span></button>}</>}
     >
       <Toolbar>
-        <div className="min-w-0 flex-1 md:hidden"><SearchBox items={allItems} value={search} onChange={setSearch} onSelect={(item) => setSearch(item.name)} placeholder="搜索名称或物品编号..." /></div>
+        {/* 窄屏下让搜索框独占一行:此前它和「空间 / 排序 / 导出」挤在一行,
+            在 390px 上被压到只剩「搜」一个字,连占位提示都看不见。Toolbar 本身是 flex-wrap,
+            所以这里给满宽就会自然换行。 */}
+        <div className="min-w-0 w-full md:hidden"><SearchBox items={allItems} value={search} onChange={setSearch} onSelect={(item) => setSearch(item.name)} placeholder="搜索名称或物品编号..." /></div>
         <label className="flex shrink-0 items-center gap-1 text-xs font-bold muted">
   <span className="sr-only">空间</span>
   <select

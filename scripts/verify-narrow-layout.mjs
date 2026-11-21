@@ -100,6 +100,33 @@ for (let i = 0; i < 5; i += 1) {
     if (state.scrollWidth > state.docWidth + 2 || state.boundary) offenders.push(`${route}(scroll=${state.scrollWidth}/${state.docWidth},boundary=${state.boundary})`);
   }
   check("窄屏下各页面无横向滚动、无错误边界", offenders.length === 0, offenders.join(" | "));
+// 窄屏物品页的搜索框:此前它和「空间 / 排序 / 导出 / 选择」挤在同一行,
+// 在 390px 上被压到只剩「搜」一个字,占位提示完全看不见 —— 而搜索是主要操作。
+// 现在它独占一行,这里量一下真实可见宽度。
+{
+  await page.goto(`${BASE}/items`);
+  await page.waitForTimeout(2600);
+  const search = await page.evaluate(() => {
+    // 只找「可见」的搜索框:顶栏那个在窄屏是隐藏的(宽 0)
+    const inputs = Array.from(document.querySelectorAll('main input[placeholder]'))
+      .map((node) => ({ node, rect: node.getBoundingClientRect() }))
+      .filter((entry) => entry.rect.width > 0 && entry.rect.height > 0);
+    const target = inputs.sort((a, b) => b.rect.width - a.rect.width)[0];
+    if (!target) return { found: false };
+    return {
+      found: true,
+      width: Math.round(target.rect.width),
+      placeholder: target.node.getAttribute("placeholder") ?? "",
+      truncated: target.node.scrollWidth > target.node.clientWidth + 2,
+    };
+  });
+
+  check("窄屏物品页有可见的搜索框", search.found, "没找到可见的搜索框");
+  if (search.found) {
+    check("搜索框不被挤压(宽度 ≥ 240px)", search.width >= 240, `width=${search.width}`);
+    check("搜索框的占位提示看得见", search.placeholder.length > 0 && !search.truncated, `placeholder=${search.placeholder}`);
+  }
+}
 }
 
 // ============ 2. 助手面板:文字不折成多行 ============
