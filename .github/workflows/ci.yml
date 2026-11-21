@@ -24,6 +24,8 @@ jobs:
       - run: npx prisma generate --schema prisma/schema.prisma
       - run: npm run typecheck
       - run: npx eslint src scripts
+      - name: 写接口守卫检查(静态)
+        run: node scripts/verify-api-guards.mjs
 
   unit:
     name: 纯函数单测

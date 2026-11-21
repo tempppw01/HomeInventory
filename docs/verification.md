@@ -33,6 +33,7 @@
 | `password` / `validation`(账号) | 密码强度各档、用户名规则 |
 | `local-date` / `weekly-review` / `relative-time` | 本地日历日、每周盘点设定日、相对时间文案 |
 | 一致性 | 服务端写入的动作都有中文标签;代码引用的 `/api` 路径都有对应路由 |
+| 写接口守卫 | 每个非 GET 处理器必须有权限校验,或在「设计上公开 / 自带细粒度校验」清单里(清单同时校验不过期) |
 
 **约 225 条**。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
 以便直接测引用了其他模块的文件。
