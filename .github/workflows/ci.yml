@@ -25,9 +25,9 @@ jobs:
       - run: npm run typecheck
       - run: npx eslint src scripts
       - name: 写接口守卫检查(静态)
+        run: node scripts/verify-api-guards.mjs
       - name: 配置文档一致性检查(静态)
         run: node scripts/verify-config-docs.mjs
-        run: node scripts/verify-api-guards.mjs
 
   unit:
     name: 纯函数单测
