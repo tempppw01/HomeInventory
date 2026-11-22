@@ -55,7 +55,8 @@ export function MonthlyBars({
         })}
         {rects.map((rect, index) => (
           <rect
-            key={points[index].label}
+            // 标签可能重复(同一天盘了两次 → 两个「11/21」),用 label 当 key 会撞车。
+            key={`${points[index].label}-${index}`}
             x={rect.x}
             y={rect.y}
             width={rect.width}
@@ -65,9 +66,12 @@ export function MonthlyBars({
           />
         ))}
       </svg>
-      <div className="mt-1.5 flex justify-between text-[10px] muted">
+      {/* 标签必须落在各自柱子的正下方。此前用 flex justify-between 把标签铺满整行,
+          首尾两个会跑到柱子外侧(1440px 宽实测偏 137px),读者会把标签认到隔壁柱子上;
+          现在按 N 等分列居中,与 SVG 里的槽位一一对应(slot 中心 = 列中心)。 */}
+      <div className="mt-1.5 grid text-[10px] muted" style={{ gridTemplateColumns: `repeat(${points.length}, minmax(0, 1fr))` }}>
         {points.map((point, index) => (
-          <span key={point.label} className={index === maxIndex ? "font-bold" : ""}>{point.label}</span>
+          <span key={`${point.label}-${index}`} className={`truncate text-center ${index === maxIndex ? "font-bold" : ""}`}>{point.label}</span>
         ))}
       </div>
     </figure>

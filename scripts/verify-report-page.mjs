@@ -62,6 +62,31 @@ check("月报页返回 200 且没有落进错误边界", status === 200 && !stat
 check("月报页显示标题与四个小节", state.title && state.sections === 4, `title=${state.title} sections=${state.sections}`);
 check("月报页有月份标签", state.monthLabel, `monthLabel=${state.monthLabel}`);
 check("月报页图表正常渲染(柱状 + 占比)", state.chartBars > 0 && Boolean(state.shareAria), `bars=${state.chartBars} share=${state.shareAria}`);
+// 月份标签必须落在柱子的正下方。此前标签行用 flex justify-between 铺满整行,
+// 首尾两个会跑到柱子外侧(1440px 宽实测偏 137px),读者会把标签认到隔壁柱子上。
+const axis = await page.evaluate(() => {
+  const rows = [];
+  for (const figure of document.querySelectorAll('figure[role="img"]')) {
+    const svg = figure.querySelector("svg");
+    if (!svg) continue;
+    const bars = [...svg.querySelectorAll("rect")];
+    const labels = [...figure.querySelectorAll("div > span")];
+    if (!bars.length || bars.length !== labels.length) continue;
+    let worst = 0;
+    bars.forEach((bar, index) => {
+      const b = bar.getBoundingClientRect();
+      const l = labels[index].getBoundingClientRect();
+      worst = Math.max(worst, Math.abs((b.left + b.width / 2) - (l.left + l.width / 2)));
+    });
+    rows.push({ count: bars.length, worst: Number(worst.toFixed(1)) });
+  }
+  return rows;
+});
+check(
+  "月份标签与柱子逐一对齐(偏差 ≤ 2px)",
+  axis.length > 0 && axis.every((row) => row.worst <= 2),
+  JSON.stringify(axis),
+);
 check("月报页有打印按钮", state.printButton, `printButton=${state.printButton}`);
 // 天数叙述必须说人话:今天到期就写「今天到期」,不能出现「0 天后到期」。
 // (这条是全站统一的重灾区:概览卡片、月报、支出预测以前都各自用 Math.max(0, days) 拼天数)
