@@ -292,6 +292,77 @@ if (!aiAvailable) {
   check("设置页的文件输入框都有可访问名称", state.nameless.length === 0, state.nameless.slice(0, 3).join(" | "));
 }
 
+// ============ 6 AI 设置的模型选择器:写了 listbox 就得有方向键 ============
+// 这个下拉此前写着 aria-haspopup="listbox" + role="listbox" + role="option",
+// 却一条键盘交互都没有:实测打开后焦点留在触发按钮上、方向键不动、Esc 也关不掉
+// (只有一个「点外面关闭」的监听)。读屏会明确告诉用户「这是列表,用方向键选」,
+// 按下去却毫无反应 —— 契约写了就得兑现。
+// 需要真的能拉到模型列表(即配好了 AI),否则这一节跳过而不是判红。
+if (!aiAvailable) {
+  console.log("      跳过模型选择器键盘检查:本环境未配置 AI,拉不到模型列表");
+} else {
+  await page.goto(`${BASE}/settings`);
+  await page.waitForTimeout(2600);
+  await dismissBlockingDialogs(page);
+  await page.evaluate(() => { document.querySelectorAll("main details").forEach((node) => { node.open = true; }); });
+  await page.waitForTimeout(800);
+
+  const trigger = page.locator('button[aria-label="拉取并选择模型"]').first();
+  if ((await trigger.count()) === 0) {
+    check("能找到模型选择器入口", false, "设置页没有「拉取并选择模型」按钮");
+  } else {
+    await trigger.click();
+    await page.waitForTimeout(3500);
+    const opened = await page.evaluate(() => {
+      const listbox = document.querySelector('[role="listbox"]');
+      const options = listbox ? [...listbox.querySelectorAll('[role="option"]')] : [];
+      const inside = listbox ? listbox.contains(document.activeElement) : false;
+      return {
+        options: options.length,
+        roles: options.map((node) => node.getAttribute("role")),
+        tabIndexes: [...new Set(options.map((node) => node.tabIndex))],
+        focusInside: inside,
+        activeText: inside ? (document.activeElement?.textContent || "").trim().slice(0, 24) : null,
+        error: document.querySelector('[role="listbox"] .text-red-500')?.textContent?.slice(0, 40) ?? null,
+        controls: document.querySelector('button[aria-label="拉取并选择模型"]')?.getAttribute("aria-controls") ?? null,
+      };
+    });
+    check("模型选择器真的拉到了选项(否则这一节等于没测)", opened.options >= 2, `options=${opened.options} error=${opened.error}`);
+    check("选项是 role=option(列表的语义)", opened.options > 0 && opened.roles.every((role) => role === "option"), JSON.stringify(opened.roles));
+    check("触发按钮用 aria-controls 指向这张列表", opened.controls === "ai-model-listbox", `aria-controls=${opened.controls}`);
+    check("打开后焦点进入列表(方向键才有意义)", opened.focusInside, `active=${opened.activeText ?? "(不在列表内)"}`);
+
+    if (opened.options >= 2 && opened.focusInside) {
+      const focusText = () => page.evaluate(() => (document.activeElement?.textContent || "").trim().slice(0, 24));
+      const start = await focusText();
+      await page.keyboard.press("ArrowDown");
+      await page.waitForTimeout(200);
+      const down = await focusText();
+      await page.keyboard.press("ArrowUp");
+      await page.waitForTimeout(200);
+      const up = await focusText();
+      check("↓ 能把焦点移到下一个选项", down !== start, `${start} → ${down}`);
+      check("↑ 能回到上一个选项", up === start, `${down} → ${up}`);
+
+      await page.keyboard.press("End");
+      await page.waitForTimeout(200);
+      const end = await focusText();
+      await page.keyboard.press("Home");
+      await page.waitForTimeout(200);
+      const home = await focusText();
+      check("End / Home 能跳到首尾", end !== home && home === start, `End=${end} Home=${home}`);
+
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(500);
+      const closed = await page.evaluate(() => ({
+        open: Boolean(document.querySelector('[role="listbox"]')),
+        focusOnTrigger: document.activeElement?.getAttribute("aria-label") === "拉取并选择模型",
+      }));
+      check("Esc 能关掉列表并把焦点还给触发按钮", !closed.open && closed.focusOnTrigger, JSON.stringify(closed));
+    }
+  }
+}
+
 await context.close();
 await browser.close();
 

@@ -227,10 +227,32 @@ for (let i = 0; i < 5; i += 1) {
 // 只统计真正可见且可点的元素:sr-only 的隐藏控件(高 1px)是给读屏用的,
 // 它们对应的可见 label 才是触摸目标,所以用「尺寸 + 可见性」一起判断。
 {
-  const routes = ["/", "/items", "/locations", "/tasks", "/audit", "/settings"];
+  // 「/items/__detail__」是占位:物品详情页的地址带物品 id,运行时再解析成真实链接。
+  // 它此前不在这条扫描里 —— 而详情页刚新增了「上传照片」入口(v0.1.16),
+  // 新控件必须被同一条触摸目标底线管住。
+  const routes = ["/", "/items", "/locations", "/tasks", "/audit", "/settings", "/items/__detail__"];
   const offenders = [];
+  const scanned = [];
   for (const route of routes) {
-    await page.goto(BASE + route);
+    let path = route;
+    if (route === "/items/__detail__") {
+      const detailId = await page.evaluate(async () => {
+        try {
+          const response = await fetch("/api/items", { cache: "no-store" });
+          const body = await response.json();
+          const rows = Array.isArray(body) ? body : (body.items ?? []);
+          return rows[0]?.id ?? null;
+        } catch {
+          return null;
+        }
+      });
+      if (!detailId) {
+        console.log("      跳过物品详情页:库里没有物品");
+        continue;
+      }
+      path = `/items/${detailId}`;
+    }
+    await page.goto(BASE + path);
     await page.waitForTimeout(2200);
     // 关闭遗留弹层:上一步若打开过批量识别/采购清单等底部弹层,它会盖住页面内容,
     // 导致命中区探针落到弹层上、误判为「按钮太小」。
@@ -276,9 +298,12 @@ for (let i = 0; i < 5; i += 1) {
         })
         .map((node) => (node.getAttribute("aria-label") || node.textContent || "").trim().slice(0, 14) || node.tagName);
     });
-    if (small.length) offenders.push(`${route}: ${small.join("/")}`);
+    if (small.length) offenders.push(`${path}: ${small.join("/")}`);
+    scanned.push(path);
   }
   check("窄屏下各页面可点元素都 ≥40px", offenders.length === 0, offenders.join(" | "));
+  // 防止「没扫到也算绿」:详情页是这一轮新增的扫描目标,必须确认它真的被扫了。
+  check("触摸目标扫描覆盖了物品详情页", scanned.some((item) => item.startsWith("/items/") && item !== "/items"), `扫过:${scanned.join(", ")}`);
 
   // 防止「空跑」:如果卡片一直没渲染,上面的触摸目标检查等于没测到卡片里的按钮。
   // 但要区分两种情况:

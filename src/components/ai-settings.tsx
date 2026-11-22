@@ -40,6 +40,10 @@ export function AiSettings({ onToast }: { onToast: (message: string) => void }) 
   const [modelsError, setModelsError] = useState("");
   const [modelsOpen, setModelsOpen] = useState(false);
   const modelMenuRef = useRef<HTMLDivElement>(null);
+  const modelButtonRef = useRef<HTMLButtonElement>(null);
+  const modelOptionsRef = useRef<(HTMLButtonElement | null)[]>([]);
+  // 「这次打开要不要把焦点送进列表」——只在打开时置位,避免每次重渲染都抢焦点。
+  const focusFirstOption = useRef(false);
   const provider = useMemo(() => providerForBaseUrl(form.baseUrl), [form.baseUrl]);
 
   useEffect(() => {
@@ -59,6 +63,47 @@ export function AiSettings({ onToast }: { onToast: (message: string) => void }) 
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
   }, [modelsOpen]);
+
+  /**
+   * 模型选择器的键盘模型。
+   *
+   * 此前这个下拉写着 aria-haspopup="listbox" + role="listbox" + role="option",
+   * 却**一条键盘交互都没有**:实测打开后焦点还留在触发按钮上,方向键不动、
+   * Esc 也关不掉(只有一个「点外面关闭」的监听)。读屏会明确告诉用户这是列表、
+   * 应该用方向键选,用户按下去却毫无反应 —— 契约写了就得兑现。
+   *
+   * 现在按 ARIA listbox 的惯常做法:打开就把焦点送进列表(选中项优先),
+   * ↑/↓ 上下移动并回卷,Home/End 到首尾,Esc 关闭并把焦点还给触发按钮,Tab 关闭后继续往后走。
+   */
+  useEffect(() => {
+    if (!modelsOpen || !focusFirstOption.current) return;
+    const index = models.findIndex((model) => model === form.model);
+    const target = modelOptionsRef.current[index >= 0 ? index : 0];
+    if (!target) return; // 列表还在拉取,等它到位
+    target.focus();
+    focusFirstOption.current = false;
+  }, [modelsOpen, models, form.model]);
+
+  const closeModels = (restoreFocus: boolean) => {
+    setModelsOpen(false);
+    if (restoreFocus) modelButtonRef.current?.focus();
+  };
+
+  const onModelListKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape") { event.preventDefault(); closeModels(true); return; }
+    if (event.key === "Tab") { setModelsOpen(false); return; }
+    const count = models.length;
+    if (!count) return;
+    const current = modelOptionsRef.current.findIndex((node) => node === document.activeElement);
+    let next: number | null = null;
+    if (event.key === "ArrowDown") next = current < 0 ? 0 : (current + 1) % count;
+    else if (event.key === "ArrowUp") next = current < 0 ? count - 1 : (current - 1 + count) % count;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = count - 1;
+    if (next === null) return;
+    event.preventDefault();
+    modelOptionsRef.current[next]?.focus();
+  };
 
   const loadModels = async () => {
     setModelsLoading(true);
@@ -81,7 +126,8 @@ export function AiSettings({ onToast }: { onToast: (message: string) => void }) 
     if (form.managedByEnvironment) return;
     const next = !modelsOpen;
     setModelsOpen(next);
-    if (next) void loadModels();
+    // 打开时把焦点交给列表;关闭时(再点一次按钮)焦点本来就在按钮上,不用管。
+    if (next) { focusFirstOption.current = true; void loadModels(); }
   };
 
   const chooseProvider = (id: (typeof AI_PROVIDER_PRESETS)[number]["id"]) => {
@@ -138,11 +184,11 @@ export function AiSettings({ onToast }: { onToast: (message: string) => void }) 
         control={<div className="relative flex w-full" ref={modelMenuRef}>
           <span className="pointer-events-none absolute left-3.5 top-1/2 z-10 flex -translate-y-1/2"><ProviderIcon provider={providerForModel(form.model, form.baseUrl).id} size={17} /></span>
           <input required aria-label="模型" disabled={form.managedByEnvironment} className="input input-icon input-model" value={form.model} onChange={(event) => setForm((old) => ({ ...old, model: event.target.value }))} />
-          <button type="button" disabled={form.managedByEnvironment} onClick={toggleModels} className="grid w-11 shrink-0 place-items-center rounded-r-2xl border disabled:opacity-60" style={{ borderColor: "var(--border)", background: "var(--surface-soft)" }} aria-label="拉取并选择模型" aria-haspopup="listbox" aria-expanded={modelsOpen}>{modelsLoading ? <LoaderCircle className="animate-spin" size={17} /> : <ChevronDown className={`transition-transform ${modelsOpen ? "rotate-180" : ""}`} size={17} />}</button>
-          {modelsOpen && <div className="surface absolute left-0 right-0 top-full z-30 mt-2 max-h-64 overflow-y-auto rounded-2xl p-1.5 shadow-2xl" role="listbox">
+          <button ref={modelButtonRef} type="button" disabled={form.managedByEnvironment} onClick={toggleModels} className="grid w-11 shrink-0 place-items-center rounded-r-2xl border disabled:opacity-60" style={{ borderColor: "var(--border)", background: "var(--surface-soft)" }} aria-label="拉取并选择模型" aria-haspopup="listbox" aria-expanded={modelsOpen} aria-controls={modelsOpen ? "ai-model-listbox" : undefined}>{modelsLoading ? <LoaderCircle className="animate-spin" size={17} /> : <ChevronDown className={`transition-transform ${modelsOpen ? "rotate-180" : ""}`} size={17} />}</button>
+          {modelsOpen && <div id="ai-model-listbox" role="listbox" aria-label="可选模型" onKeyDown={onModelListKeyDown} className="surface absolute left-0 right-0 top-full z-30 mt-2 max-h-64 overflow-y-auto rounded-2xl p-1.5 shadow-2xl">
             {modelsLoading ? <div className="flex items-center gap-2 px-3 py-3 text-xs muted"><LoaderCircle className="animate-spin" size={15} />正在拉取模型列表…</div>
               : modelsError ? <div className="p-2"><p className="m-0 px-1 text-xs leading-5 text-red-500">{modelsError}</p><button type="button" onClick={() => void loadModels()} className="btn-ghost mt-2 flex w-full items-center justify-center gap-2 py-2 text-xs"><RefreshCw size={14} />重新拉取</button></div>
-                : models.map((model) => { const modelProvider = providerForModel(model, form.baseUrl); return <button key={model} type="button" role="option" aria-selected={form.model === model} onClick={() => { setForm((old) => ({ ...old, model })); setModelsOpen(false); }} className="flex w-full items-center gap-2 rounded-xl border-0 bg-transparent px-3 py-2.5 text-left text-sm hover:bg-[var(--primary-soft)]"><ProviderIcon provider={modelProvider.id} size={16} /><span className="min-w-0 flex-1 truncate">{model}</span>{form.model === model && <Check size={15} style={{ color: "var(--primary)" }} />}</button>; })}
+                : models.map((model, index) => { const modelProvider = providerForModel(model, form.baseUrl); return <button key={model} ref={(node) => { modelOptionsRef.current[index] = node; }} type="button" role="option" tabIndex={-1} aria-selected={form.model === model} onClick={() => { setForm((old) => ({ ...old, model })); closeModels(true); }} className="flex w-full items-center gap-2 rounded-xl border-0 bg-transparent px-3 py-2.5 text-left text-sm hover:bg-[var(--primary-soft)] focus-visible:bg-[var(--primary-soft)]"><ProviderIcon provider={modelProvider.id} size={16} /><span className="min-w-0 flex-1 truncate">{model}</span>{form.model === model && <Check size={15} style={{ color: "var(--primary)" }} />}</button>; })}
           </div>}
         </div>}
       />
