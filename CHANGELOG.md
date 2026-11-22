@@ -5,6 +5,42 @@
 
 ---
 
+## [v0.1.16] - 2026-11-23
+
+### 修复(物品详情页:没有照片时的 208px 空白,正好该放上传入口)
+
+- **那一块是纯空白**。没有照片的物品,详情页顶部是 `h-52`(208px)的空色块 + 一个 56px 的装饰图标。
+  390×844 实测:物品名被推到 **y=317**,四分之一屏先给用户看一块什么都没有的空白
+  (整页 2499px,这块占 8%)。
+- **而且详情页根本没有上传入口**。想给物品加照片,只能绕回列表卡片右键,或者进「编辑物品」→
+  展开「图片」折叠行 —— 而详情页正是最该有它的地方(实测 `input[type=file]` 数量为 **0**)。
+- 现在这一块同时解决两件事:空态收成 **96px**,并就地给出「还没有照片 / 拍一张放上来,以后找东西更快」
+  + 一个真正的「上传照片」按钮。上传走的是与列表卡片同一条路(压缩 → `/api/upload` →
+  `PATCH /api/items/:id` → `router.refresh()`),**键盘同样到得了**(复用 v0.1.14 那套
+  `.file-label` + `sr-only` 输入框)。物品名从 y=317 提到 **y=228**,第一张卡片也从 y=297 提到 y=287 以内。
+- 只读账号看不到这个入口(接口本来就会 403,界面上不该出现点了会被拒的按钮);
+  有照片时仍然是照片位,行为不变。
+
+### 新增检查
+
+- `verify-item-detail` 14 → **24 项**:无照片时顶部区块 ≤120px、照片位与物品名之间没有多余留白、
+  就地有上传入口且键盘到得了并有可访问名;用 `imageUrl` 做成对照(有照片时 ≥240px 且不显示空态);
+  另起一个只读账号的会话,确认它看不到上传入口但看得到「还没有照片」的说明。
+
+### 回归
+
+生产构建(`rm -rf .next` + `next build` + `next start`)下 **27 个界面套件 + `test:unit` + 整条 `test:api` 全绿**:
+`verify-modals-a11y` 71/71、`verify-entry-fixes` 68/68、`verify-experience` 43/43、`verify-a11y` 26/26、
+`verify-item-detail` 24/24、`verify-nested-controls` 21/21、`verify-bundle-budget` 21/21、
+`verify-narrow-layout` 21/21、`verify-role-ui` 18/18、`verify-contrast` 15/15、`verify-print-layout` 13/13、
+`verify-menus-a11y` 13/13、`verify-consume-scan` 13/13、`verify-layout-budget` 13/13、
+`verify-auth-gate` 13/13、`verify-item-template` 11/11、`verify-item-merge` 11/11、
+`verify-report-page` 10/10、`verify-offline` 10/10、`verify-overview-focus` 10/10、
+`verify-item-card-layout` 9/9、`verify-about-and-version` 8/8、`verify-weekly-review` 7/7、
+`verify-empty-states` 7/7、`verify-qr-scan` 7/7、`verify-restock-pause-ui` 6/6、`verify-audit-confirm-flow` 4/4。
+
+---
+
 ## [v0.1.15] - 2026-11-23
 
 这一轮的主题是**罕见但致命的失败路径**:两处都只在特定条件下才发生,一旦发生用户完全得不到线索,

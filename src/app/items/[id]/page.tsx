@@ -10,6 +10,7 @@ import { STORAGE_LABEL } from "@/lib/item-insight";
 import { Panel } from "@/components/ui-kit";
 import { CopyCodeButton } from "@/components/copy-code-button";
 import { ItemQuickActions } from "@/components/item-quick-actions";
+import { ItemPhotoSlot } from "@/components/item-photo-slot";
 import { AskAiAboutItem } from "@/components/ask-ai-about-item";
 import { ReanalyzeAiButton } from "@/components/reanalyze-ai-button";
 import { relativeTimeText } from "@/lib/relative-time";
@@ -76,11 +77,7 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
       </Link>
 
       <article className="surface overflow-hidden rounded-[32px]">
-        {item.imageUrl ? (
-          <div className="h-64 bg-cover bg-center sm:h-80" style={{ backgroundImage: `url(${item.imageUrl})` }} />
-        ) : (
-          <div className="grid h-52 place-items-center" style={{ background: "var(--surface-soft)", color: "var(--primary)" }}><Package size={56} /></div>
-        )}
+        <ItemPhotoSlot itemId={item.id} itemName={item.name} imageUrl={item.imageUrl} readOnly={!canEdit} />
 
         <div className="space-y-4 p-5 sm:p-6">
           <div>

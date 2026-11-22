@@ -8,6 +8,7 @@
 
 import { launchChromium } from "./lib/browser.mjs";
 import { dismissBlockingDialogs, loginAndConfirm } from "./lib/probe-auth.mjs";
+import { loginCookie } from "./lib/probe-login.mjs";
 
 const BASE = process.env.BASE_URL || "http://127.0.0.1:3001";
 const USER = process.env.PROBE_USER || "bgs";
@@ -72,6 +73,101 @@ await dismissBlockingDialogs(page);
   check("详情页有「位置与数量」小节", ui.text.includes("位置与数量"));
   check("详情页有「变更记录」小节", ui.text.includes("变更记录"));
   check("详情页能返回列表", ui.text.includes("返回归物"));
+}
+
+// 1.5 顶部照片位:没有照片时不能再是一块 208px 的空白
+//
+// 此前这一块是 h-52(208px)的空色块 + 一个装饰图标,390×844 实测把物品名推到 y=317;
+// 而详情页本身没有任何上传入口(加照片只能绕回列表卡片右键,或进「编辑物品」的图片折叠行)。
+// 现在空态收成 96px,并就地给出键盘到得了的上传入口。
+{
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(detailUrl);
+  await page.waitForTimeout(2600);
+  await dismissBlockingDialogs(page);
+
+  const empty = await page.evaluate(() => {
+    const article = document.querySelector("article");
+    const band = article?.firstElementChild;
+    const name = article?.querySelector("h1");
+    const input = document.querySelector('input[type="file"]');
+    const box = (node) => { const rect = node?.getBoundingClientRect(); return rect ? { top: Math.round(rect.top + window.scrollY), height: Math.round(rect.height) } : null; };
+    let focusable = false;
+    if (input) { input.focus(); focusable = document.activeElement === input; input.blur(); }
+    const nameBox = box(name);
+    const bandBox = box(band);
+    return {
+      band: bandBox,
+      nameTop: nameBox?.top ?? null,
+      // 照片位底边与物品名之间不该再夹着一段空白
+      gapToName: bandBox && nameBox ? nameBox.top - (bandBox.top + bandBox.height) : null,
+      hasUpload: Boolean(input),
+      uploadFocusable: focusable,
+      uploadName: input ? (input.getAttribute("aria-label") || "") : "",
+      text: (band?.innerText || "").replace(/\n+/g, " | "),
+    };
+  });
+  check("没有照片时顶部区块不再是 208px 的空白(≤120px)", Boolean(empty.band) && empty.band.height <= 120, JSON.stringify(empty.band));
+  check("照片位与物品名之间没有多余留白(≤40px)", empty.gapToName !== null && empty.gapToName <= 40, `gap=${empty.gapToName} nameTop=${empty.nameTop}`);
+  check("没有照片时详情页就地给出上传入口", empty.hasUpload && /上传照片/.test(empty.text), empty.text.slice(0, 80));
+  check("上传入口键盘到得了(不是 display:none)", empty.uploadFocusable, JSON.stringify({ has: empty.hasUpload, focusable: empty.uploadFocusable }));
+  check("上传入口有可访问名", /^给「.+」上传照片$/.test(empty.uploadName), `aria-label=${empty.uploadName}`);
+
+  // 对照:有照片时仍然显示照片位,而不是空态
+  // (imageUrl 的校验只收完整 URL 或 /api/uploads/... 内部路径,所以这里用一个完整 URL)
+  const staged = await page.evaluate(async (id) => {
+    const response = await fetch(`/api/items/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ imageUrl: "https://example.com/photo.png" }) });
+    return response.status;
+  }, created.id);
+  check("能把这件物品设成有照片(用于对照)", staged === 200, `status=${staged}`);
+  await page.goto(detailUrl);
+  await page.waitForTimeout(2600);
+  const filled = await page.evaluate(() => {
+    const band = document.querySelector("article")?.firstElementChild;
+    const rect = band?.getBoundingClientRect();
+    return { height: rect ? Math.round(rect.height) : null, text: (band?.innerText || "").trim().slice(0, 40), background: band ? getComputedStyle(band).backgroundImage.slice(0, 30) : null };
+  });
+  check("有照片时显示的是照片位(≥240px)", filled.height !== null && filled.height >= 240, JSON.stringify(filled));
+  check("有照片时不再显示「还没有照片」", !/还没有照片/.test(filled.text), filled.text);
+
+  await page.evaluate(async (id) => {
+    await fetch(`/api/items/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ imageUrl: "" }) });
+  }, created.id);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(detailUrl);
+  await page.waitForTimeout(2400);
+}
+
+// 1.6 只读账号:详情页不该出现「上传照片」
+//
+// 接口本来就会拦只读写操作(403),界面上也不该出现点了会被拒的按钮 —— 这是全站一贯的口径。
+{
+  const viewerUser = process.env.PROBE_VIEWER_USER || "viewcheck";
+  const viewerPass = process.env.PROBE_VIEWER_PASS || "View#2026";
+  let cookie = null;
+  let why = "";
+  try {
+    cookie = await loginCookie(BASE, viewerUser, viewerPass);
+  } catch (error) {
+    why = error instanceof Error ? error.message : String(error);
+  }
+  if (!cookie) {
+    check("只读账号能登录(否则这一节等于没测)", false, `拿不到 ${viewerUser} 的会话:${why}`);
+  } else {
+    const viewerContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const split = cookie.indexOf("=");
+    await viewerContext.addCookies([{ name: cookie.slice(0, split), value: cookie.slice(split + 1), url: BASE }]);
+    const viewerPage = await viewerContext.newPage();
+    await viewerPage.goto(`${BASE}/items/${created.id}`);
+    await viewerPage.waitForTimeout(2600);
+    const state = await viewerPage.evaluate(() => {
+      const band = document.querySelector("article")?.firstElementChild;
+      return { text: (band?.innerText || "").replace(/\n+/g, " | "), uploads: document.querySelectorAll('input[type="file"]').length };
+    });
+    check("只读账号在详情页看不到上传入口", state.uploads === 0 && !/上传照片/.test(state.text), JSON.stringify(state));
+    check("只读账号仍看得到「还没有照片」的说明", /还没有照片/.test(state.text), state.text.slice(0, 60));
+    await viewerContext.close();
+  }
 }
 
 // ② 余量减少 10% → 数据变化且页面数值立刻更新(不需要刷新)
