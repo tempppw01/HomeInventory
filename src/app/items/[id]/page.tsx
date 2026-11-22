@@ -5,7 +5,7 @@ import { PackagePlus, Archive, CalendarDays, Droplets, Lightbulb, MapPin, Packag
 import { prisma } from "@/lib/prisma";
 import { currentUser } from "@/lib/account-auth";
 import { dailyUsageCost, estimatedUseDays, isLiquidConsumable } from "@/lib/item-metrics";
-import { itemAiHighlights } from "@/lib/item-ai";
+import { itemAiHighlights, aiHighlightsAddNewInfo } from "@/lib/item-ai";
 import { STORAGE_LABEL } from "@/lib/item-insight";
 import { Panel } from "@/components/ui-kit";
 import { CopyCodeButton } from "@/components/copy-code-button";
@@ -60,6 +60,10 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
   const aiTimeText = relativeTimeText(aiAnalyzedAt);
   const code = item.itemCode || item.id;
   const typeLabel = item.type === "CONSUMABLE" ? "消耗品" : "耐用品";
+  // 「AI 说」面板和页面底部那块「AI 识别信息」读的是同一批字段(aiSummary / aiStorageAdvice / …)。
+  // AI 摘要存在时两边一字不差:390px 下同一个摘要要读两遍,页面还白长 520px(实测 3020 → 2498)。
+  // 只有底部那块还能额外给出信息时(没有 AI 摘要,或建议只存在于旧笔记里)才渲染它。
+  const aiBlockAddsNewInfo = aiHighlightsAddNewInfo(item);
 
   return (
     <main
@@ -182,7 +186,7 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
             <p className="mb-0 mt-2 break-all font-mono text-sm font-bold">{code}</p>
           </div>
 
-          {ai.hasHighlights && (
+          {aiBlockAddsNewInfo && (
             <div className="rounded-2xl p-4" style={{ background: "color-mix(in srgb, var(--primary) 7%, var(--surface-soft))" }}>
               <div className="flex items-center gap-2 text-sm font-black" style={{ color: "var(--primary)" }}><Sparkles size={17} />AI 识别信息</div>
               {ai.summary && <p className="mb-0 mt-3 text-sm leading-6">{ai.summary}</p>}
