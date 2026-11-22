@@ -5,6 +5,67 @@
 
 ---
 
+## [v0.1.15] - 2026-11-23
+
+这一轮的主题是**罕见但致命的失败路径**:两处都只在特定条件下才发生,一旦发生用户完全得不到线索,
+或者整批操作被拒。都不是靠读代码想出来的,是跑起来撞到的。
+
+### 修复(页面打不开时,永远停在「正在检查账号状态...」)
+
+- **现场**:端口上还挂着上一轮构建的服务进程,页面引用的 chunk 名对不上,应用外壳的脚本取不回来。
+  于是 React 根本没启动,页面上只有一句「正在检查账号状态...」永远转下去 —— 不报错、不提示、
+  没有任何可点的东西。这类故障在真实部署里并不罕见(升级后浏览器还在用旧的 HTML、静态文件缺失、
+  CDN 抽风),用户只能干等。
+- **现在**:登录门禁那一屏里带了一段**不依赖 React 的原生脚本**,8 秒还没人接手就揭开一张提示卡 ——
+  「页面没能加载完 / 页面脚本没有取到。升级之后浏览器还在用旧的缓存是最常见的原因」,
+  一个「重新加载」(服务端渲染出来就是真 `<a href="/">`,React 没起来也点得动),
+  外加一句给部署者的线索(确认部署目录里的 `.next` 与页面引用的版本一致)。
+- 正常启动时 AuthGate 会连整块一起卸载并把定时器清掉,所以「只是慢、但最终成功」不会误报 ——
+  实测健康路径下这个元素**从来不会出现在 DOM 里**。
+
+### 修复(批量导入 1000 行有约 3% 的概率整批被拒)
+
+- **现场**:`test:api` 里的批量导入验收突然报 409「已存在同名或重复的记录」,1000 行一条都没进去。
+  根因是编号生成:物品编号是 `INV-YYYYMMDD-` + 3 字节随机(2^24 ≈ 1677 万种),
+  而 `itemCode` 上有唯一索引。一次导入 1000 行时,按生日问题算**同批撞车的概率约 3%** ——
+  撞一次整个事务回滚。同一天连跑两次这个验收就会撞上(这次就是)。
+- **现在**:新增 `createItemCodeBatch()`,用 Set 保证**批内绝对不重复**,导入与 AI 批量录入都改用它;
+  万一再与库里已有编号撞车,由一次有界的重试兜住(只对 `itemCode` 的唯一约束重试,
+  空间重名之类的 P2002 照旧直接报出去)。编号格式没有变,打印出来的标签与用户手抄的编号不受影响。
+- 顺带修掉一条**概率性单测**:「连续生成 200 个编号不重复」有约 1/850 的概率红,
+  现在改成对 1000 个一批做确定性断言。
+
+### 修复(凌晨跑 test:api 必红:校验脚本自己算错了「今天」)
+
+- `verify-search-history-and-backup.mjs` 用 `new Date().toISOString().slice(0, 10)`(**UTC 日**)拼期望的
+  自动备份文件名,而应用是按**本机时区**命名(`src/lib/local-date.ts` 的 `localDateString` ——
+  它自己的注释里就写着「导出文件名 / 自动备份标记 → 与用户看到的日期不一致」正是这个坑)。
+  在东八区的 00:00~08:00 之间两者差一天:应用写 `home-inventory-2026-11-23.json`,
+  脚本却在找 `...-2026-11-22.json` → 必红(实测 05:00 跑红了一次,CI 跑在 UTC 上所以一直没暴露)。
+- 顺手补一条「这个文件是刚刚写的」:同名旧文件会让「文件确实被新建」在什么都没发生时也变绿。
+
+### 新增检查
+
+- `verify-auth-gate` 10 → **13 项**:把应用外壳那块 chunk 的请求掐掉来复现上面的场景,断言
+  ①头 1.5 秒里只显示加载中、不弹兜底提示;②10 秒内出现可操作的提示;③「重新加载」是不依赖 React 的真链接。
+- `verify-import` 11 → **13 项**:断言 1000 行的编号互不相同(那次 409 的落点)。
+- `scripts/unit` 新增/替换 3 条编号相关断言(1000 个一批确定性互不相同)。
+
+### 回归
+
+生产构建(`rm -rf .next` + `next build` + `next start`)下 **27 个界面套件 + `test:unit` + 整条 `test:api` 全绿**:
+`verify-modals-a11y` 71/71、`verify-entry-fixes` 68/68、`verify-experience` 43/43、`verify-a11y` 26/26、
+`verify-nested-controls` 21/21、`verify-bundle-budget` 21/21、`verify-narrow-layout` 21/21、
+`verify-role-ui` 18/18、`verify-contrast` 15/15、`verify-item-detail` 14/14、`verify-print-layout` 13/13、
+`verify-menus-a11y` 13/13、`verify-consume-scan` 13/13、`verify-layout-budget` 13/13、
+`verify-auth-gate` 13/13、`verify-import` 13/13、`verify-item-template` 11/11、`verify-item-merge` 11/11、
+`verify-report-page` 10/10、`verify-offline` 10/10、`verify-overview-focus` 10/10、
+`verify-item-card-layout` 9/9、`verify-about-and-version` 8/8、`verify-weekly-review` 7/7、
+`verify-empty-states` 7/7、`verify-qr-scan` 7/7、`verify-restock-pause-ui` 6/6、
+`verify-audit-confirm-flow` 4/4。
+
+---
+
 ## [v0.1.14] - 2026-11-23
 
 ### 修复(键盘用户没有上传照片的入口)

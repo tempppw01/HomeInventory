@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import {
   AlertCircle,
   Archive,
@@ -22,6 +23,15 @@ import { generatePassword, passwordStrength, PASSWORD_MIN_LENGTH, USERNAME_PATTE
 import { formatRecoveryCode, normalizeRecoveryCode, RECOVERY_CODE_LENGTH } from "@/lib/recovery-code";
 
 type AuthUser = { id: string; username: string; displayName: string; role: "ADMIN" | "MEMBER" | "VIEWER" };
+
+/**
+ * 「页面没能加载完」兜底用的原生脚本。
+ *
+ * 必须是不依赖 React 的原生脚本:这一屏真正需要它的场景,恰恰是 React 没能启动的时候。
+ * 定时器挂在 window 上,AuthGate 正常就绪后会把它清掉(见下面的 useEffect),
+ * 所以在「只是慢、但最终成功」的情况下不会误报。
+ */
+const BOOT_WATCHDOG = `(function(){window.__bootWatchdog=setTimeout(function(){var el=document.getElementById("boot-fallback");if(el){el.hidden=false;}},8000);})();`;
 
 type FieldKey = "username" | "displayName" | "password";
 
@@ -101,6 +111,13 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       .finally(() => { if (active) setReady(true); });
     return () => { active = false; };
   }, [applySession, loadSession]);
+
+  // 兜底提示的定时器只在「页面真的卡住」时才该响:应用正常起来(或只是慢)之后立刻清掉。
+  useEffect(() => {
+    if (!ready) return;
+    const pending = (window as unknown as { __bootWatchdog?: ReturnType<typeof setTimeout> }).__bootWatchdog;
+    if (pending) window.clearTimeout(pending);
+  }, [ready]);
 
   // Escape 从找回/结果视图退回登录视图。
   useEffect(() => {
@@ -266,6 +283,27 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           </span>
           <p className="m-0 text-sm muted">正在检查账号状态...</p>
         </div>
+        {/* 这一屏有可能永远不会有人来接手:如果 _next 的脚本没取到(升级后浏览器还在用旧的
+            HTML、静态文件缺失、CDN 抽风),React 根本不会启动 —— 页面就永远停在上面的
+            「正在检查账号状态...」上,既不报错也不给任何提示。本机实测遇到过一次:
+            端口上挂着上一轮构建的服务,chunk 名对不上,整个应用打不开却毫无线索。
+            下面这块由一段原生脚本在 8 秒后揭开(它不依赖 React,React 没启动它也照样跑);
+            正常启动时 AuthGate 会连整块一起卸载,并把定时器清掉,所以永远不会误报。 */}
+        <div id="boot-fallback" hidden className="fixed inset-0 grid place-items-center bg-[var(--background)] p-4">
+          <div className="surface w-full max-w-sm rounded-[var(--radius-card)] p-6 text-center sm:p-7">
+            <span className="mx-auto grid size-11 place-items-center rounded-[var(--radius-control)]" style={{ background: "color-mix(in srgb, var(--warning) 14%, var(--surface-solid))", color: "var(--warning)" }}>
+              <RefreshCw size={20} />
+            </span>
+            <h1 className="mb-0 mt-4 text-lg font-black leading-tight tracking-[-0.01em]">页面没能加载完</h1>
+            <p className="mx-auto mb-0 mt-2 max-w-[32ch] text-sm leading-6 muted">页面脚本没有取到。升级之后浏览器还在用旧的缓存是最常见的原因,重新加载一次通常就好了。</p>
+            {/* 用 Link 而不是按钮:这时候 React 还没启动,按钮上的 onClick 是空的。
+                注意这里要的不是「客户端跳转」—— Link 在服务端渲染出来就是一个真 <a href="/">,
+                React 没起来时浏览器照样按普通链接重新加载整页,正好是我们要的行为。 */}
+            <Link href="/" className="btn-primary mt-5 flex min-h-11 w-full items-center justify-center gap-2"><RefreshCw size={16} />重新加载</Link>
+            <p className="mb-0 mt-3 text-xs leading-5 muted">如果反复出现,请确认部署目录里的 <code>.next</code> 与页面引用的版本一致。</p>
+          </div>
+        </div>
+        <script dangerouslySetInnerHTML={{ __html: BOOT_WATCHDOG }} />
       </div>
     );
   }

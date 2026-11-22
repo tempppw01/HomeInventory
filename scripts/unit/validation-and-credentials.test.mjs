@@ -9,7 +9,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { itemPatchSchema, itemSchema } from "../../src/lib/validation.ts";
-import { createItemCode } from "../../src/lib/item-code.ts";
+import { createItemCode, createItemCodeBatch } from "../../src/lib/item-code.ts";
 import { activityLabel, ACTIVITY_LABELS } from "../../src/lib/activity-label.ts";
 import { passwordStrength, generatePassword, PASSWORD_MIN_LENGTH, USERNAME_PATTERN } from "../../src/lib/password.ts";
 
@@ -103,9 +103,20 @@ test("物品编号:形如 INV-YYYYMMDD-XXXXXX", () => {
   assert.match(code, /^INV-\d{8}-[0-9A-F]{6}$/);
 });
 
-test("物品编号:连续生成不重复", () => {
-  const codes = new Set(Array.from({ length: 200 }, () => createItemCode()));
-  assert.equal(codes.size, 200);
+test("物品编号:一批 1000 个必须互不相同(批量导入的真实规模)", () => {
+  // 这条必须是确定性的:编号只有 2^24 种,一次导入 1000 行时「同批撞车」的概率约 3%,
+  // 而 itemCode 上有唯一索引 —— 撞一次整个事务回滚,1000 行一条都进不去。
+  // (此前这里是「连续生成 200 个不重复」,那是概率性的:约 1/850 的运行会红。)
+  const codes = createItemCodeBatch(1000);
+  assert.equal(codes.length, 1000);
+  assert.equal(new Set(codes).size, 1000);
+  for (const code of codes) assert.match(code, /^INV-\d{8}-[0-9A-F]{6}$/);
+});
+
+test("物品编号:批量里的每一个也是合法编号", () => {
+  const codes = createItemCodeBatch(3);
+  assert.equal(new Set(codes).size, 3);
+  assert.deepEqual(createItemCodeBatch(0), []);
 });
 
 // ---------- 活动日志文案 ----------

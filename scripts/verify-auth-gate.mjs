@@ -20,6 +20,9 @@ const ROUTES = ["/", "/items", "/settings", "/audit", "/report"];
 // 注意:/api/shopping 不支持 GET(405,方法问题不是鉴权问题),别放进来
 const APIS = ["/api/dashboard", "/api/items", "/api/activity", "/api/audits", "/api/tasks", "/api/settings/preferences"];
 
+/** 应用外壳那一块 chunk(app/(app)/layout-*.js):掐掉它就等于 React 永远不会启动。 */
+const isShellChunk = (url) => /\/_next\/static\/chunks\/app\/(?:\(app\)\/)?layout-[^/]*\.js$/.test(url);
+
 const results = [];
 const check = (name, ok, detail = "") => {
   results.push({ name, ok, detail });
@@ -172,6 +175,42 @@ await page.waitForTimeout(600);
       await fetch(`/api/items/${id}`, { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ permanent: true }) });
     }, probe.id);
   }
+}
+
+// ---------- 6 脚本取不到时,不能永远停在「正在检查账号状态...」 ----------
+// 这个场景是真实遇到的:端口上还挂着上一轮构建的服务,页面引用的 chunk 名对不上,
+// 整个应用打不开 —— 却既不报错也不给提示,只有「正在检查账号状态...」永远转下去。
+// 这里把应用外壳那块 chunk 请求掐掉来复现,断言 8 秒后出现一句可操作的话和一个能点的入口。
+{
+  const broken = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const brokenPage = await broken.newPage();
+  await brokenPage.route("**/_next/static/chunks/**", (route) => {
+    const url = route.request().url();
+    // 只掐「应用外壳」那一块,其余资源照常放行。
+    if (isShellChunk(url)) return route.abort();
+    return route.continue();
+  });
+
+  await brokenPage.goto(BASE);
+  await brokenPage.waitForTimeout(1500);
+  const early = await brokenPage.evaluate(() => {
+    const el = document.getElementById("boot-fallback");
+    return { present: Boolean(el), visible: Boolean(el && !el.hidden) };
+  });
+  // 它不是「加载中」提示,而是「已经确定卡住了」的提示:头 1.5 秒里不该出现。
+  check("脚本取不到时:一开始只显示加载中,不弹兜底提示", early.present && !early.visible, JSON.stringify(early));
+
+  await brokenPage.waitForTimeout(8500);
+  const late = await brokenPage.evaluate(() => {
+    const el = document.getElementById("boot-fallback");
+    if (!el || el.hidden) return { visible: false };
+    const text = (el.innerText || "").replace(/\n+/g, " | ");
+    const link = el.querySelector("a[href]");
+    return { visible: true, text, linkText: link ? (link.textContent || "").trim() : "", linkHref: link ? link.getAttribute("href") : null };
+  });
+  check("脚本取不到时会给出可操作的提示(而不是永远转圈)", late.visible && /页面没能加载完/.test(late.text || ""), late.visible ? (late.text || "").slice(0, 90) : "10 秒后什么都没出现");
+  check("提示里的「重新加载」是不依赖 React 的链接", late.visible && Boolean(late.linkText) && late.linkHref === "/", `href=${late.linkHref} text=${late.linkText}`);
+  await broken.close();
 }
 
 const failed = results.filter((entry) => !entry.ok);

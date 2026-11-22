@@ -114,6 +114,15 @@ await cleanup();
   const bulk = await call("POST", "/api/items/import", { items: rows });
   check("超过 1000 行时只导入 1000 条", (bulk.status === 200 || bulk.status === 201) && bulk.body?.count === 1000, `status=${bulk.status} count=${bulk.body?.count}`);
   check("并明确标记被截断", bulk.body?.truncated === true, `truncated=${bulk.body?.truncated}`);
+
+  // 这一批的 1000 个编号必须互不相同。编号是 3 字节随机(2^24 种)而 itemCode 上有唯一索引:
+  // 同批撞一次,整个事务回滚,用户看到的是「已存在同名或重复的记录」——1000 行一条都进不去。
+  // 这条断言就是那次红灯的落点(同一天连跑两次批量导入,第二次整批被 409 拒掉)。
+  const minted = await withDb(async (prisma) => {
+    const created = await prisma.item.findMany({ where: { name: { startsWith: `${ITEM_PREFIX}-bulk-` } }, select: { itemCode: true } });
+    return { total: created.length, distinct: new Set(created.map((row) => row.itemCode)).size };
+  });
+  check("1000 行的编号互不相同(否则整批会被唯一索引回滚)", minted.total === 1000 && minted.distinct === 1000, JSON.stringify(minted));
 }
 
 // ---------- ⑤ 只读账号必须 403 ----------

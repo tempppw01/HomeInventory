@@ -7,7 +7,7 @@
 //
 // 用法:PROBE_USER=bgs PROBE_PASS=... node scripts/verify-search-history-and-backup.mjs
 
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, statSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
 import { join } from "node:path";
 import { loginCookie } from "./lib/probe-login.mjs";
@@ -74,7 +74,14 @@ const call = async (method, path, body) => {
 // ============ 自动备份 ============
 {
   const dir = process.env.BACKUP_DIR || join(process.env.LOCAL_UPLOAD_DIR || join(process.cwd(), "data"), "backups");
-  const today = new Date().toISOString().slice(0, 10);
+
+  // 文件名里的日期必须按**本机时区**算,与应用同一口径(src/lib/local-date.ts 的 localDateString)。
+  // 这里此前用的是 `new Date().toISOString().slice(0, 10)` —— 那是 UTC 日,
+  // 在东八区的 00:00~08:00 之间比用户的今天早一天:应用写的是 `...-2026-11-23.json`,
+  // 脚本却在找 `...-2026-11-22.json`,于是凌晨跑 test:api 必红(实测 04:56 红过一次),
+  // 而 CI 跑在 UTC 上,两边一致,所以一直没暴露。
+  const localDateString = (value = new Date()) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+  const today = localDateString();
   const target = join(dir, `home-inventory-${today}.json`);
 
   // 先把「今天已备份过」的状态清掉,否则接口会直接 skipped ——
@@ -84,11 +91,14 @@ const call = async (method, path, body) => {
   await prisma.$disconnect();
   if (existsSync(target)) rmSync(target);
 
+  const startedAt = Date.now();
   const first = await call("POST", "/api/backup/auto");
   check("自动备份:请求成功且这次真的执行了(未被跳过)", first.status === 200 && first.body?.skipped !== true, `status=${first.status} body=${JSON.stringify(first.body).slice(0, 60)}`);
 
   const exists = existsSync(target);
   check("自动备份:备份文件确实被新建", exists, `期望路径=${target}`);
+  // 只看「文件在不在」还不够:同名旧文件会让这条断言在什么都没发生时也变绿。
+  check("自动备份:这个文件是刚刚写的(不是上次留下的同名文件)", exists && statSync(target).mtimeMs >= startedAt - 2000, exists ? `mtime=${statSync(target).mtime.toISOString()}` : "文件不存在");
 
   if (exists) {
     let parsed = null;
