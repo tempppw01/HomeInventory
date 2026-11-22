@@ -5,6 +5,45 @@
 
 ---
 
+## [v0.1.14] - 2026-11-23
+
+### 修复(键盘用户没有上传照片的入口)
+
+- **物品卡片的照片位只有鼠标点得到**。四处「上传图片」把 `<input type="file">` 写成 `className="hidden"`(display:none):外层 `<label>` 鼠标点得到,但 display:none 的输入框**不在焦点序列里**。实测物品页从顶栏连按 26 次 Tab,焦点一次都没落到文件输入框上 —— 9 张卡片的照片位对键盘用户等于不存在(用户:无法给物品传照片)。现在输入框改 `.sr-only`(视觉上一样看不见,但 Tab 得到),焦点落在它身上时把焦点环画在外层 label 上(`.file-label:has(input:focus-visible)`;用 `:has()` 而不是 `:focus-within`,鼠标点选时不会多画一个框)。四处一并修:物品卡片、录入物品弹窗、AI 批量识别、设置页的「导入物品 / 合并恢复备份」。
+- **物品卡片的照片位没有可访问名**:label 里只有图标。给输入框补上物品名,读屏会念「上传「可口可乐罐装」的照片」。
+
+### 维护
+
+- `verify-a11y` 的「表单控件都有可访问名称」把 `file` 类型排除了,而它又按尺寸过滤(`sr-only` 的框只有 1px),所以这类问题一路绿着。这轮给它补了专门的一节。
+- 开发模式的 Next.js 悬浮调试入口(`nextjs-portal`)也会被 Tab 到,且它在界面上没有焦点环 —— 本地跑 `verify-a11y` 会永远差一条;它是生产构建里不存在的东西,已排除(与之前忽略 HMR 传输错误同一口径)。
+
+### 新增检查
+
+- `verify-a11y` 从 13 项扩到 **26 项**:物品页 / 批量识别弹窗 / 录入物品弹窗 / 设置页四处,逐个断言「文件输入框能 Tab 到(不是 display:none)」与「文件输入框有可访问名称」,每条都带「确实测到了文件输入框」的防空跑守卫。
+- `verify-entry-fixes` 的「设置页没有 <40px 的可点控件」原先会漏掉文件输入框(它当时是 display:none),
+  改成 `.sr-only` 后又被按 1px 判成「太小」。现在按项目一贯的口径处理:`sr-only` 的框由外层 label
+  代表,label 不够大才判红,并补一条「文件上传入口的可见命中区 ≥40px」。
+
+### 回归
+
+在生产构建(`rm -rf .next` + `next build` + `next start`,与 CI 同一条路)下把整套界面检查跑了一遍,
+**27 个套件全绿**:`verify-modals-a11y` 71/71、`verify-entry-fixes` 68/68、`verify-a11y` 26/26、
+`verify-nested-controls` 21/21、`verify-bundle-budget` 21/21、`verify-narrow-layout` 21/21、
+`verify-role-ui` 18/18、`verify-contrast` 15/15、`verify-item-detail` 14/14、`verify-print-layout` 13/13、
+`verify-menus-a11y` 13/13、`verify-consume-scan` 13/13、`verify-layout-budget` 13/13、
+`verify-item-template` 11/11、`verify-item-merge` 11/11、`verify-report-page` 10/10、
+`verify-offline` 10/10、`verify-auth-gate` 10/10、`verify-overview-focus` 10/10、
+`verify-item-card-layout` 9/9、`verify-about-and-version` 8/8、`verify-weekly-review` 7/7、
+`verify-empty-states` 7/7、`verify-qr-scan` 7/7、`verify-restock-pause-ui` 6/6、
+`verify-audit-confirm-flow` 4/4;`test:unit` 全绿。
+
+开发模式下那几条红灯(开发包体积、dev 悬浮入口挡住侧栏点击、AI 供应商响应慢)在生产构建下都消失,
+与产品无关。排查过程中另有两处**环境**问题值得记一笔:本机两个探针账号的密码被早前的验收脚本改过
+(`make-probe-accounts.mjs` 重置后即通过);以及端口上还挂着上一轮构建的旧服务进程时,新构建的页面
+会因为 chunk 名对不上而打不开 —— 这两种都不是产品缺陷。
+
+---
+
 ## [v0.1.13] - 2026-11-23
 
 ### 修复(无效 HTML 与嵌套控件)

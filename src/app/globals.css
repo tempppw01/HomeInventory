@@ -329,6 +329,20 @@ button:disabled, input:disabled, select:disabled, textarea:disabled, [aria-disab
 }
 @layer components {
 .muted { color: var(--muted); }
+/*
+ * 包着「上传图片」这个隐藏文件输入框的 label。
+ *
+ * 此前四处上传入口把 <input type="file"> 写成 className="hidden"(display:none):
+ * label 鼠标点得到,但 display:none 的输入框根本不在焦点序列里 ——
+ * 键盘用户没有任何入口上传照片(实测:物品页从顶栏连按 26 次 Tab,焦点一次都没落到
+ * 文件输入框上,9 张物卡片的照片位全都只能鼠标点)。
+ *
+ * 现在输入框改 .sr-only(视觉上同样看不见,但 Tab 得到),焦点落在它身上时
+ * 把焦点环画在外层 label 上 —— 否则用户看不见焦点跑到哪去了。
+ * 用 :has(... :focus-visible) 而不是 :focus-within,鼠标点选时不会多画一个框。
+ */
+.file-label { cursor: pointer; }
+.file-label:has(input:focus-visible) { outline: 2px solid var(--ring-color); outline-offset: 2px; }
 .input {
   width: 100%; border: 1px solid var(--control-border); background: var(--surface-soft); color: var(--foreground);
   min-height: var(--control-height); border-radius: var(--field-radius); padding: var(--field-padding-y) var(--field-padding-x); outline: none; line-height: var(--leading-control); transition: border-color var(--motion-base) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard), background-color var(--motion-base) var(--ease-standard);

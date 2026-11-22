@@ -520,10 +520,18 @@ const settingsExpanded = await page.evaluate(() => {
   // 用显式标记选中「设置行」,不再用 details > div > div(那会把内部包装层也算进来)。
   const rows = [...main.querySelectorAll("[data-settings-row]")].filter((node) => node.getBoundingClientRect().height > 0);
   const controls = [...main.querySelectorAll("button, select, input, textarea, [role=switch]")].filter((node) => node.offsetParent !== null && !node.closest("header"));
+  // sr-only 的文件输入框只有 1px,但真正的手指目标是包着它的 label(≥44px 的 btn-ghost):
+  // 只按输入框本身的尺寸判「小于 40px」是误报 —— 而 label 不够大的仍然留在名单里。
+  const hideBehindLabel = (node) => {
+    if (node.tagName !== "INPUT" || node.getAttribute("type") !== "file") return false;
+    const label = node.closest("label");
+    return Boolean(label && label.getBoundingClientRect().height >= 40);
+  };
   return {
     rowHeights: [...new Set(rows.map((node) => Math.round(node.getBoundingClientRect().height)))].sort((a, b) => a - b),
     rowBorders: [...new Set(rows.map((node) => getComputedStyle(node).borderTopWidth))],
-    smallControls: controls.filter((node) => Math.min(node.getBoundingClientRect().width, node.getBoundingClientRect().height) < 40).length,
+    smallControls: controls.filter((node) => !hideBehindLabel(node) && Math.min(node.getBoundingClientRect().width, node.getBoundingClientRect().height) < 40).length,
+    uploadLabelHeights: [...main.querySelectorAll("label")].filter((label) => label.querySelector('input[type="file"]')).map((label) => Math.round(label.getBoundingClientRect().height)),
     switches: main.querySelectorAll("[role=switch]").length,
     switchHeights: [...new Set([...main.querySelectorAll("[role=switch]")].map((node) => Math.round(node.getBoundingClientRect().height)))],
     nativeCheckboxes: main.querySelectorAll('input[type="checkbox"]').length,
@@ -532,6 +540,7 @@ const settingsExpanded = await page.evaluate(() => {
 });
 check("设置行最小高度 56px 且分隔为发丝线", settingsExpanded.rowHeights[0] === 56 && settingsExpanded.rowBorders.sort().join(",") === "0px,1px", JSON.stringify({ heights: settingsExpanded.rowHeights.slice(0, 4), border: settingsExpanded.rowBorders }));
 check("设置页没有 <40px 的可点控件", settingsExpanded.smallControls === 0, "small=" + settingsExpanded.smallControls);
+check("文件上传入口的可见命中区 ≥40px", settingsExpanded.uploadLabelHeights.length > 0 && settingsExpanded.uploadLabelHeights.every((height) => height >= 40), JSON.stringify(settingsExpanded.uploadLabelHeights));
 check("勾选框已换成 role=switch(44px)", settingsExpanded.nativeCheckboxes === 0 && settingsExpanded.switches >= 2 && settingsExpanded.switchHeights.every((height) => height >= 44), JSON.stringify({ checkboxes: settingsExpanded.nativeCheckboxes, switches: settingsExpanded.switches, heights: settingsExpanded.switchHeights }));
 check("设置页下拉全部来自 SettingsSelect", settingsExpanded.selectClasses.length === 1 && settingsExpanded.selectClasses[0] === "settings", JSON.stringify(settingsExpanded.selectClasses));
 check("设置页布局能展开", (await page.locator("main details[open]").count()) === 8, "open=" + (await page.locator("main details[open]").count()));

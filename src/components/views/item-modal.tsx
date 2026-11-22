@@ -313,10 +313,10 @@ export function ItemModal({ locations, allItems, item, onClose, onSaved, aiAvail
           {draft.imageUrl && <button type="button" onClick={() => { set("imageUrl", ""); setImageUrlDraft(""); }} className="ml-auto min-h-11 text-xs font-bold" style={{ color: "var(--danger)" }}>移除图片</button>}
         </div>
         {imageMode === "upload" ? (
-          <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl px-2 text-sm font-bold" style={{ background: "var(--surface-soft)" }}>
+          <label className="file-label flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-bold" style={{ background: "var(--surface-soft)" }}>
             <ImagePlus size={16} style={{ color: "var(--primary)" }} />{uploading ? "正在压缩并上传..." : "选择图片上传"}
             <span className="ml-auto text-xs font-normal muted">选图后自动压缩</span>
-            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" disabled={uploading} onChange={(e) => uploadImage(e.target.files?.[0])} />
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only" disabled={uploading} onChange={(e) => uploadImage(e.target.files?.[0])} />
           </label>
         ) : (
           <div className="flex gap-2">

@@ -79,8 +79,8 @@ export function DataTools({ role, onToast }: { role: "ADMIN" | "MEMBER" | "VIEWE
         <a href="/report" target="_blank" rel="noreferrer" className="btn-ghost flex items-center gap-2 text-xs" aria-label="打开家庭月报">
           <History size={14} />家庭月报
         </a>
-{!isViewer && <label className="btn-ghost flex cursor-pointer items-center gap-2 text-xs"><Upload size={14} />导入物品<input type="file" accept="application/json,.json,text/csv,.csv" className="hidden" onChange={(e) => importFile(e.target.files?.[0])} /></label>}
-        {isAdmin && <label className="btn-ghost flex cursor-pointer items-center gap-2 text-xs"><History size={14} />合并恢复备份<input type="file" accept="application/json,.json" className="hidden" onChange={(e) => restoreBackup(e.target.files?.[0])} /></label>}
+{!isViewer && <label className="file-label btn-ghost flex cursor-pointer items-center gap-2 text-xs"><Upload size={14} />导入物品<input type="file" accept="application/json,.json,text/csv,.csv" className="sr-only" onChange={(e) => importFile(e.target.files?.[0])} /></label>}
+        {isAdmin && <label className="file-label btn-ghost flex cursor-pointer items-center gap-2 text-xs"><History size={14} />合并恢复备份<input type="file" accept="application/json,.json" className="sr-only" onChange={(e) => restoreBackup(e.target.files?.[0])} /></label>}
       </div>}
     />
 

@@ -65,6 +65,36 @@ await page.goto(`${BASE}/items`);
 await page.waitForTimeout(2600);
 await dismissBlockingDialogs(page);
 
+/**
+ * 文件输入框的键盘可达性。
+ *
+ * 为什么单独量:页面上四处「上传图片」把 <input type="file"> 写成 className="hidden"
+ * (display:none),外层 <label> 鼠标点得到,但 display:none 的输入框不在焦点序列里 ——
+ * 键盘用户没有任何入口给物品加照片(实测:从顶栏连按 26 次 Tab 都没落到文件输入框上)。
+ * 上面「表单控件都有可访问名称」那条查不到它,因为它把 file 类型排除了,
+ * 而且按尺寸过滤(sr-only 的框只有 1px)。
+ */
+const fileInputState = () => page.evaluate(() => {
+  const inputs = Array.from(document.querySelectorAll('input[type="file"]'));
+  const describe = (node) => (node.getAttribute("aria-label") || node.closest("label")?.textContent?.trim().slice(0, 16) || "未命名");
+  const unreachable = [];
+  const nameless = [];
+  for (const input of inputs) {
+    const style = getComputedStyle(input);
+    if (style.display === "none" || style.visibility === "hidden") {
+      unreachable.push(describe(input));
+      continue;
+    }
+    input.focus();
+    if (document.activeElement !== input) unreachable.push(describe(input));
+    input.blur();
+    const labelled = Boolean(input.getAttribute("aria-label") || input.getAttribute("aria-labelledby"));
+    const byLabel = Boolean(input.labels && input.labels.length && (input.labels[0].textContent || "").trim());
+    if (!labelled && !byLabel) nameless.push(describe(input));
+  }
+  return { total: inputs.length, unreachable, nameless };
+});
+
 // ============ 0. 守卫:页面上得有可测的东西 ============
 {
   const counts = await page.evaluate(() => ({
@@ -73,6 +103,14 @@ await dismissBlockingDialogs(page);
   }));
   check("页面上有足够的可聚焦元素(防止空跑)", counts.focusable >= 20, `focusable=${counts.focusable}`);
   check("页面上有表单控件(防止空跑)", counts.inputs >= 3, `inputs=${counts.inputs}`);
+}
+
+// ============ 0.5 文件输入框:键盘也到得了 ============
+{
+  const state = await fileInputState();
+  check("物品页有文件输入框(防止空跑)", state.total >= 3, `total=${state.total}`);
+  check("物品页的文件输入框都能 Tab 到(不是 display:none)", state.unreachable.length === 0, state.unreachable.slice(0, 3).join(" | "));
+  check("物品页的文件输入框都有可访问名称", state.nameless.length === 0, state.nameless.slice(0, 3).join(" | "));
 }
 
 // ============ 1. 表单控件都有可访问名称 ============
@@ -105,6 +143,9 @@ await dismissBlockingDialogs(page);
     const info = await page.evaluate(() => {
       const node = document.activeElement;
       if (!node || node === document.body) return null;
+      // Next.js 开发模式的悬浮调试入口(nextjs-portal)也会被 Tab 到,它在生产构建里不存在,
+      // 也不属于应用界面 —— 不排除掉的话,本地跑这套检查永远差一条。
+      if (node.tagName === "NEXTJS-PORTAL" || node.closest("nextjs-portal")) return null;
       const style = getComputedStyle(node);
       const outlineVisible = style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0;
       const shadowVisible = Boolean(style.boxShadow && style.boxShadow !== "none");
@@ -161,6 +202,10 @@ if (!aiAvailable) {
     const hasFileInput = (await fileInput.count()) > 0;
     check("批量识别弹窗里有文件选择框", hasFileInput);
 
+    const modalFileState = await fileInputState();
+    check("批量识别弹窗的文件选择框能 Tab 到(不是 display:none)", modalFileState.unreachable.length === 0, modalFileState.unreachable.slice(0, 3).join(" | "));
+    check("批量识别弹窗的文件选择框有可访问名称", modalFileState.nameless.length === 0, modalFileState.nameless.slice(0, 3).join(" | "));
+
     if (hasFileInput) {
       await fileInput.setInputFiles(pngPath);
       await page.waitForTimeout(1200);
@@ -202,6 +247,49 @@ if (!aiAvailable) {
     const closed = await page.evaluate(() => !Array.from(document.querySelectorAll('[role="dialog"]')).some((node) => node.getBoundingClientRect().height > 0));
     check("Esc 可以关闭弹窗", closed);
   }
+}
+
+// ============ 4. 录入物品弹窗:图片上传入口也要能 Tab 到 ============
+{
+  const trigger = page.locator('button[aria-label="录入物品"]').first();
+  if ((await trigger.count()) === 0) {
+    check("能找到「录入物品」入口", false, "顶栏没有录入物品按钮(上传入口没被测到)");
+  } else {
+    await trigger.click({ timeout: 10000 }).catch(() => {});
+    await page.waitForTimeout(1200);
+    const opened = await page.evaluate(() => Array.from(document.querySelectorAll('[role="dialog"]')).some((node) => node.getBoundingClientRect().height > 0));
+    check("能打开「录入物品」弹窗", opened, "点击后没有弹窗");
+    if (opened) {
+      // 图片上传入口在「图片」折叠行里,默认收起 —— 先展开再量。
+      await page.locator('[role="dialog"] button[aria-expanded]:has-text("图片")').first().click({ timeout: 5000 }).catch(() => {});
+      await page.waitForTimeout(600);
+      const state = await fileInputState();
+      check("录入物品弹窗有文件输入框(防止空跑)", state.total >= 1, `total=${state.total}`);
+      check("录入物品弹窗的文件输入框能 Tab 到(不是 display:none)", state.unreachable.length === 0, state.unreachable.slice(0, 3).join(" | "));
+      check("录入物品弹窗的文件输入框有可访问名称", state.nameless.length === 0, state.nameless.slice(0, 3).join(" | "));
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(600);
+    }
+  }
+}
+
+// ============ 5. 设置页:数据与备份里的两个导入入口 ============
+{
+  await page.goto(`${BASE}/settings`);
+  await page.waitForTimeout(2600);
+  await dismissBlockingDialogs(page);
+  // 这两个入口在折叠的 <details> 分组里,先展开。
+  await page.evaluate(() => {
+    document.querySelectorAll("main details:not([open])").forEach((node) => {
+      const summary = node.querySelector("summary");
+      if (summary instanceof HTMLElement) summary.click();
+    });
+  });
+  await page.waitForTimeout(1200);
+  const state = await fileInputState();
+  check("设置页有文件输入框(防止空跑)", state.total >= 2, `total=${state.total}`);
+  check("设置页的文件输入框都能 Tab 到(不是 display:none)", state.unreachable.length === 0, state.unreachable.slice(0, 3).join(" | "));
+  check("设置页的文件输入框都有可访问名称", state.nameless.length === 0, state.nameless.slice(0, 3).join(" | "));
 }
 
 await context.close();
