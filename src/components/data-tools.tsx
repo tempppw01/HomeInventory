@@ -87,8 +87,12 @@ export function DataTools({ role, onToast }: { role: "ADMIN" | "MEMBER" | "VIEWE
     <SettingsRow
       icon={Users}
       title="家庭成员"
+      // 这一份成员是「给物品标注归属的人」,和能登录的账号不是一回事 —— 不写清就会和
+      // 上面「账号与家庭成员」里的账号数对不上(实测同页出现「4 个登录账号」与「0 位成员」)。
+      description="成员用来标注物品归属(谁的药、谁的毛巾),不需要账号;能登录的账号在上面的「账号与家庭成员」里管。"
       stacked
       control={<div className="flex w-full flex-wrap items-center gap-2">
+        {members.length === 0 && <span className="text-xs muted">还没有家庭成员。加上之后,录入物品时就能标注这是谁的。</span>}
         {members.map((member) => <span key={member.id} className="rounded-xl px-2.5 py-1.5 text-xs font-bold" style={{
             background: "var(--surface-soft)",
             // 成员颜色是固定值(默认 #7c3aed),直接当文字色时,深色背景下对比度只有 2.4 左右。

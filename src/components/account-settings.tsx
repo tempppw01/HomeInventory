@@ -258,8 +258,10 @@ export function AccountSettings({ onToast }: { onToast: (message: string) => voi
   const accountSummary = users.length === 0
     ? "正在读取账号..."
     : currentUser
-      ? `当前账号 ${currentUser.displayName} · ${roleLabel(currentUser.role)} · ${users.length} 位家庭成员`
-      : `${users.length} 位家庭成员`;
+      // 「家庭成员」是数据安全面板里那份「给物品标注归属的人」,和能登录的账号是两回事。
+      // 这里原本写「N 位家庭成员」,同一页就会出现「4 位家庭成员」与「0 位成员」两个矛盾的说法。
+      ? `当前账号 ${currentUser.displayName} · ${roleLabel(currentUser.role)} · ${users.length} 个登录账号`
+      : `${users.length} 个登录账号`;
   const accountBadge = users.length === 0
     ? <SettingsBadge tone="muted">读取中</SettingsBadge>
     : <SettingsBadge tone={inactiveUsers > 0 ? "warning" : "success"}>{inactiveUsers > 0 ? `${inactiveUsers} 个已停用` : "全部启用"}</SettingsBadge>;
