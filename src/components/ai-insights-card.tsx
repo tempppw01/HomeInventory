@@ -78,7 +78,12 @@ export function AiInsightsCard({ aiAvailable, onRestock, onOpenItem }: { aiAvail
   if (!aiAvailable || failed) return null;
 
   return (
-    <section className="surface rounded-[28px] p-5" aria-label="AI 本周建议">
+    <section
+      // 概览页把这张卡与「最近更新」放进同一行网格,默认会被拉到与其等高,
+      // 实测留下约 190px 空白(内容 304px,卡片被撑到 495px)。self-start 让它按内容收口。
+      className="surface self-start rounded-[28px] p-5"
+      aria-label="AI 本周建议"
+    >
       <div className="flex items-center gap-2">
         <span className="grid size-8 place-items-center rounded-xl" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>
           <Sparkles size={16} />
@@ -97,7 +102,9 @@ export function AiInsightsCard({ aiAvailable, onRestock, onOpenItem }: { aiAvail
 
       {payload && (
         <>
-          <div className="mt-3 flex items-start justify-between gap-3">
+          {/* 窄屏竖排:「全部标为已读」与摘要并排时,390px 下摘要只剩 206px,一句话被折成两行;
+              桌面仍保持左右两端对齐。 */}
+          <div className="mt-3 flex flex-col items-start gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
             <p className="mb-0 text-sm font-bold">{payload.headline}</p>
             {filterDismissed(payload.insights, dismissedKeys).length > 1 && (
               <button
