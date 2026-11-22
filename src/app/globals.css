@@ -16,52 +16,63 @@
   inset: -8px;
 }
 
-/* Typography system: MiSans for interface copy, Geist Mono for IDs and numeric data. */
+/* Typography system: MiSans for interface copy, Geist Mono for IDs and numeric data.
+ *
+ * 中文字体(MiSans)只用 local():此前这里挂的是第三方 OSS 上的 woff2,那些文件**已经不在了**
+ * (curl -I 逐个实测:两个字体族共 7 个 URL 全部 404,404 响应自然也没有 CORS 头),
+ * 于是每次打开页面都会白发这些注定失败的跨域请求、在控制台留下 2 条报错,
+ * 而拿到的字体和「不写这一段」完全一样。MiSans 本体是小米的免费字体,
+ * 但不便随仓库分发 —— 所以改成:设备上装了 MiSans 就直接用,没装就安静回退到
+ * --font-sans 里的 PingFang SC / Microsoft YaHei,不再发无用请求。
+ *
+ * 等宽数字(Geist Mono)是 SIL OFL 授权、体积小,直接自托管在 public/fonts/ 下同源加载。
+ * 见 public/fonts/README.md。
+ */
 @font-face {
   font-family: "MiSans";
-  src: local("MiSans"), local("MiSans VF"), url("https://cloudreve-bei.oss-cn-guangzhou.aliyuncs.com/ledgerflow/fonts/MiSans-Regular.woff2") format("woff2");
+  src: local("MiSans"), local("MiSans VF");
   font-style: normal;
   font-weight: 400;
   font-display: swap;
 }
 @font-face {
   font-family: "MiSans";
-  src: local("MiSans"), local("MiSans VF"), url("https://cloudreve-bei.oss-cn-guangzhou.aliyuncs.com/ledgerflow/fonts/MiSans-Medium.woff2") format("woff2");
+  src: local("MiSans"), local("MiSans VF");
   font-style: normal;
   font-weight: 500;
   font-display: swap;
 }
 @font-face {
   font-family: "MiSans";
-  src: local("MiSans"), local("MiSans VF"), url("https://cloudreve-bei.oss-cn-guangzhou.aliyuncs.com/ledgerflow/fonts/MiSans-Semibold.woff2") format("woff2");
+  src: local("MiSans"), local("MiSans VF");
   font-style: normal;
   font-weight: 600;
   font-display: swap;
 }
 @font-face {
   font-family: "MiSans";
-  src: local("MiSans"), local("MiSans VF"), url("https://cloudreve-bei.oss-cn-guangzhou.aliyuncs.com/ledgerflow/fonts/MiSans-Bold.woff2") format("woff2");
+  src: local("MiSans"), local("MiSans VF");
   font-style: normal;
   font-weight: 700;
   font-display: swap;
 }
 @font-face {
   font-family: "MiSans";
-  src: local("MiSans"), local("MiSans VF"), url("https://cloudreve-bei.oss-cn-guangzhou.aliyuncs.com/ledgerflow/fonts/MiSans-Heavy.woff2") format("woff2");
+  src: local("MiSans"), local("MiSans VF");
   font-style: normal;
   font-weight: 800 900;
   font-display: swap;
 }
 @font-face {
   font-family: "Geist Mono";
-  src: local("Geist Mono"), url("https://cloudreve-bei.oss-cn-guangzhou.aliyuncs.com/ledgerflow/fonts/GeistMono-Regular.woff2") format("woff2");
+  src: local("Geist Mono"), url("/fonts/GeistMono-Regular.woff2") format("woff2");
   font-style: normal;
   font-weight: 400;
   font-display: swap;
 }
 @font-face {
   font-family: "Geist Mono";
-  src: local("Geist Mono"), url("https://cloudreve-bei.oss-cn-guangzhou.aliyuncs.com/ledgerflow/fonts/GeistMono-SemiBold.woff2") format("woff2");
+  src: local("Geist Mono"), url("/fonts/GeistMono-SemiBold.woff2") format("woff2");
   font-style: normal;
   font-weight: 600 700;
   font-display: swap;

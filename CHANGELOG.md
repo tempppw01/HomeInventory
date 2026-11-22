@@ -5,6 +5,27 @@
 
 ---
 
+## [v0.1.13] - 2026-11-23
+
+### 修复(无效 HTML 与嵌套控件)
+
+- **点「处理掉」会连带弹出「编辑物品」**:提醒中心那一行既是按钮(点一下进编辑),右侧又放了一个「处理掉」按钮,渲染出来的 DOM 是 `<button>` 里套 `<button>` —— HTML 不允许,React 每次挂载都报 hydration 错误(开发模式右下角常驻「2 Issues」);更直接的是点内层按钮会冒泡触发整行的 onClick,「移入回收站」的二次确认与「编辑物品」两个弹窗同时弹出来(1440px 实测,截图见提交说明)。现在 `ListRow` 先判断 `trailing` 里有没有控件:有就退成普通容器、主内容单独做按钮、`trailing` 作为兄弟节点独立可点;没有就保持原来的整行按钮。判定抽成 `src/lib/interactive-nesting.ts`(纯函数,可单测)。
+- **概览「最近更新」的两个图标快捷键只有鼠标点得到**:AI 助手 / 二维码此前写成带 `aria-label` 的 `<span onClick>` —— Tab 到不了,`aria-label` 挂在无角色的 span 上也读不出来。改成真正的 `<button>`,名字带上物品名(`对「可口可乐罐装」使用 AI 助手`),尺寸 24 → 28px 并用 `tap-target` 把命中区扩到 44px。
+- **盘点核对表的「已确认」读屏读不到**:该状态此前只靠图标底色表达。`ListRow` 只要收到 `active` 就在按钮上给出 `aria-pressed`(普通操作行不补,免得把「点一下」说成「切换」)。
+
+### 修复(字体:不再白发跨域请求)
+
+- **MiSans 的 5 个 woff2 早已 404**:`curl -I` 逐个实测,两个字体族共 7 个 OSS URL 全部 404(404 响应自然也没有 CORS 头),于是每次打开页面都白发这些注定失败的跨域请求、控制台留下 2 条报错,而拿到的字体与「不写这一段」完全一样。现在 MiSans 只用 `local()`:设备上装了就用,没装安静回退到 PingFang SC / Microsoft YaHei。
+- **Geist Mono 改为自托管**:SIL OFL 授权、体积小,放到 `public/fonts/` 同源加载(此前同样 404)。
+
+### 新增检查
+
+- `scripts/verify-nested-controls.mjs`(21 项):9 个视图 + 提醒中心 + 回收站里不得出现「控件套控件」;打开提醒中心全程控制台零报错;点「处理掉」只弹一个确认框、不得同时出现「编辑物品」;概览两个图标快捷键必须是真按钮 / 有可访问名 / 能 Tab / ≥28px;盘点核对表每行带 `aria-pressed`。已接入 `npm run test:ui` 与 CI 的无障碍作业。
+- `scripts/unit/interactive-nesting.test.mjs` 6 项:钉住 `hasInteractiveNode` 的各种形状(按钮、下拉、藏在 span / Fragment 里的控件、只带 `onClick` 的 span、接了 `onClick` 的自定义组件,以及纯文字不该被误判)。
+- 回归:`test:unit` 全部通过;`verify-modals-a11y` 64/64、`verify-menus-a11y` 13/13、`verify-layout-budget` 10/10、`verify-empty-states` 7/7、`verify-overview-focus` 10/10、`verify-item-card-layout` 9/9、`verify-audit-confirm-flow` 4/4、`verify-narrow-layout` 19/21(剩下 2 项是本机 AI 供应商响应过慢导致「AI 本周建议」卡片 30 秒内没出结果,与本次改动无关)。
+
+---
+
 ## [v0.1.12] - 2026-11-22
 
 ### 修复(图表)

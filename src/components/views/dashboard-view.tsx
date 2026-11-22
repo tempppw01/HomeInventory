@@ -283,9 +283,11 @@ export function RecentItemRow({ item, onEdit, onQr, onAi }: { item: Item; onEdit
     meta={`${item.location?.name || "未设置位置"} · ${item.category}${ai.summary ? ` · ${ai.summary}` : ai.storage ? ` · ${ai.storage}` : ""}`}
     trailing={<span className="flex shrink-0 items-center gap-1.5">
       <span className="text-right text-sm font-black">{item.quantity}<span className="ml-1 text-xs font-normal muted">{item.unit}</span></span>
-      <span className="flex gap-0.5 opacity-60 transition-opacity hover:opacity-100">
-        <span onClick={(event) => { event.stopPropagation(); onAi(); }} className="grid size-6 place-items-center rounded-md hover:bg-[var(--surface-solid)]" aria-label="AI 物品助手"><Bot size={12} /></span>
-        <span onClick={(event) => { event.stopPropagation(); onQr(); }} className="grid size-6 place-items-center rounded-md hover:bg-[var(--surface-solid)]" aria-label="显示二维码"><QrCode size={12} /></span>
+      {/* 这两个是真正的按钮:此前写成带 aria-label 的 <span onClick>,既是「点得到但 Tab 到不了」,
+          aria-label 挂在无角色的 span 上也读不出来。尺寸同时从 24px 提到 28px(项目自己的触控下限)。 */}
+      <span className="flex gap-1 opacity-60 transition-opacity hover:opacity-100">
+        <button type="button" onClick={() => onAi()} className="tap-target grid size-7 place-items-center rounded-md hover:bg-[var(--surface-solid)]" aria-label={`对「${item.name}」使用 AI 助手`} title="AI 物品助手"><Bot size={13} /></button>
+        <button type="button" onClick={() => onQr()} className="tap-target grid size-7 place-items-center rounded-md hover:bg-[var(--surface-solid)]" aria-label={`显示「${item.name}」的二维码`} title="显示二维码"><QrCode size={13} /></button>
       </span>
     </span>}
   />

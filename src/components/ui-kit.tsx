@@ -5,6 +5,7 @@ import type { ButtonHTMLAttributes, HTMLAttributes, LabelHTMLAttributes, ReactNo
 import type { ReactElement } from "react";
 import type { LucideIcon } from "lucide-react";
 import { ChevronRight } from "lucide-react";
+import { hasInteractiveNode } from "@/lib/interactive-nesting";
 
 // 重构后的界面组件系统。规则(温和家居风):
 // · 层级靠留白、字重和暖色面,而不是到处画边框;真正的分隔只用发丝线。
@@ -95,20 +96,26 @@ function trailingNeedsLabel(node: ReactNode): ReactElement<{ "aria-label"?: stri
   return props.children == null ? element : null;
 }
 
-export function ListRow({ icon: Icon, title, meta, trailing, onClick, active = false, onContextMenu }: {
+export function ListRow({ icon: Icon, title, meta, trailing, onClick, active, onContextMenu }: {
   icon?: LucideIcon;
   title: ReactNode;
   meta?: ReactNode;
   trailing?: ReactNode;
   onClick?: () => void;
+  /**
+   * 只有真的传了值才表示「这一行带开关状态」(例如盘点核对表:已确认 / 未确认)。
+   * 传了就会在按钮上给出 aria-pressed —— 此前状态只靠图标底色,读屏完全读不到。
+   * 不传(普通操作行)不能凭空补一个 aria-pressed=false,那会把「点一下」说成「切换」。
+   */
   active?: boolean;
   /** 右键菜单:行内容与按钮/div 两种形态都要能挂上 */
   onContextMenu?: (event: React.MouseEvent<HTMLElement>) => void;
 }) {
-  const content = (
+  const isActive = active === true;
+  const main = (
     <>
       {Icon && (
-        <span className="grid size-10 shrink-0 place-items-center rounded-2xl" style={{ background: active ? "var(--primary-soft)" : "var(--surface-soft)", color: active ? "var(--primary)" : "var(--muted)" }}>
+        <span className="grid size-10 shrink-0 place-items-center rounded-2xl" style={{ background: isActive ? "var(--primary-soft)" : "var(--surface-soft)", color: isActive ? "var(--primary)" : "var(--muted)" }}>
           <Icon size={18} />
         </span>
       )}
@@ -116,20 +123,31 @@ export function ListRow({ icon: Icon, title, meta, trailing, onClick, active = f
         <span className="block truncate text-sm font-bold">{title}</span>
         {meta && <span className="mt-0.5 block truncate text-xs leading-5 muted">{meta}</span>}
       </span>
-      {(() => {
-        const labelable = trailingNeedsLabel(trailing);
-        if (labelable && typeof title === "string" && title.trim()) {
-          return cloneElement(labelable, { "aria-label": title.trim() });
-        }
-        return trailing;
-      })()}
-      
     </>
   );
+  const trailingNode = (() => {
+    const labelable = trailingNeedsLabel(trailing);
+    if (labelable && typeof title === "string" && title.trim()) {
+      return cloneElement(labelable, { "aria-label": title.trim() });
+    }
+    return trailing;
+  })();
+  const content = <>{main}{trailingNode}</>;
   const className = "flex w-full min-w-0 items-center gap-3 border-t px-1 py-3 text-left transition-colors first:border-t-0 first:pt-0 first:pb-3";
   const style = { borderColor: "var(--hairline)" };
-  if (onClick) return <button type="button" onClick={onClick} onContextMenu={onContextMenu} className={`${className} rounded-2xl`} style={style}>{content}</button>;
-  return <div className={className} style={style} onContextMenu={onContextMenu}>{content}</div>;
+  if (!onClick) return <div className={className} style={style} onContextMenu={onContextMenu}>{content}</div>;
+  // active 是「这一行已确认 / 已选中」这类开关状态。此前只用底色表达,
+  // 读屏用户完全读不到 —— 盘点核对表里就分不出哪件已确认、哪件还没。
+  const pressed = active === undefined ? undefined : isActive;
+  if (hasInteractiveNode(trailing)) {
+    return (
+      <div className={`${className} rounded-2xl`} style={style} onContextMenu={onContextMenu}>
+        <button type="button" onClick={onClick} aria-pressed={pressed} className="flex min-w-0 flex-1 items-center gap-3 text-left">{main}</button>
+        {trailingNode}
+      </div>
+    );
+  }
+  return <button type="button" onClick={onClick} aria-pressed={pressed} onContextMenu={onContextMenu} className={`${className} rounded-2xl`} style={style}>{content}</button>;
 }
 
 export function Metric({ label, value, hint, tone = "neutral", icon: Icon }: {

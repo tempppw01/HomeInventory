@@ -329,6 +329,8 @@ jobs:
         run: node scripts/verify-a11y.mjs
       - name: 弹窗无障碍检查
         run: node scripts/verify-modals-a11y.mjs
+      - name: 嵌套控件检查(控件套控件会触发 hydration 错误,并让内层按钮连带触发整行)
+        run: node scripts/verify-nested-controls.mjs
       - name: 菜单无障碍检查
         run: node scripts/verify-menus-a11y.mjs
       - name: 颜色对比度检查(明暗两套主题 + 只读角色视角)
