@@ -2,7 +2,7 @@
 
 import { useRef, FormEvent, useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Check, ClipboardCopy, Eye, EyeOff, History, KeyRound, Loader2, LogOut, MonitorX, ShieldCheck, UserPlus, Users, X } from "lucide-react";
+import { Check, ClipboardCopy, Eye, EyeOff, History, KeyRound, Loader2, LogOut, MonitorX, UserPlus, Users, X } from "lucide-react";
 import { generatePassword, PASSWORD_MIN_LENGTH } from "@/lib/password";
 import { SettingsActions, SettingsBadge, SettingsRow, SettingsSection, SettingsSelect } from "@/components/settings-primitives";
 import { ListRow } from "@/components/ui-kit";
@@ -84,14 +84,10 @@ export function AccountSettings({ onToast }: { onToast: (message: string) => voi
   const [created, setCreated] = useState<Credentials | null>(null);
   const [resetCredential, setResetCredential] = useState<Credentials | null>(null);
   const [creating, setCreating] = useState(false);
-  // 恢复码这一块只在这里(管理员面板)保留;「改自己的密码」已经拆到 AccountSecurity,
-  // 对所有角色渲染 —— 此前整块只在 isAdmin 下,导致成员/只读连改密码的入口都没有。
-  const [recovery, setRecovery] = useState<{ loading: boolean; hasCode: boolean; generatedAt: string | null }>({ loading: true, hasCode: false, generatedAt: null });
-  const [recoveryOpen, setRecoveryOpen] = useState(false);
-
   // 关闭弹窗后把焦点还给触发它的按钮(否则会掉到 body,键盘用户得从头 Tab)。
   const openerRef = useRef<HTMLElement | null>(null);
-  const anyDialogOpen = Boolean(resetTarget) || recoveryOpen;
+  const anyDialogOpen = Boolean(resetTarget);
+
   useEffect(() => {
     if (anyDialogOpen) {
       if (document.activeElement instanceof HTMLElement) openerRef.current = document.activeElement;
@@ -114,16 +110,10 @@ export function AccountSettings({ onToast }: { onToast: (message: string) => voi
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       if (resetTarget) { setResetTarget(null); return; }
-      if (recoveryOpen) setRecoveryOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [resetTarget, recoveryOpen]);
-  const [recoveryPassword, setRecoveryPassword] = useState("");
-  const [showRecoveryPassword, setShowRecoveryPassword] = useState(false);
-  const [recoveryError, setRecoveryError] = useState("");
-  const [recoveryBusy, setRecoveryBusy] = useState(false);
-  const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
+  }, [resetTarget]);
 
   const load = useCallback(async () => {
     const [usersResponse, recordsResponse] = await Promise.all([fetch("/api/auth/users"), fetch("/api/auth/login-records")]);
@@ -135,20 +125,6 @@ export function AccountSettings({ onToast }: { onToast: (message: string) => voi
     const frame = requestAnimationFrame(() => { void load().catch(() => undefined); });
     return () => cancelAnimationFrame(frame);
   }, [load]);
-
-  const loadRecoveryStatus = useCallback(async () => {
-    try {
-      const response = await fetch("/api/auth/recovery");
-      if (!response.ok) { setRecovery((current) => ({ ...current, loading: false })); return; }
-      const result = await response.json() as { hasCode?: boolean; generatedAt?: string | null };
-      setRecovery({ loading: false, hasCode: Boolean(result.hasCode), generatedAt: typeof result.generatedAt === "string" ? result.generatedAt : null });
-    } catch { setRecovery((current) => ({ ...current, loading: false })); }
-  }, []);
-
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => { void loadRecoveryStatus(); });
-    return () => cancelAnimationFrame(frame);
-  }, [loadRecoveryStatus]);
 
   const create = async (event: FormEvent) => {
     event.preventDefault();
@@ -193,29 +169,6 @@ export function AccountSettings({ onToast }: { onToast: (message: string) => voi
     await load();
     onToast(`已重置“${resetTarget.displayName}”的密码`);
   };
-
-  const mintRecoveryCode = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!recoveryPassword) { setRecoveryError("请输入当前密码"); return; }
-    setRecoveryError("");
-    setRecoveryBusy(true);
-    try {
-      const response = await fetch("/api/auth/recovery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: recoveryPassword }) });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) { setRecoveryError(result.error || "生成失败,请稍后重试"); return; }
-      setRecoveryCode(typeof result.code === "string" ? result.code : null);
-      setRecoveryPassword("");
-      setShowRecoveryPassword(false);
-      setRecoveryOpen(false);
-      await loadRecoveryStatus();
-      onToast("恢复码已生成,请立刻保存");
-    } catch {
-      setRecoveryError("网络异常,请稍后重试");
-    } finally {
-      setRecoveryBusy(false);
-    }
-  };
-
   const copy = async (value: string, message: string) => {
     try {
       await navigator.clipboard.writeText(value);
@@ -266,12 +219,6 @@ export function AccountSettings({ onToast }: { onToast: (message: string) => voi
   const accountBadge = users.length === 0
     ? <SettingsBadge tone="muted">读取中</SettingsBadge>
     : <SettingsBadge tone={inactiveUsers > 0 ? "warning" : "success"}>{inactiveUsers > 0 ? `${inactiveUsers} 个已停用` : "全部启用"}</SettingsBadge>;
-  const recoverySummary = recovery.loading
-    ? "正在读取恢复码状态..."
-    : recovery.hasCode
-      ? `已设置恢复码${recovery.generatedAt ? ` · 生成于 ${formatLoginTime(recovery.generatedAt)}` : ""}`
-      : "尚未设置恢复码";
-
   return <>
   <SettingsSection icon={Users} title="账号与家庭成员" summary={accountSummary} badge={accountBadge}>
     {users.map((user) => <div key={user.id}>
@@ -377,27 +324,6 @@ export function AccountSettings({ onToast }: { onToast: (message: string) => voi
     </SettingsActions>
   </SettingsSection>
 
-  <SettingsSection
-    icon={ShieldCheck}
-    title="恢复码"
-    summary={recoverySummary}
-    badge={<SettingsBadge tone={recovery.hasCode ? "success" : "warning"}>{recovery.hasCode ? "已设置" : "未设置"}</SettingsBadge>}
-  >
-    <SettingsRow
-      icon={KeyRound}
-      title={recovery.loading ? "正在读取恢复码状态..." : recovery.hasCode ? "已设置恢复码" : "尚未设置恢复码"}
-      description={recovery.loading ? "正在读取当前账号的恢复码状态。" : recovery.hasCode ? `生成于 ${recovery.generatedAt ? formatLoginTime(recovery.generatedAt) : "未知时间"},忘记密码时可以凭它重置。` : "设置后忘记密码也能自己重置,不必等管理员帮忙。"}
-    />
-    <SettingsActions>
-      <div className="ml-auto flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => { setRecoveryPassword(""); setRecoveryError(""); setShowRecoveryPassword(false); setRecoveryOpen(true); }} className="btn-primary flex items-center gap-2 text-xs">
-          <KeyRound size={14} />{recovery.hasCode ? "重新生成恢复码" : "生成恢复码"}
-        </button>
-      </div>
-    </SettingsActions>
-    {recoveryCode && <CredentialsCard title="新的恢复码已生成" hint="恢复码只显示这一次,请立刻抄写或存进密码管理器;重新生成后旧码立即失效。" recoveryCode={recoveryCode} onCopy={copy} onClose={() => setRecoveryCode(null)} />}
-  </SettingsSection>
-
   <AnimatePresence>
     {resetTarget && (
       <motion.div className="fixed inset-0 z-[60] grid place-items-center bg-black/30 p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => { if (event.target === event.currentTarget) setResetTarget(null); }}>
@@ -449,63 +375,6 @@ export function AccountSettings({ onToast }: { onToast: (message: string) => voi
             <button type="button" onClick={() => setResetTarget(null)} className="btn-ghost flex-1">取消</button>
             <button type="submit" disabled={resetting} className="btn-primary flex-1 disabled:cursor-not-allowed disabled:opacity-70">
               {resetting ? <><Loader2 size={15} className="animate-spin" />正在重置...</> : "确认重置"}
-            </button>
-          </div>
-        </motion.form>
-      </motion.div>
-    )}
-  </AnimatePresence>
-
-  <AnimatePresence>
-    {recoveryOpen && (
-      <motion.div className="fixed inset-0 z-[60] grid place-items-center bg-black/30 p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => { if (event.target === event.currentTarget) setRecoveryOpen(false); }}>
-        <motion.form
-          aria-modal="true"
-          role="dialog"
-          aria-labelledby="recovery-code-title"
-          onSubmit={mintRecoveryCode}
-          initial={{ opacity: 0, y: 12, scale: .98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 10, scale: .98 }}
-          className="w-full max-w-sm rounded-3xl p-5 shadow-2xl"
-          style={{ background: "var(--surface-solid)" }}
-        >
-          <div className="flex items-start gap-3">
-            <div className="grid size-10 shrink-0 place-items-center rounded-2xl" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}><ShieldCheck size={19} /></div>
-            <div className="min-w-0 flex-1">
-              <h3 id="recovery-code-title" className="m-0 text-base font-black">{recovery.hasCode ? "重新生成恢复码" : "生成恢复码"}</h3>
-              <p className="mb-0 mt-1 text-xs leading-5 muted">先用当前登录账号的密码确认身份。生成后新码只显示这一次,旧恢复码立即失效。</p>
-            </div>
-            <button type="button" onClick={() => setRecoveryOpen(false)} className="icon-action size-11 min-h-11 shrink-0" aria-label="关闭生成恢复码" title="关闭"><X size={16} /></button>
-          </div>
-
-          <div className="mt-4">
-            <label className="ds-field-label" htmlFor="recovery-current-password">当前密码</label>
-            <div className="relative">
-              <input
-                id="recovery-current-password"
-                type={showRecoveryPassword ? "text" : "password"}
-                className="input input-icon-end"
-                value={recoveryPassword}
-                onChange={(event) => { setRecoveryPassword(event.target.value); setRecoveryError(""); }}
-                placeholder="当前登录账号的密码"
-                autoComplete="current-password"
-                autoFocus
-                maxLength={128}
-                aria-invalid={Boolean(recoveryError)}
-                aria-describedby={recoveryError ? "recovery-code-error" : undefined}
-              />
-              <button type="button" onClick={() => setShowRecoveryPassword((current) => !current)} className="icon-action absolute right-0.5 top-1/2 size-11 min-h-11 -translate-y-1/2" aria-label={showRecoveryPassword ? "隐藏密码" : "显示密码"} title={showRecoveryPassword ? "隐藏密码" : "显示密码"}>
-                {showRecoveryPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-            {recoveryError && <p id="recovery-code-error" className="m-0 mt-2 text-xs font-semibold" style={{ color: "var(--danger)" }}>{recoveryError}</p>}
-          </div>
-
-          <div className="mt-5 flex gap-3">
-            <button type="button" onClick={() => setRecoveryOpen(false)} className="btn-ghost flex-1">取消</button>
-            <button type="submit" disabled={recoveryBusy} className="btn-primary flex-1 disabled:cursor-not-allowed disabled:opacity-70">
-              {recoveryBusy ? <><Loader2 size={15} className="animate-spin" />正在生成...</> : "确认生成"}
             </button>
           </div>
         </motion.form>

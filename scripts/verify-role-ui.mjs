@@ -101,7 +101,8 @@ const selfServiceState = async () => {
       if (document.activeElement !== input) focusable = false;
     }
     const named = inputs.every((input) => Boolean(input.labels && input.labels.length && (input.labels[0].textContent || "").trim()));
-    return { hasSection: (document.querySelector("main")?.innerText || "").includes("我的密码"), hasButton: inputs.length === 3, fields: inputs.length, focusable, named };
+    const text = document.querySelector("main")?.innerText || "";
+    return { hasSection: text.includes("我的密码"), hasButton: inputs.length === 3, fields: inputs.length, focusable, named, hasRecovery: text.includes("恢复码") };
   });
 };
 
@@ -141,6 +142,7 @@ const viewerSettingsState = () => page.evaluate(() => {
     const self = await selfServiceState();
     check("成员能看到「我的密码」并展开表单", self.hasSection && self.hasButton && self.fields === 3, JSON.stringify(self));
     check("成员的三项密码输入都键盘可达、有名字", self.focusable && self.named, JSON.stringify(self));
+    check("成员能看到「恢复码」块(不必等管理员代生成)", self.hasRecovery, JSON.stringify(self));
   }
 }
 
@@ -166,6 +168,7 @@ const viewerSettingsState = () => page.evaluate(() => {
     const self = await selfServiceState();
     check("只读也能看到「我的密码」并展开表单", self.hasSection && self.hasButton && self.fields === 3, JSON.stringify(self));
     check("只读的三项密码输入都键盘可达、有名字", self.focusable && self.named, JSON.stringify(self));
+    check("只读也能看到「恢复码」块", self.hasRecovery, JSON.stringify(self));
     check("只读仍然看不到「创建账号」表单", !state.createAccountButton && !state.newRoleSelect, JSON.stringify(state));
   }
 }

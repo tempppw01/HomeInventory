@@ -5,9 +5,10 @@ import { userFromToken } from "@/lib/account-auth";
 export async function middleware(request: NextRequest) {
   const publicPath = ["/api/auth/login", "/api/auth/setup", "/api/auth/session", "/api/auth/logout", "/api/auth/recovery/reset", "/api/health", "/api/public/consume"];
   if (publicPath.includes(request.nextUrl.pathname)) return NextResponse.next();
-  // 「只读」限的是家庭数据,不是自己的凭据:改自己的密码是自助操作,对所有已登录角色开放
-  // (否则成员 / 只读忘记密码只能等管理员帮忙)。
-  const selfServicePath = ["/api/auth/password"];
+  // 「只读」限的是家庭数据,不是自己的凭据:改自己的密码、生成自己的恢复码都是自助操作,
+  // 对所有已登录角色开放(否则成员 / 只读忘记密码只能等管理员帮忙)。
+  // /api/auth/recovery 的路由本身也写着「刻意不判断 canWrite()」,这里是让中间件与它一致。
+  const selfServicePath = ["/api/auth/password", "/api/auth/recovery"];
   const token = request.cookies.get(ACCOUNT_COOKIE)?.value;
   const user = token ? await userFromToken(token) : null;
   if (user) {

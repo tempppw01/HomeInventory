@@ -99,7 +99,7 @@ jobs:
       - name: 账号管理写操作核对
         run: node scripts/verify-account-ops.mjs
       - name: 账号自助改密码(/api/auth/password,含只读账号与其它会话吊销)
-        run: node scripts/verify-self-password.mjs
+        run: node scripts/verify-account-self-service.mjs
       - name: 备份往返日期核对
         run: node scripts/verify-backup-dates.mjs
       - name: 搜索历史与自动备份检查
