@@ -50,10 +50,29 @@ const login = async (page, reducedMotion = "no-preference") => {
   // sign-in form (and afterwards for the app shell) instead of a fixed sleep.
   await page.waitForSelector("#auth-username", { timeout: 20000 }).catch(() => {});
   if (await page.locator("#auth-username").count()) {
-    await page.fill("#auth-username", USER);
-    await page.fill("#auth-password", PASS);
-    await page.click('button[type="submit"]');
-    await page.waitForSelector('[aria-label="概览"]', { timeout: 30000 }).catch(() => {});
+    // 登录接口限速 12 次/分钟/IP:整链里每个套件都登录一次,撞上时页面会停在登录页,
+    // 而后面所有断言都会量在登录页上(表现为「底部导航点不动」「页面上只有 1 个按钮」),
+    // 最后以一个和真正原因无关的 30 秒超时崩掉。所以这里等够再重试,并让失败**说清原因**。
+    let entered = false;
+    for (let attempt = 0; attempt < 4 && !entered; attempt += 1) {
+      await page.fill("#auth-username", USER);
+      await page.fill("#auth-password", PASS);
+      await page.click('button[type="submit"]');
+      // 桌面是侧栏的 aria-label=概览,移动端是底部 nav[aria-label=移动端主导航];
+      // 只看桌面那个的话,移动端这一段永远等不到,登录「看起来失败」其实早就成功了。
+      entered = await page.waitForFunction(() => Boolean(document.querySelector('nav[aria-label="移动端主导航"]') || document.querySelector('[aria-label="概览"]')), null, { timeout: 15000 }).then(() => true).catch(() => false);
+      if (entered) break;
+      const limited = await page.evaluate(() => /频繁|稍后再试|too many/i.test(document.body.innerText || ""));
+      if (!limited) break;
+      console.log(`      登录被限速,等 21 秒后重试(${attempt + 1}/4)`);
+      await page.waitForTimeout(21000);
+      await page.goto(BASE, { waitUntil: "domcontentloaded" });
+      await page.waitForSelector("#auth-username", { timeout: 15000 }).catch(() => {});
+    }
+    if (!entered) {
+      const head = await page.evaluate(() => (document.body.innerText || "").replace(/\\s+/g, " ").slice(0, 80));
+      throw new Error(`登录没有进入应用(可能被限速),页面停在:${head}`);
+    }
   }
   const skip = page.locator('[aria-label="暂时跳过欢迎引导"]');
   // 欢迎引导在数据加载完成后才挂载,可能比导航栏晚一步出现;先等它一下再关。

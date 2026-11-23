@@ -128,12 +128,37 @@ export function duplicateGroups(items: readonly ForecastInput[]): DuplicateGroup
   // 只在归一化后完全相同才分组,于是最常见的「同一件东西买了不同规格/口味」漏掉了。
   // 只合并「较短的名字被较长名字包含」这一种情况,并要求较短名字至少 3 个字,
   // 避免「盐」这种两字以内的通用词把一堆无关物品拉进一组。
+  //
+  // 这里原来是**两两比对**:对每一对 key 都做一次 includes()。
+  // 10k 个不同名字就是约 1 亿次字符串搜索 —— 实测 2.5k=13ms、5k=48ms、10k=188~260ms,
+  // 每翻一倍涨四倍,是标准的 O(n²),而它在概览页每次渲染都要跑一遍
+  // (实测那一次 372ms 的主线程长任务里它占了大头)。
+  //
+  // 反过来做:枚举每个 key 的**长度 ≥3 的子串**并查表,得到的就是「谁包含在谁里面」。
+  // 代价从「名字对数」变成「每个名字的子串数」,10k 个名字约 200 万次哈希查找;
+  // 判定条件与原来完全一致(严格更短 + 较短者至少 3 字),合并顺序也保持一致。
   const keys = [...buckets.keys()].sort((left, right) => left.length - right.length);
+  const keySet = new Set(keys);
+  const rank = new Map<string, number>(keys.map((key, index) => [key, index]));
+  const containedBy = new Map<string, string[]>();
+  for (const longer of keys) {
+    for (let length = 3; length < longer.length; length += 1) {
+      for (let start = 0; start + length <= longer.length; start += 1) {
+        const shorter = longer.slice(start, start + length);
+        if (!keySet.has(shorter)) continue;
+        const list = containedBy.get(shorter);
+        if (list) list.push(longer);
+        else containedBy.set(shorter, [longer]);
+      }
+    }
+  }
+  // 候选按 keys 的原顺序处理(短到长),这样「谁吸收谁」与原实现完全一致
+  for (const list of containedBy.values()) list.sort((left, right) => (rank.get(left) ?? 0) - (rank.get(right) ?? 0));
+
   for (const shorter of keys) {
     if (shorter.length < 3 || !buckets.has(shorter)) continue;
-    for (const longer of keys) {
-      if (longer === shorter || longer.length <= shorter.length) continue;
-      if (!longer.includes(shorter) || !buckets.has(longer)) continue;
+    for (const longer of containedBy.get(shorter) ?? []) {
+      if (!buckets.has(longer)) continue;
       buckets.set(shorter, [...(buckets.get(shorter) ?? []), ...(buckets.get(longer) ?? [])]);
       buckets.delete(longer);
     }
