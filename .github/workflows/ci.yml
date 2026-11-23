@@ -556,6 +556,26 @@ jobs:
           PROBE_USER: leadcheck
           PROBE_PASS: Lead#2026
         run: node scripts/verify-p2-features.mjs
+      # 空库上的「新用户从 0 到 1」旅程:上面几十个套件全都跑在有数据的库上,
+      # 空状态与首次使用只会在空库上暴露。这里另起一个空库实例(3002),
+      # **不动 3001 那份共享数据** —— 这条检查会把物品清空。
+      - name: 准备空库与账号(首次使用旅程用)
+        run: |
+          DATABASE_URL="file:../data/empty.db" npx prisma db push --schema prisma/schema.prisma --skip-generate
+          DATABASE_URL="file:../data/empty.db" node scripts/make-probe-accounts.mjs
+      - name: 启动空库实例(3002)
+        run: |
+          DATABASE_URL="file:../data/empty.db" PORT=3002 node node_modules/next/dist/bin/next start > server-empty.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3002/api/health > /dev/null; then echo "ready"; break; fi
+            sleep 2
+          done
+      - name: 首次使用旅程检查(空库:引导 → 录入第一件物品 → 首屏从空切到有)
+        env:
+          BASE_URL: http://127.0.0.1:3002
+          PROBE_USER: leadcheck
+          PROBE_PASS: Lead#2026
+        run: node scripts/verify-first-run-journey.mjs
       - name: 失败时打印服务日志
         if: failure()
         run: tail -100 server.log

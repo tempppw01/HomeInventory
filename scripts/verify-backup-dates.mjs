@@ -111,15 +111,14 @@ if (true) {
   const back = rows.find((entry) => entry.name === NAME2);
   check("旧备份恢复后物品存在", Boolean(back), "被静默跳过");
   if (back) {
-    const localDate = (value) => { const d = new Date(value); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
     // 旧格式按 UTC 日历日解析(机器无关)。这里输入是 2026-12-30T16:00Z → UTC 日 12-30,
     // 旧备份的 ISO 写法本身有歧义(导出时写的是「服务器本地零点」),
-// 跨时区恢复时最多差一天 —— 这里只要求「差不超过 1 天且不是乱值」,
-// 精确性由新格式(YYYY-MM-DD)保证,上面已单独断言。
-const restoredDay = new Date(back.expiryDate);
-const restoredLocal = Date.UTC(restoredDay.getFullYear(), restoredDay.getMonth(), restoredDay.getDate());
-const drift = Math.abs(restoredLocal - Date.UTC(2026, 11, 31)) / 86400000;
-check("旧备份日期最多相差 1 天(旧数据有固有歧义)", drift <= 1, `相差 ${drift} 天`);
+    // 跨时区恢复时最多差一天 —— 这里只要求「差不超过 1 天且不是乱值」,
+    // 精确性由新格式(YYYY-MM-DD)保证,上面已单独断言。
+    const restoredDay = new Date(back.expiryDate);
+    const restoredLocal = Date.UTC(restoredDay.getFullYear(), restoredDay.getMonth(), restoredDay.getDate());
+    const drift = Math.abs(restoredLocal - Date.UTC(2026, 11, 31)) / 86400000;
+    check("旧备份日期最多相差 1 天(旧数据有固有歧义)", drift <= 1, `相差 ${drift} 天`);
     await call("DELETE", `/api/items/${back.id}`, { permanent: true });
   }
 }

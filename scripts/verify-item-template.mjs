@@ -100,7 +100,6 @@ await openItemModal();
   check("保存模板后有确认提示", Boolean(state), "没有出现提示");
   if (state) {
     const successColor = await tokenColor("--success");
-    const dangerColor = await tokenColor("--danger");
     check("这条确认用的是成功色(--success)", state.color === successColor, `实际=${state.color} 期望=${successColor}`);
     check("成功提示与错误提示的颜色确实不同", Boolean(errorNoticeColor) && state.color !== errorNoticeColor, `成功=${state.color} 错误=${errorNoticeColor}`);
   }
