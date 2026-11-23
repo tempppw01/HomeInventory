@@ -5,11 +5,15 @@ import type { LucideIcon } from "lucide-react";
 import { createContext } from "react";
 import type { Item, ItemType, Location } from "@/types";
 import { usageDays } from "@/lib/item-metrics";
+import { EXPIRING_SOON_DAYS } from "@/lib/expiry-status";
 import { APP_VERSION } from "@/lib/version";
 import { isMedicineCategory, MEDICINE_CATEGORIES } from "@/lib/categories";
 
 import { DatePickerPreset } from "@/components/date-picker";
 export const ReadOnlyContext = createContext(false);
+
+/** 临期窗口(天):来自用户设置的「保质期提前 N 天」,默认沿用 30 天 */
+export const ExpiryWindowContext = createContext(EXPIRING_SOON_DAYS);
 
 export type View = "dashboard" | "items" | "locations" | "tasks" | "audit" | "settings" | "about";
 export type ThemeMode = "light" | "dark" | "system";

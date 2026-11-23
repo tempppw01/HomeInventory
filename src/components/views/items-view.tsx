@@ -17,11 +17,11 @@ import { formatLocationPath, locationSegmentsById } from "@/lib/location-path";
 import { isSortMode, SORT_MODES, sortHint, sortItems, type SortMode } from "@/lib/item-sort";
 import { useConfirm } from "@/components/confirm-dialog";
 import { Chip, Empty, ListRow, Panel, Screen, Toolbar } from "@/components/ui-kit";
-import { ReadOnlyContext, ItemQuickFilter, expiryDays, expiryDateLabel, request } from "../shared";
+import { ReadOnlyContext, ItemQuickFilter, expiryDateLabel, request, ExpiryWindowContext } from "../shared";
 import { Modal } from "./modals";
 import { localDateString } from "@/lib/local-date";
 import { isLowStock, isRestockPaused } from "@/lib/low-stock";
-import { isExpiringSoonDays } from "@/lib/expiry-status";
+import { expiryStatusFor } from "@/lib/expiry-status";
 
 const TYPE_FILTERS = [["ALL", "全部"], ["DURABLE", "耐用品"], ["CONSUMABLE", "消耗品"], ["MEDICINE", "医药"]] as const;
 
@@ -263,9 +263,11 @@ export function ItemCard({ item, onEdit, onOpenDetail, onImageUpload, onDuplicat
   const showRemaining = !compact && isLiquidConsumable(item) && onRemainingChange;
   // 「用掉一个」只对按个数消耗的消耗品有意义:液体交给右侧滑块。
   const canConsumeOne = !compact && !readOnly && item.type === "CONSUMABLE" && !isLiquidConsumable(item) && Boolean(onConsume);
-  const expiry = item.expiryDate ? expiryDays(item) : null;
-  const expired = expiry !== null && expiry <= 0;
-  const expiring = expiry !== null && isExpiringSoonDays(expiry);
+  // 临期窗口跟用户设置走:此前这里硬编码 30 天,和提醒中心的「提前 N 天」是两套标准
+  const expiryWindowDays = useContext(ExpiryWindowContext);
+  const expiryStatus = expiryStatusFor(item.expiryDate, undefined, expiryWindowDays);
+  const expired = expiryStatus?.expired ?? false;
+  const expiring = expiryStatus?.expiring ?? false;
   const context = useContextMenu();
   const contextItems: ContextMenuItem[] = [{ label: "编辑物品", icon: Pencil, onClick: onEdit, disabled: readOnly }, ...(onDuplicate ? [{ label: "复制为新物品", icon: Copy, onClick: onDuplicate, disabled: readOnly }] : []), ...(onCopy ? [{ label: "复制物品编号", icon: Copy, onClick: onCopy }] : []), { label: "显示二维码", icon: QrCode, onClick: onQr }, { label: isMedicine ? "AI 补全药品说明" : "AI 识别与建议", icon: Sparkles, onClick: onAi }];
   // 「暂停补货提醒」此前只有字段与逻辑、界面没有入口:用户根本开不了这个功能。

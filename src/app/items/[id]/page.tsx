@@ -14,7 +14,7 @@ import { ItemPhotoSlot } from "@/components/item-photo-slot";
 import { AskAiAboutItem } from "@/components/ask-ai-about-item";
 import { ReanalyzeAiButton } from "@/components/reanalyze-ai-button";
 import { relativeTimeText } from "@/lib/relative-time";
-import { expiryToneFor } from "@/lib/expiry-status";
+import { expiryStatusFor } from "@/lib/expiry-status";
 
 export const dynamic = "force-dynamic";
 
@@ -32,23 +32,20 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
     include: { location: true },
   });
   if (!item) notFound();
+  // 临期窗口与物品卡片保持同一口径(用户设置的「保质期提前 N 天」)
+  const preferences = await prisma.householdPreference.findUnique({ where: { id: "default" } });
+  const expiryWindowDays = preferences?.expiryReminderDays ?? 14;
   const dailyCost = dailyUsageCost(item);
   const useDays = estimatedUseDays(item);
   const showRemaining = isLiquidConsumable(item);
   const ai = itemAiHighlights(item);
   // 有效期剩几天:药品/食品最要紧的一项,之前详情页完全没有显示。
-  const expiryDaysLeft = (() => {
-    if (!item.expiryDate) return null;
-    const target = new Date(item.expiryDate);
-    if (Number.isNaN(target.getTime())) return null;
-    const today = new Date();
-    const start = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
-    const end = Date.UTC(target.getFullYear(), target.getMonth(), target.getDate());
-    return Math.round((end - start) / 86400000);
-  })();
+  // 天数与颜色都用全站唯一的判定口径(此前详情页自己算一遍,且「今天到期」判成警示色而不是危险色)
+  const expiryStatus = expiryStatusFor(item.expiryDate, undefined, expiryWindowDays);
+  const expiryDaysLeft = expiryStatus?.days ?? null;
   // 上次补货:入库(shopping 标记已购买)时由服务端记录,这里用相对时间显示。
   const restockedText = item.lastRestockedAt ? relativeTimeText(item.lastRestockedAt) : null;
-  const expiryTone = expiryDaysLeft === null ? undefined : expiryToneFor(expiryDaysLeft) === "danger" ? "var(--danger)" : expiryToneFor(expiryDaysLeft) === "warning" ? "var(--warning)" : undefined;
+  const expiryTone = expiryStatus?.tone === "danger" ? "var(--danger)" : expiryStatus?.tone === "warning" ? "var(--warning)" : undefined;
   // 这件物品的变更流水:谁在什么时候改过它。此前 ActivityLog 有 itemId 却没有任何界面用到。
   const history = await prisma.activityLog.findMany({
     where: { itemId: item.id },

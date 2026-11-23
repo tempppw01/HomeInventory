@@ -5,7 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { DashboardData, HouseholdTask, Item, Location, ShoppingItem } from "@/types";
 
 import { useConfirm } from "@/components/confirm-dialog";
-import { ReadOnlyContext, View, ThemeMode, ItemQuickFilter, compressImage, returnStateKey, readReturnState, welcomeStorageKey, legacyWelcomeStorageKeys, normalizedItemName, expiryDays, request } from "@/components/shared";
+import { ReadOnlyContext, View, ThemeMode, ItemQuickFilter, compressImage, returnStateKey, readReturnState, welcomeStorageKey, legacyWelcomeStorageKeys, normalizedItemName, expiryDays, request, ExpiryWindowContext } from "@/components/shared";
 import { pathForTarget, pathForView, viewForPath } from "@/components/app/routes";
 import { isCountUnit, isLiquidConsumable } from "@/lib/item-metrics";
 import { isMedicineCategory } from "@/lib/categories";
@@ -456,6 +456,8 @@ function useAppState() {
 
   return {
     data, loading, refresh, ensureFresh, aiAvailable: data?.aiAvailable ?? false,
+    // 临期窗口:物品卡片与提醒中心要用同一个值(此前卡片硬编码 30 天)
+    expiryReminderDays,
     setToastAction,
     view, pathname, openView, beginNavigation,
     search, setSearch, typeFilter, categoryFilter, changeTypeFilter, changeCategoryFilter, filteredItems,
@@ -481,7 +483,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const value = useAppState();
   return (
     <AppContext.Provider value={value}>
-      <ReadOnlyContext.Provider value={value.readOnly}>{children}</ReadOnlyContext.Provider>
+      <ReadOnlyContext.Provider value={value.readOnly}>
+        {/* 临期窗口跟用户设置走:物品卡片此前硬编码 30 天,与提醒中心的「提前 N 天」不一致 */}
+        <ExpiryWindowContext.Provider value={value.expiryReminderDays}>{children}</ExpiryWindowContext.Provider>
+      </ReadOnlyContext.Provider>
     </AppContext.Provider>
   );
 }

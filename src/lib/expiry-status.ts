@@ -57,6 +57,25 @@ export function isWithinExpiryWindowDays(days: ExpiryDays, window = EXPIRING_SOO
   return days <= window;
 }
 
+/**
+ * 一件东西的到期状态 —— **全站唯一的判定口径**。
+ *
+ * 以前三处各算各的:卡片把「今天到期」当已过期(红)、详情页当临期(黄);
+ * 卡片与详情页的临期窗口还硬编码 30 天,而提醒中心用的是用户设置的「提前 N 天」。
+ * 于是把提醒设成 7 天时,卡片会给 20 天后到期的东西打黄色到期标,而提醒中心里没有它。
+ *
+ * @param windowDays 临期窗口,来自用户设置(householdPreference.expiryReminderDays)
+ */
+export function expiryStatusFor(dateLike: Date | string | null | undefined, now: Date | string | number = Date.now(), windowDays: number = EXPIRING_SOON_DAYS) {
+  if (!dateLike) return null;
+  const days = daysUntilLocalDay(dateLike, now);
+  if (Number.isNaN(days)) return null;
+  const expired = days <= 0;
+  const expiring = !expired && days <= windowDays;
+  const tone: "danger" | "warning" | null = expired ? "danger" : expiring ? "warning" : null;
+  return { days, expired, expiring, tone };
+}
+
 /** 界面色调:已过期用危险色、临期用警示色、其余不上色。 */
 export function expiryToneFor(days: ExpiryDays | null): "danger" | "warning" | undefined {
   if (days === null) return undefined;
