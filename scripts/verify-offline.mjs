@@ -56,6 +56,27 @@ for (let attempt = 0; attempt < 5 && !state.controlled; attempt += 1) {
 check("注册了 Service Worker", Boolean(state.registered), JSON.stringify(state));
 check("页面已被 Service Worker 接管", Boolean(state.controlled), `${JSON.stringify(state)} —— 没接管的话,下面断网导航会落到通用错误页,那两条断言不可信`);
 
+// ---------- 1b 等预缓存就绪:离线页是在 install 阶段 cache.addAll 进去的 ----------
+// 只等「接管」会在 CI 上偶发失败:SW 已经接管,但 /offline 还没写进缓存,
+// 这时断网导航就会落到应用自己的错误页(实测红过两次)。
+const offlineCacheState = async () => page.evaluate(async () => {
+  if (!("caches" in window)) return { supported: false, names: [], hasOffline: false };
+  const names = await caches.keys();
+  let hasOffline = false;
+  for (const name of names) {
+    const cache = await caches.open(name);
+    if (await cache.match("/offline")) { hasOffline = true; break; }
+  }
+  return { supported: true, names, hasOffline };
+});
+
+let cacheState = await offlineCacheState();
+for (let attempt = 0; attempt < 10 && !cacheState.hasOffline; attempt += 1) {
+  await page.waitForTimeout(500);
+  cacheState = await offlineCacheState();
+}
+check("离线页已经进了 Service Worker 的缓存(断网导航才有东西可给)", cacheState.hasOffline, `缓存=${JSON.stringify(cacheState)}`);
+
 // 记下一件在线时看得见的物品,断网后要确认它**不会**出现
 const itemName = await page.evaluate(() => {
   const text = document.querySelector("main")?.innerText || "";

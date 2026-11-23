@@ -99,7 +99,7 @@
 | `verify-first-run-journey` | **空库**上的新用户 0→1:空状态文案、引导→录入第一件物品、首屏从空切到有、空间页空状态 | 16 | 流程(需空库实例) |
 | `verify-schema-outdated` | 库结构比应用旧时的失败体验:health 如实报 degraded、接口给命令、页面不崩(需一个删过列的实例) | 13 | 升级 |
 | `verify-first-run` | 首次使用:欢迎引导的三个入口都真能打开、焦点陷阱、看过之后不再打扰 | 13 | 流程 |
-| `verify-offline` | 断网后落到离线说明页、不显示旧数据、恢复网络后可用 | 10 | 流程 |
+| `verify-offline` | 断网后落到离线说明页(含「离线页已进缓存」前置检查)、不显示旧数据、恢复网络后可用 | 11 | 流程 |
 | `verify-item-card-layout` | 物品卡片布局:桌面宽度下物品名不截断、状态胶囊在第二行、窄屏点击区与无横向溢出 | 9 | 流程 |
 | `verify-about-and-version` | 关于页可打开、显示的版本与 package.json 一致、有 Releases 入口;设置页版本同样一致 | 8 | 流程 |
 | `verify-weekly-review` | 每周盘点只在设定日给出入口 | 7 | 流程 |

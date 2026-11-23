@@ -5,12 +5,31 @@
 //   也不要给用户看过期的数字(家庭账目最忌讳拿旧数据做决定)。
 // - 导航请求走 network-first:有网时总是最新;断网时回退到缓存过的 shell。
 // - 静态资源(chunk/css/字体)走 cache-first:内容哈希命名,不会过期。
-const CACHE = "guiwu-shell-v2";
+const CACHE = "guiwu-shell-v3";
 const OFFLINE_URL = "/offline";
+
+/**
+ * 预缓存离线页 **以及它自己要用的资源**。
+ *
+ * 只缓存 /offline 那份 HTML 是不够的:离线时页面还要取它自己的 JS/CSS 分块,
+ * 取不到就会在客户端渲染失败 —— 用户看到的是应用的错误页,而不是「你没网了」这句说明。
+ * 这些分块以前只有在「碰巧被之前的浏览缓存过」时才在,所以这条时灵时不灵。
+ */
+async function precacheOfflineShell() {
+  const cache = await caches.open(CACHE);
+  const response = await fetch(OFFLINE_URL, { cache: "reload" });
+  if (!response.ok) return;
+  const html = await response.clone().text();
+  await cache.put(OFFLINE_URL, response.clone());
+  // 从 HTML 里挑出同源静态资源(_next 分块、样式、字体、图标),一并放进缓存
+  const assets = [...new Set([...html.matchAll(/(?:src|href)="([^"]+)"/g)].map((match) => match[1]))]
+    .filter((path) => path.startsWith("/_next/") || /\.(?:css|js|woff2?|png|jpg|jpeg|svg|webp|ico)$/.test(path));
+  if (assets.length) await cache.addAll(assets).catch(() => undefined);
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll([OFFLINE_URL])).catch(() => undefined).then(() => self.skipWaiting()),
+    precacheOfflineShell().catch(() => undefined).then(() => self.skipWaiting()),
   );
 });
 
