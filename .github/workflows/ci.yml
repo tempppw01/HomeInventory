@@ -335,6 +335,9 @@ jobs:
         run: node scripts/verify-nested-controls.mjs
       - name: axe 体系化无障碍扫描(11 个页面 × 亮/暗主题 × 桌面/窄屏)
         run: node scripts/verify-axe.mjs
+      # 需要配置了 AI 才有草稿,未配置时脚本会打印跳过(不判红)。
+      - name: AI 批量识别草稿列表检查
+        run: node scripts/verify-batch-drafts.mjs
       - name: 菜单无障碍检查
         run: node scripts/verify-menus-a11y.mjs
       - name: 颜色对比度检查(明暗两套主题 + 只读角色视角)
