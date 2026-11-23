@@ -5,11 +5,14 @@ import { userFromToken } from "@/lib/account-auth";
 export async function middleware(request: NextRequest) {
   const publicPath = ["/api/auth/login", "/api/auth/setup", "/api/auth/session", "/api/auth/logout", "/api/auth/recovery/reset", "/api/health", "/api/public/consume"];
   if (publicPath.includes(request.nextUrl.pathname)) return NextResponse.next();
+  // 「只读」限的是家庭数据,不是自己的凭据:改自己的密码是自助操作,对所有已登录角色开放
+  // (否则成员 / 只读忘记密码只能等管理员帮忙)。
+  const selfServicePath = ["/api/auth/password"];
   const token = request.cookies.get(ACCOUNT_COOKIE)?.value;
   const user = token ? await userFromToken(token) : null;
   if (user) {
     const writeRequest = !["GET", "HEAD", "OPTIONS"].includes(request.method);
-    if (writeRequest && user.role === "VIEWER") return NextResponse.json({ error: "只读账号没有修改权限" }, { status: 403 });
+    if (writeRequest && user.role === "VIEWER" && !selfServicePath.includes(request.nextUrl.pathname)) return NextResponse.json({ error: "只读账号没有修改权限" }, { status: 403 });
     if (writeRequest && (request.nextUrl.pathname.startsWith("/api/settings/") || request.nextUrl.pathname === "/api/auth/users") && user.role !== "ADMIN") return NextResponse.json({ error: "只有管理员可以修改系统设置" }, { status: 403 });
     return NextResponse.next();
   }

@@ -84,7 +84,8 @@ export function AccountSettings({ onToast }: { onToast: (message: string) => voi
   const [created, setCreated] = useState<Credentials | null>(null);
   const [resetCredential, setResetCredential] = useState<Credentials | null>(null);
   const [creating, setCreating] = useState(false);
-  // 「密码与恢复码」面向所有已登录账号,与下面的管理员面板互不影响。
+  // 恢复码这一块只在这里(管理员面板)保留;「改自己的密码」已经拆到 AccountSecurity,
+  // 对所有角色渲染 —— 此前整块只在 isAdmin 下,导致成员/只读连改密码的入口都没有。
   const [recovery, setRecovery] = useState<{ loading: boolean; hasCode: boolean; generatedAt: string | null }>({ loading: true, hasCode: false, generatedAt: null });
   const [recoveryOpen, setRecoveryOpen] = useState(false);
 
@@ -378,7 +379,7 @@ export function AccountSettings({ onToast }: { onToast: (message: string) => voi
 
   <SettingsSection
     icon={ShieldCheck}
-    title="密码与恢复码"
+    title="恢复码"
     summary={recoverySummary}
     badge={<SettingsBadge tone={recovery.hasCode ? "success" : "warning"}>{recovery.hasCode ? "已设置" : "未设置"}</SettingsBadge>}
   >

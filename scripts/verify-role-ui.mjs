@@ -81,6 +81,30 @@ const settingsState = () => page.evaluate(() => {
 });
 
 /** 只读账号的设置页:哪些控件可改、哪些被置灰/隐藏 */
+/**
+ * 「我的密码」这一块(所有角色都该有):
+ * 展开它,看三个输入框在不在、能不能聚焦、有没有可访问名。
+ */
+const selfServiceState = async () => {
+  const hasSection = await page.evaluate(() => (document.querySelector("main")?.innerText || "").includes("我的密码"));
+  const button = page.locator('main button:has-text("修改我的密码")').first();
+  const hasButton = (await button.count()) > 0;
+  if (hasButton) await button.click({ timeout: 5000 }).catch(() => {});
+  await page.waitForTimeout(500);
+  return page.evaluate(() => {
+    const inputs = ["#self-current-password", "#self-new-password", "#self-confirm-password"]
+      .map((selector) => document.querySelector(selector))
+      .filter(Boolean);
+    let focusable = inputs.length === 3;
+    for (const input of inputs) {
+      input.focus();
+      if (document.activeElement !== input) focusable = false;
+    }
+    const named = inputs.every((input) => Boolean(input.labels && input.labels.length && (input.labels[0].textContent || "").trim()));
+    return { hasSection: (document.querySelector("main")?.innerText || "").includes("我的密码"), hasButton: inputs.length === 3, fields: inputs.length, focusable, named };
+  });
+};
+
 const viewerSettingsState = () => page.evaluate(() => {
   const controlDisabled = (label) => {
     const node = Array.from(document.querySelectorAll('main select, main button[role="switch"]'))
@@ -111,6 +135,12 @@ const viewerSettingsState = () => page.evaluate(() => {
     check("成员看不到 AI 配置字段", !state.aiEndpointField, JSON.stringify(state));
     check("成员看到一句说明(为什么没有这些设置)", state.adminNote, JSON.stringify(state));
     check("成员不再卡在「读取中」", !state.stuck, JSON.stringify(state));
+
+    // 账号自助:改自己的密码对所有角色开放(账号管理才只给管理员)。
+    // 此前设置页里写的是 {isAdmin && <AccountSettings/>},成员连改密码的入口都没有。
+    const self = await selfServiceState();
+    check("成员能看到「我的密码」并展开表单", self.hasSection && self.hasButton && self.fields === 3, JSON.stringify(self));
+    check("成员的三项密码输入都键盘可达、有名字", self.focusable && self.named, JSON.stringify(self));
   }
 }
 
@@ -131,6 +161,12 @@ const viewerSettingsState = () => page.evaluate(() => {
     check("只读看不到写动作(导入 / 添加成员)", !state.importInput && !state.memberInput, JSON.stringify(state));
     check("只读看到「只读账号不可修改」的说明", state.readonlyBadge, JSON.stringify(state));
     check("只读仍能导出(GET 是允许的)", state.exportLink, JSON.stringify(state));
+
+    // 只读的底线限的是家庭数据:自己的密码属于自助操作,入口该在。
+    const self = await selfServiceState();
+    check("只读也能看到「我的密码」并展开表单", self.hasSection && self.hasButton && self.fields === 3, JSON.stringify(self));
+    check("只读的三项密码输入都键盘可达、有名字", self.focusable && self.named, JSON.stringify(self));
+    check("只读仍然看不到「创建账号」表单", !state.createAccountButton && !state.newRoleSelect, JSON.stringify(state));
   }
 }
 

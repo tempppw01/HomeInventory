@@ -509,7 +509,7 @@ const settingsFolded = await page.evaluate(() => {
     icons: [...new Set(details.map((node) => { const icon = node.querySelector("summary > span:first-child"); if (!icon) return "none"; const rect = icon.getBoundingClientRect(); return Math.round(rect.width) + "x" + Math.round(rect.height); }))],
   };
 });
-check("设置页 8 个面板默认全部折叠", settingsFolded.details === 8 && settingsFolded.open === 0, JSON.stringify({ details: settingsFolded.details, open: settingsFolded.open }));
+check("设置页 9 个面板默认全部折叠", settingsFolded.details === 9 && settingsFolded.open === 0, JSON.stringify({ details: settingsFolded.details, open: settingsFolded.open }));
 check("面板容器样式完全一致", settingsFolded.classes.length === 1 && settingsFolded.radii.length === 1 && settingsFolded.pads.length === 1, JSON.stringify({ classes: settingsFolded.classes.length, radii: settingsFolded.radii, pads: settingsFolded.pads }));
 check("面板标题与图标块尺寸一致", settingsFolded.titles.length === 1 && settingsFolded.icons.length === 1, JSON.stringify({ titles: settingsFolded.titles, icons: settingsFolded.icons }));
 
@@ -543,7 +543,7 @@ check("设置页没有 <40px 的可点控件", settingsExpanded.smallControls ==
 check("文件上传入口的可见命中区 ≥40px", settingsExpanded.uploadLabelHeights.length > 0 && settingsExpanded.uploadLabelHeights.every((height) => height >= 40), JSON.stringify(settingsExpanded.uploadLabelHeights));
 check("勾选框已换成 role=switch(44px)", settingsExpanded.nativeCheckboxes === 0 && settingsExpanded.switches >= 2 && settingsExpanded.switchHeights.every((height) => height >= 44), JSON.stringify({ checkboxes: settingsExpanded.nativeCheckboxes, switches: settingsExpanded.switches, heights: settingsExpanded.switchHeights }));
 check("设置页下拉全部来自 SettingsSelect", settingsExpanded.selectClasses.length === 1 && settingsExpanded.selectClasses[0] === "settings", JSON.stringify(settingsExpanded.selectClasses));
-check("设置页布局能展开", (await page.locator("main details[open]").count()) === 8, "open=" + (await page.locator("main details[open]").count()));
+check("设置页布局能展开", (await page.locator("main details[open]").count()) === 9, "open=" + (await page.locator("main details[open]").count()));
 
 // 390 手机上不能横向溢出(展开态最容易撑破) —— 响应式由 CSS 决定,直接切视口测。
 await page.setViewportSize({ width: 390, height: 844 });

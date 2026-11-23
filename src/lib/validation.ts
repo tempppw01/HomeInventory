@@ -139,6 +139,15 @@ export const memberSchema = z.object({
 });
 
 /** 新建账号:用户名规则与前端提示保持一致。 */
+/**
+ * 用户自助修改密码:必须给当前密码(服务端会再验一次),新密码沿用建号时的长度下限。
+ * 与「管理员重置别人密码」不同 —— 那条不需要当前密码,因为管理员本来就有权限。
+ */
+export const passwordChangeSchema = z.object({
+  currentPassword: z.string().min(1, "请填写当前密码").max(200),
+  newPassword: z.string().min(8, "新密码至少 8 位").max(200),
+});
+
 export const userCreateSchema = z.object({
   username: z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9._-]{2,31}$/, "请填写有效用户名、显示名称和至少 8 位密码"),
   displayName: z.string().trim().min(1, "请填写有效用户名、显示名称和至少 8 位密码").max(40),

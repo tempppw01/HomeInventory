@@ -6,6 +6,7 @@ import { AiSettings } from "@/components/ai-settings";
 import { DataTools } from "@/components/data-tools";
 import { HouseholdPreferences } from "@/components/household-preferences";
 import { AccountSettings } from "@/components/account-settings";
+import { AccountSecurity } from "@/components/account-security";
 import { APP_VERSION } from "@/lib/version";
 import { Field } from "@/components/ui-kit";
 import { Panel, Screen } from "@/components/ui-kit";
@@ -19,6 +20,8 @@ export function SettingsView({ role, onToast, onAbout, theme, onThemeChange, den
   useEffect(() => { let active = true; request<{ databaseLabel: string; storageMode: string }>("/api/system/info").then((result) => { if (active) setDatabase(result); }).catch(() => undefined); return () => { active = false; }; }, []);
   return <Screen title="设置" description="按类别展开需要修改的设置,不常用的选项默认收起。">
     <div className="grid max-w-6xl items-start gap-4 sm:gap-5 lg:grid-cols-2 xl:gap-6">
+    {/* 账号自助(改自己的密码)对所有角色开放 —— 账号管理才只给管理员。 */}
+    <AccountSecurity onToast={onToast} />
     {/* 这几块只有管理员能改(接口对成员返回 403),对成员/只读直接不渲染 ——
         否则用户填完「新增成员账号」点创建只会拿到一个看不懂的失败,账号列表还会永远停在「读取中」。 */}
     {isAdmin && <AccountSettings onToast={onToast} />}

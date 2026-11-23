@@ -58,7 +58,7 @@ async function main() {
 
   console.log(`已重置账号「${user.username}」(${user.displayName} · ${user.role})的密码。`);
   console.log(`已踢出 ${removed} 个登录会话,这些设备需要重新登录。`);
-  console.log("同时生成了一个新的恢复码(应用内「设置 → 账号与家庭成员 → 密码与恢复码」里也能重新生成):");
+  console.log("同时生成了一个新的恢复码(应用内「设置 → 恢复码」里也能重新生成(管理员面板)):");
   console.log(`  ${recoveryCode}`);
   console.log("请立刻保存上面的恢复码 —— 它只在这一次输出里出现,服务端只保存哈希。");
   console.log("提示:如果这次重置不是你本人操作,请到「设置 → 账号与家庭成员」检查最近登录记录。");
