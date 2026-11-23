@@ -86,7 +86,6 @@ const settingsState = () => page.evaluate(() => {
  * 展开它,看三个输入框在不在、能不能聚焦、有没有可访问名。
  */
 const selfServiceState = async () => {
-  const hasSection = await page.evaluate(() => (document.querySelector("main")?.innerText || "").includes("我的密码"));
   const button = page.locator('main button:has-text("修改我的密码")').first();
   const hasButton = (await button.count()) > 0;
   if (hasButton) await button.click({ timeout: 5000 }).catch(() => {});

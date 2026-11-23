@@ -32,13 +32,15 @@
 | `csv-import` / `item-type-guess` / `fridge` / `task-recurrence` | 导入解析、类型猜测、冷藏规则、重复任务的下一次到期 |
 | `password` / `validation`(账号) | 密码强度各档、用户名规则 |
 | `local-date` / `weekly-review` / `relative-time` | 本地日历日、每周盘点设定日、相对时间文案 |
+| `interactive-nesting` | 「行里的 trailing 是不是控件」的判定(判断错了就会渲染出 `<button>` 套 `<button>`) |
+| `ai-error` | 上游 AI 报错的解读:各状态码与两种「图片链接被拒」措辞、HTML 去标签、超长截断;外加一条源码级守卫 —— 四个 AI 路由里不许再自己拼失败文案 |
 | 一致性 | 服务端写入的动作都有中文标签;代码引用的 `/api` 路径都有对应路由 |
 | 写接口守卫 | 每个非 GET 处理器必须有权限校验,或在「设计上公开 / 自带细粒度校验」清单里(清单同时校验不过期) |
 | 配置文档一致性 | 代码用到的用户可配置环境变量都必须在 README / compose 里出现;开发专用白名单同时校验不过期 |
 | CI 工作流自检 | 每个步骤有 run/uses、引用的脚本存在、关键作业与检查仍在(工作流无效时 CI 根本不会跑,所以这条放在本地 test:unit 最前) |
 | 两份 schema 同步 | MySQL 用的 `schema.mysql.prisma` 必须与 `schema.prisma` 的表/字段完全一致(容器启动时会用它覆盖正式 schema) |
 
-**约 225 条**。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
+**254 条**(最近一次全绿)。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
 以便直接测引用了其他模块的文件。
 
 ## 二、API 层(需要服务在跑,CI 里在 `api` 作业)
@@ -50,48 +52,53 @@
 | `backup-roundtrip-test` | 导出 → 恢复 → 比对(日期不挪位) | 25 |
 | `edge-input-test` | 极端值、超长、表情、非法 JSON | 26 |
 | `verify-account-ops` | 建号 / 停用 / 重置密码 / 踢出登录 | 16 |
-| `verify-search-history-and-backup` | 搜索历史去重与上限、自动备份真的写文件 | 13 |
+| `verify-account-self-service` | 自助改密码与自助恢复码:401/400 矩阵、旧密码失效、其它设备会话被吊销、只读也能改自己的凭据但改家庭数据仍 403、恢复码端到端重置 | 26 |
+| `verify-search-history-and-backup` | 搜索历史去重与上限、自动备份真的写文件(含「这个文件是刚写的」) | 14 |
 | `verify-backup-dates` | 备份里的日期格式 | 12 |
 | `verify-task-recurrence` | 完成 → 下次到期 → 撤销复原 | 7 |
 | `verify-restock-pause` | 暂停补货期内不生成采购建议 | 6 |
 | `verify-concurrency` | 并发写入不产生重复采购建议(含自愈)、并发消耗是原子的 | 9 |
 | `verify-user-isolation` | 跨用户隔离:聊天记录与搜索历史只属于各自账号,覆盖写入不影响别人 | 10 |
-| `verify-import` | 导入接口:合法数据进库并自动建空间、逐行报错、1000 行截断、只读 403 | 12 |
+| `verify-import` | 导入接口:合法数据进库并自动建空间、逐行报错、1000 行截断、1000 个编号互不相同、只读 403 | 13 |
 | `verify-members-and-sysinfo` | 家庭成员增删(含删号时一并清理)、只读 403;系统信息需登录且不泄露连接串/密钥 | 19 |
-| `verify-image-upload` | 图片上传(本地存储):落盘、读回、大小与类型限制、删除物品时清理文件 | 11 |
+| `verify-image-upload` | 图片上传(本地存储):落盘、读回、大小与类型限制、删除物品时清理文件 | 10 |
 | `verify-upgrade-path` | 旧版本库 → `prisma db push` → 数据不丢、新表新字段可用 | 10 |
 
 ## 三、界面层(需要浏览器,CI 里分「布局 / 无障碍 / 流程」三个作业)
 
 | 套件 | 覆盖什么 | 条数 | CI 作业 |
 | --- | --- | --- | --- |
-| `verify-modals-a11y` | 10 个弹窗 × 7 项(名称/焦点/围栏/Esc/归还…) | 71 | 无障碍 |
-| `verify-entry-fixes` | 录入、盘点扫码、日期选择、购物等流程修复 | 67 | 流程 |
+| `verify-modals-a11y` | 10 个弹窗 × 7 项(名称/焦点/围栏/Esc/归还...) | 71 | 无障碍 |
+| `verify-entry-fixes` | 录入、盘点扫码、日期选择、购物等流程修复;设置页面板数与上传入口命中区 | 68 | 流程 |
 | `verify-experience` | 总体体验(含**只读角色**看不到写入口) | 43 | 流程 |
+| `verify-a11y` | 焦点可见、图标按钮有名字、Tab 顺序、**文件输入框能 Tab 到**、AI 模型选择器的 listbox 键盘模型 | 34 | 无障碍 |
+| `verify-role-ui` | 成员 / 只读看不到管理员专属设置且有说明、**两者都有「我的密码」与「恢复码」**、成员调管理员接口一律 403 | 25 | 流程 |
+| `verify-item-detail` | 详情页骨架、余量加减真的改数据、上次补货、**无照片时顶部 96px 且就地可上传(含只读看不到入口)** | 24 | 流程 |
+| `verify-narrow-layout` | 窄屏可点元素 ≥40px、不遮挡、无横向溢出、**每个页面都有 main 地标** | 23 | 布局 |
 | `verify-bundle-budget` | 5 个路由首屏传输体积 | 21 | 布局 |
-| `verify-contrast` | 明暗两套主题 × 7 个页面,**外加只读角色 2 页** | 20 | 无障碍 |
-| `verify-a11y` | 焦点可见、图标按钮有名字、Tab 顺序 | 14 | 无障碍 |
-| `verify-narrow-layout` | 窄屏可点元素 ≥40px、不遮挡 | 14 | 布局 |
+| `verify-nested-controls` | 9 个视图 + 提醒中心 + 回收站里不得出现「控件套控件」(会触发 hydration 错误并让内层按钮连带触发整行) | 21 | 无障碍 |
+| `verify-date-picker` | 手写日历的键盘行为:roving tabindex、←↑/Home/End、范围夹取(不能选到未来)、PageUp/PageDown 换月、回车选中、Esc 关闭并把焦点还给触发按钮 | 20 | 无障碍 |
+| `verify-contrast` | 明暗两套主题 × 7 个页面,**外加只读角色 2 页** | 15 | 无障碍 |
 | `verify-p2-features` | 到期日历、变更记录等 | 14 | 流程 |
-| `verify-item-detail` | 详情页骨架、余量加减真的改数据、上次补货 | 14 | 流程 |
 | `verify-menus-a11y` | 右键菜单与快捷菜单语义、方向键、Esc | 13 | 无障碍 |
 | `verify-layout-budget` | 文字不被按钮挤压(阅读区占比) | 13 | 布局 |
+| `verify-print-layout` | 打印排版几何:标签毫米尺寸、纸张边界、每行几列换行 | 13 | 流程 |
+| `verify-consume-scan` | 「扫码消耗」页(/consume/[id]):打开即消耗 1 件、重复提交幂等、液体不扣件数、未知编号 404 | 13 | 流程 |
+| `verify-auth-gate` | 未登录时 5 个应用路由只给登录表单且不泄露物品名、6 个数据接口 401、退出后重新被拦住、**脚本取不到时给出可操作兜底**;含阳性对照 | 13 | 流程 |
 | `verify-item-template` | 模板保存、提示配色、点模板带出名称 | 11 | 流程 |
 | `verify-item-merge` | 合并的数量合计、最早保质期、软删除、单位不一致拒绝 | 11 | 流程 |
-| `verify-report-page` | 月报页图表与结论 | 7 | 布局 |
-| `verify-empty-states` | 搜索无结果的空状态、清空后恢复 | 7 | 流程 |
-| `verify-weekly-review` | 每周盘点只在设定日给出入口 | 7 | 流程 |
-| `verify-restock-pause-ui` | 卡片菜单暂停 / 恢复补货提醒 | 6 | 流程 |
-| `verify-print-layout` | 打印排版几何:标签毫米尺寸、纸张边界、每行几列换行 | 13 | 流程 |
-| `verify-qr-scan` | 无 BarcodeDetector 时用 jsQR 兜底解码:应用自己的二维码走「图片」模式能识别并推进盘点 | 7 | 流程 |
-| `verify-item-card-layout` | 物品卡片布局:桌面宽度下物品名不截断、状态胶囊在第二行、窄屏点击区与无横向溢出 | 8 | 流程 |
-| `verify-audit-confirm-flow` | 盘点页点击第一件物品后进度从 0 推进到 1,避免「点了但没确认」的回归 | 4 | 流程 |
 | `verify-overview-focus` | 概览首屏「最需要做的事」:文案不重复叙述天数,并随数据状态在「快到期 / 已经过期」间切换 | 10 | 流程 |
-| `verify-about-and-version` | 关于页可打开、显示的版本与 package.json 一致、有 Releases 入口;设置页版本同样一致 | 8 | 流程 |
-| `verify-consume-scan` | 「扫码消耗」页(/consume/[id]):打开即消耗 1 件、重复提交幂等、液体不扣件数、未知编号 404 | 13 | 流程 |
-| `verify-auth-gate` | 未登录时 5 个应用路由只给登录表单且不泄露物品名、6 个数据接口 401、退出后重新被拦住;含阳性对照 | 9 | 流程 |
-| `verify-role-ui` | 成员看不到管理员专属设置(账号/AI/存储/完整备份)且有说明、管理员照旧看得到、成员调管理员接口一律 403 | 12 | 流程 |
+| `verify-report-page` | 月报页图表与结论 | 10 | 布局 |
 | `verify-offline` | 断网后落到离线说明页、不显示旧数据、恢复网络后可用 | 10 | 流程 |
+| `verify-item-card-layout` | 物品卡片布局:桌面宽度下物品名不截断、状态胶囊在第二行、窄屏点击区与无横向溢出 | 9 | 流程 |
+| `verify-about-and-version` | 关于页可打开、显示的版本与 package.json 一致、有 Releases 入口;设置页版本同样一致 | 8 | 流程 |
+| `verify-weekly-review` | 每周盘点只在设定日给出入口 | 7 | 流程 |
+| `verify-empty-states` | 搜索无结果的空状态、清空后恢复 | 7 | 流程 |
+| `verify-qr-scan` | 无 BarcodeDetector 时用 jsQR 兜底解码:应用自己的二维码走「图片」模式能识别并推进盘点 | 7 | 流程 |
+| `verify-restock-pause-ui` | 卡片菜单暂停 / 恢复补货提醒 | 6 | 流程 |
+| `verify-batch-drafts` | AI 批量识别的草稿列表:现场生成商品图 → 真的识别出草稿 → 移除中间一条后焦点落在接替它的那条上、再按回车不会连带删下一条(未配置 AI 时打印跳过) | 6 | 流程 |
+| `verify-audit-confirm-flow` | 盘点页点击第一件物品后进度从 0 推进到 1,避免「点了但没确认」的回归 | 4 | 流程 |
+| `verify-axe` | axe-core 全站扫描:11 个页面 × 3 种视口/主题 = 33 次,断言零违规 | 3 | 无障碍 |
 
 ## 四、发布前
 
@@ -130,7 +137,7 @@
 | AI 相关功能 | 需要 API Key(gated by `aiAvailable`);套件在未配置时打印跳过原因而不是伪装通过 |
 | 相机 / 屏幕共享扫码 | 需要真实摄像头与屏幕共享权限;但**解码链路**已由 `verify-qr-scan` 覆盖(用应用自己生成的二维码走「图片」模式) |
 | 纸上的最终结果 | 排版几何(尺寸/边界/换行)已用 print 媒体验过,但真实打印机的输出无法在 CI 里验证 |
-| 打印工作室 / 日期选择器的自动扫描 | 两者都是嵌套弹窗,自动判定不稳定;已单独探测确认过行为,但**没有纳入回归**(在脚本里写明了原因) |
+| 打印工作室的自动扫描 | 它是嵌套弹窗,自动判定不稳定;排版几何已由 `verify-print-layout` 覆盖,但没有纳入弹窗扫描(在 `verify-modals-a11y` 里写明了原因) |
 
 ## 七、怎么跑
 

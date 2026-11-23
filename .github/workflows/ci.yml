@@ -338,6 +338,8 @@ jobs:
       # 需要配置了 AI 才有草稿,未配置时脚本会打印跳过(不判红)。
       - name: AI 批量识别草稿列表检查
         run: node scripts/verify-batch-drafts.mjs
+      - name: 日期选择器键盘检查
+        run: node scripts/verify-date-picker.mjs
       - name: 菜单无障碍检查
         run: node scripts/verify-menus-a11y.mjs
       - name: 颜色对比度检查(明暗两套主题 + 只读角色视角)
