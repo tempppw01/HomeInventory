@@ -43,6 +43,14 @@ export type HouseholdReport = {
   value: number;
   monthlySpend: number;
   expiring: Array<{ name: string; days: number; expired: boolean }>;
+  /**
+   * 要到期/已过期的**真实件数**(不受下面列表截断影响)。
+   *
+   * 起因:列表为了排版只留最急的 8 条,而顶部的结论句直接数了这个列表 ——
+   * 于是 311 件过期会说成「有 8 件已经过期」,差了 39 倍。
+   * 结论句必须说真数,列表只管显示。
+   */
+  expiringTotals: { all: number; expired: number; soon: number };
   runningOut: Array<{ name: string; days: number; unit: string }>;
   fridgeMissing: string[];
   lowStock: string[];
@@ -70,9 +78,16 @@ export function buildHouseholdReport(input: ReportInput): HouseholdReport {
     if (isLowStock(item)) lowStock.push(item.name);
   }
 
-  const expiring = [...input.expiring]
+  // 先按窗口过滤出**全部**要到期 / 已过期的,数清楚再决定列表里放哪几条。
+  const withinWindow = input.expiring
     .filter((row) => isWithinExpiryWindowDays(row.days))
-    .sort((left, right) => left.days - right.days)
+    .sort((left, right) => left.days - right.days);
+  const expiringTotals = {
+    all: withinWindow.length,
+    expired: withinWindow.filter((row) => row.days < 0).length,
+    soon: withinWindow.filter((row) => row.days >= 0).length,
+  };
+  const expiring = withinWindow
     .slice(0, 8)
     .map((row) => ({ ...row, expired: row.days < 0 }));
 
@@ -83,17 +98,18 @@ export function buildHouseholdReport(input: ReportInput): HouseholdReport {
     value: Number(value.toFixed(2)),
     monthlySpend: Number(monthlySpend.toFixed(2)),
     expiring,
+    expiringTotals,
     runningOut: [...input.runningOut].sort((left, right) => left.days - right.days).slice(0, 5),
     fridgeMissing: input.fridgeMissing.slice(0, 6),
     lowStock: lowStock.slice(0, 6),
   };
 }
 
-/** 报告顶部的「一句话结论」:挑最要紧的一条说。 */
+/** 报告顶部的「一句话结论」:挑最要紧的一条说。数字用真实件数,不数截断后的列表。 */
 export function reportHeadline(report: HouseholdReport) {
-  const expired = report.expiring.filter((row) => row.expired);
-  if (expired.length) return `有 ${expired.length} 件已经过期,建议先处理掉`;
-  if (report.expiring.length) return `${report.expiring.length} 件在 30 天内到期,注意先用`;
+  const { expired, soon } = report.expiringTotals;
+  if (expired) return `有 ${expired} 件已经过期,建议先处理掉`;
+  if (soon) return `${soon} 件在 30 天内到期,注意先用`;
   if (report.runningOut.length) return `最急的是「${report.runningOut[0].name}」,${inDaysPhrase(report.runningOut[0].days, "用完", true)}`;
   if (report.fridgeMissing.length) return `有 ${report.fridgeMissing.length} 件该冷藏的物品还没放好`;
   return "库存状态良好,暂时没有需要特别处理的事";

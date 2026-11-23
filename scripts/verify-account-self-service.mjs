@@ -44,7 +44,8 @@ const api = async (method, path, { cookie, body } = {}) => {
   const text = await response.text();
   let parsed = null;
   try { parsed = text ? JSON.parse(text) : null; } catch { parsed = { raw: text.slice(0, 120) }; }
-  return { status: response.status, body: parsed };
+  // 限速时服务端会用 Retry-After 说清楚要等多久,调用方需要拿到它才能等够
+  return { status: response.status, body: parsed, retryAfter: response.headers.get("retry-after") };
 };
 
 const sessionOk = async (cookie) => {
@@ -104,12 +105,15 @@ try {
   check("当前密码正确 → 改密成功(200)", changed.status === 200 && changed.body?.ok === true, `status=${changed.status} body=${JSON.stringify(changed.body).slice(0, 80)}`);
 
   // 登录接口限速 12 次/分钟/IP。这一步恰好可能撞上 429 —— 那既不是「旧密码还能用」,
-  // 也不该被算成产品缺陷。撞上就等一会儿重来(本机全量回归时确实撞到过)。
+  // 也不该被算成产品缺陷。撞上就按 Retry-After 等够再重来:
+  // 固定等 11 秒是不够的(限速窗口是 60 秒,服务端会直接说「等 57 秒」)。
   const loginStatus = async (username, password) => {
     for (let attempt = 0; attempt < 6; attempt += 1) {
       const response = await api("POST", "/api/auth/login", { body: { username, password } });
       if (response.status !== 429) return response;
-      await new Promise((resolve) => setTimeout(resolve, 11_000));
+      const wait = Number(response.retryAfter ?? 10);
+      console.log(`      登录被限速,等 ${wait} 秒(第 ${attempt + 1} 次)`);
+      await new Promise((resolve) => setTimeout(resolve, (wait + 1) * 1000));
     }
     return { status: 429, body: { error: "登录一直被限速" } };
   };

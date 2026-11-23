@@ -311,9 +311,19 @@ if (!aiAvailable) {
   if ((await trigger.count()) === 0) {
     check("能找到模型选择器入口", false, "设置页没有「拉取并选择模型」按钮");
   } else {
-    await trigger.click();
+    // 「欢迎使用」与「提醒中心」这两个弹层是**自己会弹**的,而且可能晚一步出现:
+    // 只在这之前清一次,偶尔会正好落在「清完 → 它弹出来 → 按钮被盖住」的缝里。
+    // 那会让这一节以「options=0」的形式假失败(实测撞到过一次,单跑却 34/34 全绿)。
+    // 所以点之前再清一次,点不动就重试一次,并且**明确说出**是点不动而不是拉不到。
+    let clicked = false;
+    for (let attempt = 0; attempt < 3 && !clicked; attempt += 1) {
+      await dismissBlockingDialogs(page);
+      clicked = await trigger.click({ timeout: 6000 }).then(() => true).catch(() => false);
+      if (!clicked) await page.waitForTimeout(800);
+    }
+    check("能点到模型选择器入口(没有被自动弹出的弹层挡住)", clicked, "按钮被弹层盖住,点不动");
     await page.waitForTimeout(3500);
-    const opened = await page.evaluate(() => {
+    const opened = clicked ? await page.evaluate(() => {
       const listbox = document.querySelector('[role="listbox"]');
       const options = listbox ? [...listbox.querySelectorAll('[role="option"]')] : [];
       const inside = listbox ? listbox.contains(document.activeElement) : false;
@@ -326,7 +336,7 @@ if (!aiAvailable) {
         error: document.querySelector('[role="listbox"] .text-red-500')?.textContent?.slice(0, 40) ?? null,
         controls: document.querySelector('button[aria-label="拉取并选择模型"]')?.getAttribute("aria-controls") ?? null,
       };
-    });
+    }) : { options: -1, roles: [], tabIndexes: [], focusInside: false, activeText: null, error: "入口点不动", controls: null };
     check("模型选择器真的拉到了选项(否则这一节等于没测)", opened.options >= 2, `options=${opened.options} error=${opened.error}`);
     check("选项是 role=option(列表的语义)", opened.options > 0 && opened.roles.every((role) => role === "option"), JSON.stringify(opened.roles));
     check("触发按钮用 aria-controls 指向这张列表", opened.controls === "ai-model-listbox", `aria-controls=${opened.controls}`);

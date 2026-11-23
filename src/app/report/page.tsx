@@ -145,7 +145,10 @@ export default async function ReportPage() {
             </div>
           ))}
 
-          {section(<CalendarDays size={14} />, "要到期了", report.expiring.length
+          {section(<CalendarDays size={14} />, report.expiringTotals.all > report.expiring.length
+            // 列表只放最急的几条;标题里说清总数,免得「列出 8 条」被读成「一共 8 件」
+            ? `要到期了(共 ${report.expiringTotals.all} 件,先列最急的 ${report.expiring.length} 件)`
+            : "要到期了", report.expiring.length
             ? <ul className="m-0 list-none space-y-1 p-0 text-sm">{report.expiring.map((row) => <li key={row.name}>{row.name} · {inDaysPhrase(row.days, "到期")}</li>)}</ul>
             : <p className="m-0 text-sm muted">30 天内没有到期的东西</p>)}
 

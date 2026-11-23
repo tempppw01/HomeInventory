@@ -44,14 +44,14 @@
 | CI 工作流自检 | 每个步骤有 run/uses、引用的脚本存在、关键作业与检查仍在(工作流无效时 CI 根本不会跑,所以这条放在本地 test:unit 最前) |
 | 两份 schema 同步 | MySQL 用的 `schema.mysql.prisma` 必须与 `schema.prisma` 的表/字段完全一致(容器启动时会用它覆盖正式 schema) |
 
-**254 条**(最近一次全绿)。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
+**257 条**(最近一次全绿)。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
 以便直接测引用了其他模块的文件。
 
 ## 二、API 层(需要服务在跑,CI 里在 `api` 作业)
 
 | 套件 | 覆盖什么 | 条数 |
 | --- | --- | --- |
-| `api-contract-test` | 各接口的字段与错误码、注入类输入 | 57 |
+| `api-contract-test` | 各接口的字段与错误码、注入类输入(含**零宽字符名称被拒 / 可见字符不受影响**) | 59 |
 | `auth-matrix-test` | 三种角色的权限矩阵、找回流程 | 47 |
 | `backup-roundtrip-test` | 导出 → 恢复 → 比对(日期不挪位) | 25 |
 | `edge-input-test` | 极端值、超长、表情、非法 JSON | 26 |
@@ -76,7 +76,7 @@
 | `verify-modals-a11y` | 10 个弹窗 × 7 项(名称/焦点/围栏/Esc/归还...) | 71 | 无障碍 |
 | `verify-entry-fixes` | 录入、盘点扫码、日期选择、购物等流程修复;设置页面板数与上传入口命中区 | 68 | 流程 |
 | `verify-experience` | 总体体验(含**只读角色**看不到写入口) | 43 | 流程 |
-| `verify-a11y` | 焦点可见、图标按钮有名字、Tab 顺序、**文件输入框能 Tab 到**、AI 模型选择器的 listbox 键盘模型 | 34 | 无障碍 |
+| `verify-a11y` | 焦点可见、图标按钮有名字、Tab 顺序、**文件输入框能 Tab 到**、AI 模型选择器的 listbox 键盘模型(含**入口被自动弹层挡住时明确报出**) | 35 | 无障碍 |
 | `verify-role-ui` | 成员 / 只读看不到管理员专属设置且有说明、**两者都有「我的密码」与「恢复码」**、成员调管理员接口一律 403 | 25 | 流程 |
 | `verify-item-detail` | 详情页骨架、余量加减真的改数据、上次补货、**无照片时顶部 96px 且就地可上传(含只读看不到入口)** | 24 | 流程 |
 | `verify-narrow-layout` | 窄屏可点元素 ≥40px、不遮挡、无横向溢出、**每个页面都有 main 地标** | 23 | 布局 |

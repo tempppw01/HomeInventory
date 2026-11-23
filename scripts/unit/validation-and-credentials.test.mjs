@@ -8,7 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { itemPatchSchema, itemSchema } from "../../src/lib/validation.ts";
+import { itemPatchSchema, itemSchema, locationSchema, memberSchema, shoppingSchema } from "../../src/lib/validation.ts";
 import { createItemCode, createItemCodeBatch } from "../../src/lib/item-code.ts";
 import { activityLabel, ACTIVITY_LABELS } from "../../src/lib/activity-label.ts";
 import { passwordStrength, generatePassword, PASSWORD_MIN_LENGTH, USERNAME_PATTERN } from "../../src/lib/password.ts";
@@ -86,6 +86,32 @@ test("物品:名称会去掉首尾空格", () => {
 
 test("物品:名称不能为空", () => {
   assert.equal(itemSchema.safeParse({ ...baseItem, name: "   " }).success, false);
+});
+
+test("物品:名称不能只有不可见字符(零宽/BOM)", () => {
+  // 实测:纯 \u200b\u200b\u200b 能通过 trim().min(1) 存进库 —— 列表里那一条是一片空白,
+  // 按名字搜也搜不到,只能靠一条条翻。零宽字符不是空白,trim() 不会去掉它们。
+  for (const invisible of ["\u200b\u200b\u200b", "\ufeff", "\u200d", "\u00ad\u00ad", "\u200b \u200b", "\u2060"]) {
+    const parsed = itemSchema.safeParse({ ...baseItem, name: invisible });
+    assert.equal(parsed.success, false, `「${JSON.stringify(invisible)}」这种名字应该被拒`);
+  }
+  // 正常的名字不受影响:零宽字符夹在中间、或前后有可见字符,都照常通过
+  assert.equal(itemSchema.safeParse({ ...baseItem, name: "纸巾\u200b" }).success, true);
+  assert.equal(itemSchema.safeParse({ ...baseItem, name: "🧴\u200d洗手液" }).success, true);
+  // emoji、组合字符、全角、数字、单字名都要留着
+  for (const good of ["🧴", "é", "ｑ", "1", "巾", "O'Brien", "\u3000纸\u3000"]) {
+    assert.equal(itemSchema.safeParse({ ...baseItem, name: good }).success, true, `「${good}」应该通过`);
+  }
+});
+
+test("空间/成员/采购项的名字也要求看得见", () => {
+  // 同一个洞在三处都有:名字看不见 → 列表里是空白行、筛选里也认不出来
+  assert.equal(locationSchema.safeParse({ name: "\u200b" }).success, false);
+  assert.equal(locationSchema.safeParse({ name: "阳台" }).success, true);
+  assert.equal(memberSchema.safeParse({ name: "\u200b\u200b" }).success, false);
+  assert.equal(memberSchema.safeParse({ name: "小周" }).success, true);
+  assert.equal(shoppingSchema.safeParse({ name: "\ufeff" }).success, false);
+  assert.equal(shoppingSchema.safeParse({ name: "牛奶" }).success, true);
 });
 
 test("物品:数量不能为负", () => {

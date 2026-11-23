@@ -59,8 +59,23 @@ const imageUrlSchema = z.union([
     .refine((value) => !value.includes("..")),
 ]);
 
+/**
+ * 名字是不是「只有空白或不可见字符」。
+ *
+ * `z.string().trim().min(1)` 拦不住这个:`\u200b`(零宽空格)、`\u200c/\u200d`(连接符)、
+ * `\ufeff`(BOM)都不是空白字符,`trim()` 也不会去掉它们。于是「名称全是零宽字符」的物品
+ * 能真的存进库 —— 列表里那一条是一片空白,搜索按名字搜不到,只能靠一条条翻出来。
+ * 实测:用纯零宽字符 POST /api/items 返回 201。
+ */
+export function isInvisibleName(value: string) {
+  return /^[\s\u00ad\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2064\ufeff]*$/.test(value);
+}
+
+/** 名称类字段统一的「必须看得见」规则 */
+const INVISIBLE_NAME_MESSAGE = "名称不能只有不可见字符,请填一个看得见的名字";
+
 export const itemSchema = z.object({
-  name: z.string().trim().min(1, "请输入物品名称").max(80, "物品名称最多 80 个字"),
+  name: z.string().trim().min(1, "请输入物品名称").max(80, "物品名称最多 80 个字").refine((value) => !isInvisibleName(value), INVISIBLE_NAME_MESSAGE),
   category: z.string().trim().min(1, "请选择或输入分类").max(40, "分类最多 40 个字"),
   type: z.enum(["DURABLE", "CONSUMABLE"]),
   quantity: z.coerce.number().min(0).max(999999),
@@ -134,7 +149,7 @@ export const taskPatchSchema = z.object({
 
 /** 家庭成员:只需要名字(与颜色)。 */
 export const memberSchema = z.object({
-  name: z.string().trim().min(1, "请输入成员名称").max(30),
+  name: z.string().trim().min(1, "请输入成员名称").max(30).refine((value) => !isInvisibleName(value), INVISIBLE_NAME_MESSAGE),
   color: z.string().trim().max(20).optional(),
 });
 
@@ -171,7 +186,7 @@ export const searchHistorySchema = z.object({
   query: z.string().trim().min(1, "搜索词不能为空").max(120),
 });
 export const shoppingSchema = z.object({
-  name: z.string().trim().min(1, "请输入采购项").max(80),
+  name: z.string().trim().min(1, "请输入采购项").max(80).refine((value) => !isInvisibleName(value), INVISIBLE_NAME_MESSAGE),
   quantity: z.coerce.number().positive().max(999999).default(1),
   unit: z.string().trim().min(1).max(12).default("件"),
   category: z.union([z.string().max(40), z.null()]).optional().transform((value) => value || null),
@@ -180,7 +195,7 @@ export const shoppingSchema = z.object({
 });
 
 export const locationSchema = z.object({
-  name: z.string().trim().min(1).max(30),
+  name: z.string().trim().min(1, "请输入空间名称").max(30).refine((value) => !isInvisibleName(value), INVISIBLE_NAME_MESSAGE),
   icon: z.string().max(30).default("Package"),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default("#7c3aed"),
   thumbnailUrl: z.union([z.string().url().max(1000), z.literal(""), z.null()]).optional().transform((value) => value || null),

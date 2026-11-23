@@ -97,6 +97,15 @@ const baseItem = { name: "T-基础物品", category: "日用", type: "CONSUMABLE
   record("items", "不存在的 locationId 应被拒绝", r11.status >= 400, `status=${r11.status}`);
   if (r11.body?.id) created.items.push(r11.body.id);
 
+  // 零宽字符不是空白,trim() 去不掉 —— 这条曾经真的存进库:列表里是一行空白、按名字也搜不到
+  const r11b = await call("POST", "/api/items", { ...baseItem, name: "\u200b\u200b\u200b" });
+  record("items", "名称只有零宽字符应被拒绝", r11b.status >= 400, `status=${r11b.status}`);
+  if (r11b.body?.id) created.items.push(r11b.body.id);
+
+  const r11c = await call("POST", "/api/items", { ...baseItem, name: "T-零宽夹在中间\u200b" });
+  record("items", "可见字符 + 零宽字符的名称照常接受", r11c.status === 201 && String(r11c.body?.name ?? "").includes("T-零宽夹在中间"), `status=${r11c.status}`);
+  if (r11c.body?.id) created.items.push(r11c.body.id);
+
   const r12 = await call("POST", "/api/items", "{not json");
   record("items", "非 JSON body 应返回 4xx 而非 500", r12.status >= 400 && r12.status < 500, `status=${r12.status}`);
 }
