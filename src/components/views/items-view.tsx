@@ -345,7 +345,9 @@ export function RemainingLevel({ value, onChange }: { value: number; onChange: (
     onChange(Math.round(next / 5) * 5);
   };
   const color = level <= 20 ? "var(--danger)" : level <= 45 ? "var(--warning)" : "var(--primary)";
-  return <div className="flex shrink-0 flex-col items-center" onClick={(event) => event.stopPropagation()}>
+  // 这里原来挂了一个 onClick={stopPropagation}:当年外层卡片自己是可点的,现在卡片里可点的只有同级的按钮,
+  // 祖先没有点击处理,所以它什么也拦不到 —— 去掉,免得下一个人以为这里需要它。
+  return <div className="flex shrink-0 flex-col items-center">
     <div role="slider" tabIndex={0} aria-label={`${level}% 剩余量,上下拖动调整`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={level} title="上下拖动调整剩余量" className="relative h-[70px] w-10 touch-none select-none outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={() => { setDrag(null); setDraftLevel(null); }} onKeyDown={(event) => { if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return; event.preventDefault(); event.stopPropagation(); const next = event.key === "Home" ? 0 : event.key === "End" ? 100 : normalized + (event.key === "ArrowUp" ? 5 : -5); onChange(clamp(Math.round(next / 5) * 5)); }}>
       <div className="absolute left-1/2 top-0 h-3 w-4 -translate-x-1/2 rounded-t-md border border-b-0" style={{ borderColor: "var(--muted)" }} />
       <div className="absolute inset-x-0 bottom-0 top-2 overflow-hidden rounded-[11px] border-2" style={{ borderColor: "var(--muted)", background: "var(--surface-soft)" }}>

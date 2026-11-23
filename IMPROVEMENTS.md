@@ -592,12 +592,12 @@
    > 与**概览页那一次 React 渲染**(改前长任务 372 ms,其中 `duplicateGroups` 的 O(n²) 已修掉、降到 248 ms)。
    > 所以下一步不是「加页码」,而是:概览页用 profiler 找出那 ~250 ms 的渲染成本,以及考虑把重聚合挪到服务端。
    > (更早的两次计量:v0.1.26 测得 1200 条时 1111 KB;v0.1.27 把响应压到 64 KB。)
-2. **`items-view.tsx` 里还有一处失效的 `event.stopPropagation()`**(滑杆外层那个 div):
-   当初挂上去时有可点的祖先,现在没有了,属于死代码。
-3. **验证脚本还没迁到 Playwright Test**:现在是 `scripts/verify-*.mjs` 一串自研脚本 + 自写的 PASS/FAIL 汇总,
+2. **验证脚本还没迁到 Playwright Test**:现在是 `scripts/verify-*.mjs` 一串自研脚本 + 自写的 PASS/FAIL 汇总,
    能跑但复用与并发能力弱;CI 里已经按作业拆开并行跑。
 
 ### 已完成(不必再跟)
+
+- ~~`items-view.tsx` 里那处失效的 `event.stopPropagation()`~~ → v0.1.36 已删:卡片里可点的只有同级按钮,祖先没有点击处理,它什么也拦不到(删时留了一行说明)。
 
 - ~~概览页的重复检测是 O(n²)~~ → v0.1.28 起 `duplicateGroups` 改为枚举子串查表(1 万条 188~260 ms → 25 ms),并用「与旧实现逐字段等价」的随机对拍守住行为。
 
