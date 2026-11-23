@@ -8,6 +8,7 @@ import { useConfirm } from "@/components/confirm-dialog";
 import { ReadOnlyContext, View, ThemeMode, ItemQuickFilter, compressImage, returnStateKey, readReturnState, welcomeStorageKey, legacyWelcomeStorageKeys, normalizedItemName, expiryDays, request, ExpiryWindowContext } from "@/components/shared";
 import { pathForTarget, pathForView, viewForPath } from "@/components/app/routes";
 import { isCountUnit, isLiquidConsumable } from "@/lib/item-metrics";
+import { matchesSearch } from "@/lib/item-search";
 import { isMedicineCategory } from "@/lib/categories";
 import { localDateString } from "@/lib/local-date";
 import { isLowStock } from "@/lib/low-stock";
@@ -266,7 +267,8 @@ function useAppState() {
       (typeFilter === "ALL" || (typeFilter === "MEDICINE" ? isMedicineCategory(item.category) : item.type === typeFilter)) &&
       (categoryFilter === "ALL" || (categoryFilter === "MEDICINE" ? isMedicineCategory(item.category) : item.category === categoryFilter)) &&
       (!spaceScope || spaceScope.has(item.locationId ?? "")) &&
-      (!term || [item.name, item.itemCode, item.category, item.location?.name, item.autoTags].some((value) => value ? value.toLowerCase().includes(term) : false)),
+      // 搜索字段只在 lib/item-search 里定义一份(此前列表过滤、下拉建议、接口 q 各一套,字段还不一样)
+      matchesSearch(item, term),
     );
   }, [categoryFilter, data, search, spaceScope, typeFilter]);
 

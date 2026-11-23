@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Search, ChevronRight, Package } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import type { Item } from "@/types";
+import { matchesSearch } from "@/lib/item-search";
 import { SearchHistory, saveSearchHistory, clearSearchHistory } from "./search-history";
 
 export function SearchBox({ 
@@ -33,13 +34,9 @@ export function SearchBox({
   const suggestions = useMemo(() => {
     const term = value.trim().toLowerCase();
     if (!term) return [];
-    return items
-      .filter((item) => 
-        [item.name, item.itemCode, item.category, item.location?.name].some((field) => 
-          field?.toLowerCase().includes(term)
-        )
-      )
-      .slice(0, 6);
+    // 与列表过滤共用同一份字段定义(lib/item-search):此前下拉少了自动标签与备注,
+    // 于是同一句搜索会出现「列表里有、下拉里没有」这种说不清的差别。
+    return items.filter((item) => matchesSearch(item, term)).slice(0, 6);
   }, [items, value]);
 
   const closePopover = () => {

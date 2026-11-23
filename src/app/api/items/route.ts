@@ -18,8 +18,9 @@ export async function GET(request: NextRequest) {
     const exportData = request.nextUrl.searchParams.get("export") === "1";
     const includeDeleted = request.nextUrl.searchParams.get("includeDeleted") === "1";
     const items = await prisma.item.findMany({
-      // 搜索也覆盖后台自动标签:搜「冷藏」「饮料」这类词也能命中。
-      where: { deletedAt: deleted ? { not: null } : includeDeleted ? undefined : null, ...(search ? { OR: [{ name: { contains: search } }, { category: { contains: search } }, { notes: { contains: search } }, { autoTags: { contains: search } }] } : {}) },
+      // 搜索字段与界面共用一份定义(lib/item-search):名称/编号/分类/备注/自动标签/空间名。
+      // 此前这里有备注却没有编号与空间名,而界面正好相反 —— 输入编号时下拉有建议、接口零结果。
+      where: { deletedAt: deleted ? { not: null } : includeDeleted ? undefined : null, ...(search ? { OR: [{ name: { contains: search } }, { itemCode: { contains: search } }, { category: { contains: search } }, { notes: { contains: search } }, { autoTags: { contains: search } }, { location: { name: { contains: search } } }] } : {}) },
       include: { location: true },
       orderBy: { updatedAt: "desc" },
     });
