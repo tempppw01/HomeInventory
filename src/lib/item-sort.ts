@@ -3,6 +3,8 @@
 // 零依赖纯函数:排序规则集中在一处,页面与单测共用。
 // 约定:没有到期日期的物品永远排在最后(而不是被当成「很久以后」或「今天」)。
 
+import { daysUntilLocalDay } from "@/lib/expiry-status";
+
 export type SortMode = "updated" | "expiry" | "name" | "quantity";
 
 export const SORT_MODES: ReadonlyArray<{ id: SortMode; label: string }> = [
@@ -74,7 +76,7 @@ export function sortHint(mode: SortMode, items: readonly Sortable[], now = Date.
     .map((item) => timeOf(item.expiryDate))
     .filter((time): time is number => time !== null);
   if (!times.length) return "这些物品都没有填有效期";
-  const days = Math.round((Math.min(...times) - now) / 86400000);
+  const days = daysUntilLocalDay(new Date(Math.min(...times)), now);
   if (days < 0) return `最快的一件已过期 ${Math.abs(days)} 天`;
   if (days === 0) return "最快的一件今天到期";
   return `最快的一件还有 ${days} 天到期`;

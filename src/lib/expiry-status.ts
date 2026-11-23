@@ -8,6 +8,25 @@
 
 /** 临期窗口(天):还剩这么多天以内就算临期 */
 export const EXPIRING_SOON_DAYS = 30;
+
+/**
+ * 距离「本地自然日」还有几天(负数=已过期几天)。
+ *
+ * 关键是**两侧都要先归到本地那一天的 00:00**,不能拿原始时间戳相减:
+ * 保质期存的是本地 00:00(本地 11-24 = 2026-11-23T16:00:00Z),直接相减的话
+ * 一件今天到期的东西在中午 12 点之后就会算成 -1(提示「已过期 1 天」),
+ * 而明天到期的东西在傍晚会算成 0(提示「今天到期」)。
+ * 应用里其它地方(shared.tsx 的 expiryDays)用的就是这个口径,这里保持一致。
+ */
+export function daysUntilLocalDay(dateLike: Date | string | number, now: Date | string | number = Date.now()): number {
+  const target = new Date(dateLike);
+  const today = new Date(now);
+  if (Number.isNaN(target.getTime()) || Number.isNaN(today.getTime())) return Number.NaN;
+  const startOfTarget = new Date(target.getFullYear(), target.getMonth(), target.getDate()).getTime();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  return Math.round((startOfTarget - startOfToday) / 86400000);
+}
+
 /** 紧急窗口(天):概览「本周到期」用 */
 export const EXPIRING_URGENT_DAYS = 7;
 

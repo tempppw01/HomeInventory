@@ -5,7 +5,7 @@ import { apiError } from "@/lib/api";
 import { requireUser } from "@/lib/account-auth";
 import { aiFetch, chatCompletionsUrl, getAiConfig } from "@/lib/ai";
 import { restockForecast } from "@/lib/item-forecast";
-import { EXPIRING_URGENT_DAYS, isExpiringSoonDays } from "@/lib/expiry-status";
+import { EXPIRING_URGENT_DAYS, isExpiringSoonDays, daysUntilLocalDay } from "@/lib/expiry-status";
 
 /**
  * 概览页的「AI 本周建议」。
@@ -86,7 +86,9 @@ export async function GET(request: Request) {
     }
 
     const now = Date.now();
-    const expiring = items.filter((item) => item.expiryDate && isExpiringSoonDays(Math.round((new Date(item.expiryDate).setHours(0, 0, 0, 0) - new Date(now).setHours(0, 0, 0, 0)) / 86400000), EXPIRING_URGENT_DAYS)).map((item) => ({ name: item.name, days: Math.round((item.expiryDate!.getTime() - now) / 86400000) }));
+    const daysLeft = (item: { expiryDate: Date | null }) => (item.expiryDate ? daysUntilLocalDay(item.expiryDate, now) : Number.NaN);
+    // 筛选与上报用**同一个**天数:此前上报那份是拿原始时间戳相减的,今天到期的东西在中午之后会报成 -1
+    const expiring = items.filter((item) => item.expiryDate && isExpiringSoonDays(daysLeft(item), EXPIRING_URGENT_DAYS)).map((item) => ({ name: item.name, days: daysLeft(item) }));
     const forecast = restockForecast(items.map((item) => ({
       id: item.id, name: item.name, category: item.category, type: item.type, unit: item.unit,
       quantity: item.quantity, remainingPercent: item.remainingPercent, consumeRate: item.consumeRate ?? null, expiryDate: item.expiryDate?.toISOString() ?? null,
