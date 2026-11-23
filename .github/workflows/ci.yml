@@ -115,6 +115,10 @@ jobs:
         run: git fetch --depth 1 origin tag v0.0.7 || true
       - name: 跨版本升级演练
         run: node scripts/verify-upgrade-path.mjs
+      # 迁移脚本会改写用户数据、只在升级路径上跑,平时没人碰 —— 此前完全没有回归。
+      # 实测就抓到:backfill 的编号日期取的是 UTC 日,与在线路径的本地日不一致。
+      - name: 迁移脚本检查(编号回填用本地日 / 幂等 / normalize 只动耐用品)
+        run: node scripts/verify-migrations.mjs
       - name: 图片上传检查(本地存储)
         run: node scripts/verify-image-upload.mjs
       - name: 家庭成员与系统信息检查

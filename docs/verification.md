@@ -68,6 +68,7 @@
 | `verify-payload-budget` | **首屏载荷预算**:gzip 真的生效且**无损**、声明不压缩就不压、`vary` 有声明、压缩比 ≤1/3、单件体积预算、`item.location` 只带 id/name、**导出分支仍是不压缩的完整转储** | 14 |
 | `verify-members-and-sysinfo` | 家庭成员增删(含删号时一并清理)、只读 403;系统信息需登录且不泄露连接串/密钥 | 19 |
 | `verify-image-upload` | 图片上传(本地存储):落盘、读回、大小与类型限制、删除物品时清理文件 | 10 |
+| `verify-migrations` | 迁移脚本:编号回填用**本地创建日**、幂等、字母表与在线一致、normalize 只动耐用品 | 12 | 升级 |
 | `verify-upgrade-path` | 旧版本库 → `prisma db push` → 数据不丢、新表新字段可用 | 10 |
 
 ## 三、界面层(需要浏览器,CI 里分「布局 / 无障碍 / 流程」三个作业)
