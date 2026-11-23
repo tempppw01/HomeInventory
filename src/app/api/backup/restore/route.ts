@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { localDateOf } from "@/lib/local-date";
 import { prisma } from "@/lib/prisma";
 import { apiError, requireAdminUser } from "@/lib/api";
 import { createItemCode } from "@/lib/item-code";
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
       }
       for (const row of (body.items || []).slice(0, 2000)) {
         const source = row as Record<string, unknown>;
-        const parsed = itemSchema.omit({ recordPurchase: true, purchaseStore: true }).safeParse({ ...source, purchaseDate: typeof source.purchaseDate === "string" ? source.purchaseDate.slice(0, 10) : source.purchaseDate, expiryDate: typeof source.expiryDate === "string" ? source.expiryDate.slice(0, 10) : source.expiryDate, locationId: typeof source.locationId === "string" ? locationIdMap.get(source.locationId) || null : null });
+        const parsed = itemSchema.omit({ recordPurchase: true, purchaseStore: true }).safeParse({ ...source, purchaseDate: typeof source.purchaseDate === "string" ? localDateOf(source.purchaseDate) : source.purchaseDate, expiryDate: typeof source.expiryDate === "string" ? localDateOf(source.expiryDate) : source.expiryDate, locationId: typeof source.locationId === "string" ? locationIdMap.get(source.locationId) || null : null });
         if (!parsed.success) continue;
         const data = parsed.data;
         const duplicate = await tx.item.findFirst({ where: { name: data.name, locationId: data.locationId, deletedAt: null } });

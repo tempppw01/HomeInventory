@@ -3,6 +3,8 @@
 // 盘点界面的结果此前只存在浏览器本地(confirmed 集合),结束后就散掉了:
 // 想留个记录、或者把「哪些没找到」发给家人看,都没有出口。
 
+import { localDateOf } from "@/lib/local-date";
+
 export type AuditItemInput = {
   id: string;
   itemCode: string | null;
@@ -40,7 +42,7 @@ export function auditRows(items: readonly AuditItemInput[], confirmedIds: Readon
       quantity: item.quantity,
       unit: item.unit,
       location: item.locationPath ?? "未设置",
-      expiry: item.expiryDate ? item.expiryDate.slice(0, 10) : "",
+      expiry: localDateOf(item.expiryDate),
       status: (confirmedIds.has(item.id) ? "已确认" : "未确认") as "已确认" | "未确认",
     }))
     .sort((left, right) => (left.status === right.status ? left.name.localeCompare(right.name) : left.status === "已确认" ? -1 : 1));

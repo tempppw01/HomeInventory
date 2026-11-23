@@ -19,7 +19,7 @@ import { useConfirm } from "@/components/confirm-dialog";
 import { Chip, Empty, ListRow, Panel, Screen, Toolbar } from "@/components/ui-kit";
 import { ReadOnlyContext, ItemQuickFilter, expiryDateLabel, request, ExpiryWindowContext } from "../shared";
 import { Modal } from "./modals";
-import { localDateString } from "@/lib/local-date";
+import { localDateString, localDateOf } from "@/lib/local-date";
 import { isLowStock, isRestockPaused } from "@/lib/low-stock";
 import { expiryStatusFor } from "@/lib/expiry-status";
 
@@ -110,7 +110,7 @@ export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, lo
     };
     const rows = items.map((item) => [
       item.name, item.quantity, item.unit, item.category, item.type === "CONSUMABLE" ? "消耗品" : "耐用品",
-      pathById.get(item.locationId ?? "") ?? "", item.remainingPercent, item.purchaseDate?.slice(0, 10) ?? "", item.expiryDate?.slice(0, 10) ?? "",
+      pathById.get(item.locationId ?? "") ?? "", item.remainingPercent, localDateOf(item.purchaseDate), localDateOf(item.expiryDate),
       item.price ?? "", item.itemCode ?? "", item.notes ?? "",
     ]);
     const csv = [header, ...rows].map((row) => row.map(escape).join(",")).join("\r\n");

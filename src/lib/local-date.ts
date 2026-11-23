@@ -12,3 +12,22 @@
 export function localDateString(value: Date = new Date()): string {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
 }
+
+/**
+ * 把「接口给的日期字符串」或 Date 转成本地 `YYYY-MM-DD`;**空值/非法返回空串**。
+ *
+ * 两种情况必须区分开:
+ *   · 完整时间戳(2026-12-13T16:00:00.000Z = 本地 12-14 零点)→ 取**本地**那天;
+ *   · 本来就是日期(2026-12-14,来自 CSV / 备份)→ 原样返回,
+ *     否则按 UTC 零点解析在某些时区会往回退一天。
+ */
+export function localDateOf(value: Date | string | null | undefined): string {
+  if (!value) return "";
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return localDateString(date);
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { Bot, CalendarClock, Check, Lightbulb, PackageCheck, Sparkles, Warehouse, X } from "lucide-react";
+import { localDateOf } from "@/lib/local-date";
 import { useContext, useEffect, useRef, useState } from "react";
 import type { Item, ItemType } from "@/types";
 import { useEscapeClose } from "@/lib/use-escape-close";
@@ -63,7 +64,7 @@ export function AiAssistantModal({ item, onClose, onApplied }: { item: Item; onC
   const [error, setError] = useState("");
   const isMedicine = item.category === "医药";
   const run = async (action: "identify" | "shelf_life" | "full") => { setLoading(true); setError(""); try { const result = await analyzeItem({ action, item, imageUrl: item.imageUrl }); setAnalysis(result.analysis); } catch (e) { setError(e instanceof Error ? e.message : "AI 分析失败"); } finally { setLoading(false); } };
-  const apply = async () => { const analysis = shownAnalysis; if (!analysis) return; setApplying(true); try { const type = analysis.type || item.type; const patch = { name: analysis.name || item.name, category: analysis.category || item.category, type, unit: analysis.unit || item.unit, expiryDate: type === "DURABLE" ? "" : analysis.suggestedExpiryDate || item.expiryDate?.slice(0, 10) || "", notes: analysis.suggestedNotes || item.notes || "", aiSummary: analysis.summary || item.aiSummary || "", aiStorageAdvice: analysis.storageAdvice || item.aiStorageAdvice || "", aiUsageAdvice: analysis.usageAdvice || item.aiUsageAdvice || "", aiReplenishmentAdvice: analysis.replenishmentAdvice || item.aiReplenishmentAdvice || "" }; await jsonRequest(`/api/items/${item.id}`, { method: "PATCH", body: JSON.stringify(patch) }); onApplied("AI 关键信息已应用并显示在物品卡片"); onClose(); } catch (e) { setError(e instanceof Error ? e.message : "应用失败"); } finally { setApplying(false); } };
+  const apply = async () => { const analysis = shownAnalysis; if (!analysis) return; setApplying(true); try { const type = analysis.type || item.type; const patch = { name: analysis.name || item.name, category: analysis.category || item.category, type, unit: analysis.unit || item.unit, expiryDate: type === "DURABLE" ? "" : analysis.suggestedExpiryDate || localDateOf(item.expiryDate), notes: analysis.suggestedNotes || item.notes || "", aiSummary: analysis.summary || item.aiSummary || "", aiStorageAdvice: analysis.storageAdvice || item.aiStorageAdvice || "", aiUsageAdvice: analysis.usageAdvice || item.aiUsageAdvice || "", aiReplenishmentAdvice: analysis.replenishmentAdvice || item.aiReplenishmentAdvice || "" }; await jsonRequest(`/api/items/${item.id}`, { method: "PATCH", body: JSON.stringify(patch) }); onApplied("AI 关键信息已应用并显示在物品卡片"); onClose(); } catch (e) { setError(e instanceof Error ? e.message : "应用失败"); } finally { setApplying(false); } };
 
   const autoStarted = useRef(false);
   // 后台自动跑:打开面板就开始全面分析;有缓存或已跑过则跳过。

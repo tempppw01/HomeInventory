@@ -22,7 +22,7 @@ import { useConfirm } from "@/components/confirm-dialog";
 import { ContextMenu, useContextMenu, type ContextMenuItem } from "@/components/context-menu";
 import { copyToClipboard } from "@/lib/clipboard";
 import { ItemCard } from "./items-view";
-import { localDateString } from "@/lib/local-date";
+import { localDateString, localDateOf } from "@/lib/local-date";
 import { inDaysPhrase, isExpiringUrgentDays } from "@/lib/expiry-status";
 export function DashboardView({ data, now, lowStock, expiring, expired, pending, totalValue, onNavigate, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onDelete, onAddRestock, onQr, onAi, onAlerts, onCreate, onMerge, aiAvailable = false, onOpenCategory }: { data: DashboardData; now: number; lowStock: Item[]; expiring: Item[]; expired: Item[]; pending: ShoppingItem[]; totalValue: number; onNavigate: (v: View) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onDelete: (i: Item) => void; onAddRestock: (i: Item) => void; onMerge: (keepId: string, mergeIds: string[]) => Promise<unknown> | void; aiAvailable?: boolean; /** 点分类图表后跳到物品页并按该分类筛选 */ onOpenCategory?: (category: string) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onAlerts: () => void; onCreate: () => void }) {
 
@@ -100,7 +100,7 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
   const urgentExpiry = [...expired, ...expiring.filter((item) => isExpiringUrgentDays(expiryDays(item, now)))]
     .sort((a, b) => new Date(a.expiryDate!).getTime() - new Date(b.expiryDate!).getTime());
   const expiryGroups = urgentExpiry.reduce<Record<string, Item[]>>((groups, item) => {
-    const key = item.expiryDate!.slice(0, 10);
+    const key = localDateOf(item.expiryDate);
     (groups[key] ||= []).push(item);
     return groups;
   }, {});

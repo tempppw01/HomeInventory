@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { localDateOf } from "@/lib/local-date";
 import { prisma } from "@/lib/prisma";
 import { apiError, requireWritableUser } from "@/lib/api";
 import { createItemCodeBatch } from "@/lib/item-code";
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
         return [];
       }
       const source = row as Record<string, unknown>;
-      const dateOnly = (value: unknown) => typeof value === "string" && value ? value.slice(0, 10) : value;
+      const dateOnly = (value: unknown) => (typeof value === "string" && value ? localDateOf(value) : value);
       const result = itemSchema.safeParse({
         name: source.name,
         category: source.category,

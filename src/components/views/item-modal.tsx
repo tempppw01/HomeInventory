@@ -22,12 +22,12 @@ import { DatePicker, DatePickerPreset } from "@/components/date-picker";
 import { guessItemType, ItemTypeGuess } from "@/lib/item-type-guess";
 import { ItemDraft, SavedItemTemplate, emptyDraft, compressImage, categories, units, itemTemplateStorageKey, dateInputValue, purchaseDatePresets, expiryDatePresets, purchaseAgeLabel, isMoneyInput, moneyValue, normalizedItemName, findCommonItemTemplate, request } from "../shared";
 import { Modal, ImageLightbox } from "./modals";
-import { localDateString } from "@/lib/local-date";
+import { localDateString, localDateOf } from "@/lib/local-date";
 export function ItemModal({ locations, allItems, item, onClose, onSaved, aiAvailable = true, canConfigureAi = false, onConfigureAi }: { locations: Location[]; allItems: Item[]; item: Item | null; onClose: () => void; onSaved: () => void; aiAvailable?: boolean; canConfigureAi?: boolean; onConfigureAi?: () => void }) {
   // A second click could still fire before the `saving` state renders, so the
   // guard is a ref: the first call wins and the duplicate returns immediately.
   const submittingRef = useRef(false);
-  const [draft, setDraft] = useState<ItemDraft>(() => item ? { name: item.name, category: item.category, type: item.type, quantity: item.quantity, minQuantity: item.minQuantity, remainingPercent: item.remainingPercent, unit: item.unit, price: item.price?.toString() ?? "", purchaseDate: item.purchaseDate?.slice(0, 10) ?? "", expiryDate: item.type === "CONSUMABLE" ? item.expiryDate?.slice(0, 10) ?? "" : "", locationId: item.locationId ?? "", notes: item.notes ?? "", imageUrl: item.imageUrl ?? "", aiSummary: item.aiSummary ?? "", aiStorageAdvice: item.aiStorageAdvice ?? "", aiUsageAdvice: item.aiUsageAdvice ?? "", aiReplenishmentAdvice: item.aiReplenishmentAdvice ?? "" } : emptyDraft);
+  const [draft, setDraft] = useState<ItemDraft>(() => item ? { name: item.name, category: item.category, type: item.type, quantity: item.quantity, minQuantity: item.minQuantity, remainingPercent: item.remainingPercent, unit: item.unit, price: item.price?.toString() ?? "", purchaseDate: localDateOf(item.purchaseDate), expiryDate: item.type === "CONSUMABLE" ? localDateOf(item.expiryDate) : "", locationId: item.locationId ?? "", notes: item.notes ?? "", imageUrl: item.imageUrl ?? "", aiSummary: item.aiSummary ?? "", aiStorageAdvice: item.aiStorageAdvice ?? "", aiUsageAdvice: item.aiUsageAdvice ?? "", aiReplenishmentAdvice: item.aiReplenishmentAdvice ?? "" } : emptyDraft);
   const [savedTemplates, setSavedTemplates] = useState<SavedItemTemplate[]>(() => {
     if (typeof window === "undefined" || item) return [];
     try {
