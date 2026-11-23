@@ -179,8 +179,20 @@ jobs:
         run: |
           # 优先用仓库里的发布说明(.github/release-notes/<tag>.md):
           # --generate-notes 只会列出提交标题,读起来像工作日志,不适合当发布说明。
+          #
+          # 这里必须**可重复执行**:release 已经存在时(有人手动发过,或者这个作业被重跑)
+          # gh release create 会以 HTTP 422 Release.tag_name already exists 失败,
+          # 而前面几 arm 的镜像其实已经构建、推送、冒烟通过了 —— 一条重复的发布记录
+          # 不该让整个 tag 构建变红。已存在就只更新说明,并保留原来的标题。
           NOTES_FILE=".github/release-notes/${GITHUB_REF_NAME}.md"
-          if [ -f "$NOTES_FILE" ]; then
+          if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "release ${GITHUB_REF_NAME} 已存在,只更新说明"
+            if [ -f "$NOTES_FILE" ]; then
+              gh release edit "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --notes-file "$NOTES_FILE"
+            else
+              echo "没有 $NOTES_FILE,保留现有说明不动"
+            fi
+          elif [ -f "$NOTES_FILE" ]; then
             echo "使用发布说明:$NOTES_FILE"
             gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" \
               --title "HomeInventory ${GITHUB_REF_NAME}" --notes-file "$NOTES_FILE"
