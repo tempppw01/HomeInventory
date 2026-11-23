@@ -1,9 +1,10 @@
 "use client";
 
 import { FileText, ImagePlus, LoaderCircle, Paperclip, Search, Send, Trash2, Bot, X, Plus, Check, ListTree } from "lucide-react";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useContext, useEffect, useRef, useState } from "react";
 import { useEscapeClose } from "@/lib/use-escape-close";
 import { useConfirm } from "@/components/confirm-dialog";
+import { ReadOnlyContext } from "@/components/shared";
 import { copyToClipboard } from "@/lib/clipboard";
 import { Copy, RotateCcw } from "lucide-react";
 
@@ -55,6 +56,8 @@ function mergeMessages(remote: ChatMessage[], local: ChatMessage[]) {
 
 export function AiChat({ onClose, items = [], onOpenItem, seed }: { onClose: () => void; items?: Array<{ id: string; name: string }>; onOpenItem?: (id: string) => void; seed?: string | null }) {
   const [messages, setMessages] = useState<ChatMessage[]>([welcome]);
+  // 只读账号可以问 AI(分析类请求已放行),但「录入」是 POST /api/items,一律 403 —— 按钮按角色隐藏。
+  const readOnly = useContext(ReadOnlyContext);
   const [input, setInput] = useState(seed ?? ""); const [attachments, setAttachments] = useState<Attachment[]>([]); const [loading, setLoading] = useState(false); const [webSearch, setWebSearch] = useState(false); const [ready, setReady] = useState(false); const [savingItem, setSavingItem] = useState<number | null>(null); const [recordedItems, setRecordedItems] = useState<Set<number>>(() => new Set());
   const panelRef = useRef<HTMLDivElement>(null);
   // 这个面板带模态遮罩(点遮罩即关闭),因此键盘焦点也应当被「关进」面板里:
@@ -222,7 +225,7 @@ const fileInput = useRef<HTMLInputElement>(null); const scrollRef = useRef<HTMLD
     )}
   </div>
 </>)}
-{message.role === "assistant" && message.itemDraft?.name && <button type="button" onClick={() => void createItem(message.itemDraft!, index)} disabled={savingItem !== null || recordedItems.has(index)} className="btn-primary mt-2 inline-flex h-9 min-h-9 items-center gap-1.5 py-0 px-3 text-xs disabled:cursor-not-allowed disabled:opacity-60"><Plus size={15} />{savingItem === index ? "正在录入…" : recordedItems.has(index) ? <><Check size={15} />已录入</> : `录入“${message.itemDraft.name}”`}</button>}{index === messages.length - 1 && !loading && <button type="button" onClick={() => void clearContext()} className="mt-2 grid size-11 place-items-center rounded-full text-[var(--muted)] opacity-65 transition hover:bg-[var(--surface-soft)] hover:text-red-500 sm:size-10" aria-label="清空上下文" title="清空上下文"><Trash2 size={13} /></button>}</div>)}{loading && <div className="flex items-center gap-2 text-xs muted"><LoaderCircle className="animate-spin" size={14} />归物助手正在整理资料…</div>}</div><div className="border-t p-3" style={{ borderColor: "var(--border)" }}>{attachments.length > 0 && <div className="mb-2 flex flex-wrap gap-1.5">{attachments.map((attachment, index) => <div key={`${attachment.name}-${index}`} className="relative"><AttachmentPreview attachment={attachment} compact /><button type="button" onClick={() => setAttachments((current) => current.filter((_, i) => i !== index))} className="absolute -right-2 -top-2 grid size-11 place-items-center rounded-full bg-black/70 text-white sm:size-10" aria-label={`移除 ${attachment.name}`}><X size={12} /></button></div>)}</div>}{pendingQuestion && !input && (
+{message.role === "assistant" && message.itemDraft?.name && !readOnly && <button type="button" onClick={() => void createItem(message.itemDraft!, index)} disabled={savingItem !== null || recordedItems.has(index)} className="btn-primary mt-2 inline-flex h-9 min-h-9 items-center gap-1.5 py-0 px-3 text-xs disabled:cursor-not-allowed disabled:opacity-60"><Plus size={15} />{savingItem === index ? "正在录入…" : recordedItems.has(index) ? <><Check size={15} />已录入</> : `录入“${message.itemDraft.name}”`}</button>}{readOnly && <p className="mt-2 text-xs muted">只读账号可以问 AI,但不能把建议录入物品库。</p>}{index === messages.length - 1 && !loading && <button type="button" onClick={() => void clearContext()} className="mt-2 grid size-11 place-items-center rounded-full text-[var(--muted)] opacity-65 transition hover:bg-[var(--surface-soft)] hover:text-red-500 sm:size-10" aria-label="清空上下文" title="清空上下文"><Trash2 size={13} /></button>}</div>)}{loading && <div className="flex items-center gap-2 text-xs muted"><LoaderCircle className="animate-spin" size={14} />归物助手正在整理资料…</div>}</div><div className="border-t p-3" style={{ borderColor: "var(--border)" }}>{attachments.length > 0 && <div className="mb-2 flex flex-wrap gap-1.5">{attachments.map((attachment, index) => <div key={`${attachment.name}-${index}`} className="relative"><AttachmentPreview attachment={attachment} compact /><button type="button" onClick={() => setAttachments((current) => current.filter((_, i) => i !== index))} className="absolute -right-2 -top-2 grid size-11 place-items-center rounded-full bg-black/70 text-white sm:size-10" aria-label={`移除 ${attachment.name}`}><X size={12} /></button></div>)}</div>}{pendingQuestion && !input && (
   <div className="mb-2 flex items-center gap-2 rounded-2xl px-3 py-2 text-xs leading-5" style={{ background: "var(--warning-soft, #fff4dc)", color: "#8a571c" }}>
     <span className="min-w-0 flex-1">上一个问题还没回答完(可能是关闭面板时中断了)。</span>
     <button type="button" onClick={retryPending} className="min-h-9 shrink-0 rounded-full px-2.5 font-bold" style={{ background: "#fff" }}>重新提问</button>

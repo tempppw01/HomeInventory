@@ -593,6 +593,9 @@
 
 ### 已完成(不必再跟)
 
+- ~~全局写保护闸门只靠各路由自觉~~ → v0.1.25 起 `src/proxy.ts` 真正生效(此前它叫 `middleware.ts` 放在仓库根目录,Next 静默忽略,构建产物里一条都没编出来:只读账号实测能删掉搜索历史),并由 `verify-write-guards` 静态 + 动态双重守着。
+- ~~只读账号的界面还在引导用户去点会 403 的写入口~~ → v0.1.25 起概览页 / 任务页 / 回收站 / 提醒中心 / AI 面板全部按角色渲染,`verify-readonly-ui` 会连弹窗与右键菜单一起点一遍。
+
 - ~~`inventory-app.tsx`(约 1000 行)按视图拆分~~ → 已拆成 `src/components/app/*` 与 `src/components/views/*`。
 - ~~`prompt()` / `confirm()` 散落在主界面交互里~~ → 已全部换成应用内弹窗(全仓 grep 无残留)。
 - ~~远程字体依赖外部 CDN~~ → v0.1.13 起 MiSans 只用 `local()`,Geist Mono 自托管在 `public/fonts/`。

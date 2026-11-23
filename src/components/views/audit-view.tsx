@@ -183,7 +183,7 @@ export function AuditView({ items, locations, onRefresh, onToast }: { items: Ite
     <Screen
       title="家庭盘点"
       description="扫码或点一下,把家里的东西挨个核对一遍。"
-      actions={<button className="btn-primary flex min-h-11 items-center gap-2" onClick={finish}><Check size={16} />结束盘点</button>}
+      actions={<button className="btn-primary flex min-h-11 items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50" onClick={finish} disabled={readOnly} title={readOnly ? "只读账号不能结束盘点" : undefined}><Check size={16} />结束盘点</button>}
     >
       <Panel
         title="盘点总览"

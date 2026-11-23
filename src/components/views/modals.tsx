@@ -8,8 +8,9 @@ import { motion } from "motion/react";
 import { QRCodeSVG } from "qrcode.react";
 import {
   CalendarCheck, Check, ChevronRight, MapPin, Package, Pencil, Printer, ShoppingBasket, X } from "lucide-react";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useContext, useEffect, useState } from "react";
 import type { Item, Location } from "@/types";
+import { ReadOnlyContext } from "@/components/shared";
 import { isLiquidConsumable } from "@/lib/item-metrics";
 import { APP_VERSION } from "@/lib/version";
 import { Field } from "@/components/ui-kit";
@@ -88,12 +89,15 @@ export function NotificationsModal({ lowStock, expiring, expired, onClose, onOpe
 
 /** 提醒中心的一条:右键可「查看物品 / 复制物品编号 / 处理掉」。 */
 function AlertRow({ item, label, color, canDispose, onOpenItem, onOpenDetail, onDispose }: { item: Item; label: string; color?: string; canDispose: boolean; onOpenItem: (item: Item) => void; onOpenDetail: (item: Item) => void; onDispose: (item: Item) => void }) {
+  // 只读账号在提醒中心里只能看:点整行、右键菜单的「编辑物品」、「处理掉」都是写操作
+  // (openEdit 会在保存时 PATCH,removeItem 直接 DELETE),一律换成「查看详情」或不出现。
+  const readOnly = useContext(ReadOnlyContext);
   const context = useContextMenu();
   const contextItems: ContextMenuItem[] = [
     { label: "查看详情", icon: ExternalLink, onClick: () => onOpenDetail(item) },
-    { label: "编辑物品", icon: Pencil, onClick: () => onOpenItem(item) },
+    ...(readOnly ? [] : [{ label: "编辑物品", icon: Pencil, onClick: () => onOpenItem(item) }]),
     { label: "复制物品编号", icon: ClipboardCopy, onClick: () => { void copyToClipboard(item.itemCode || item.id); } },
-    ...(canDispose ? [{ label: "处理掉这件", danger: true, separatorBefore: true, onClick: () => onDispose(item) }] : []),
+    ...(canDispose && !readOnly ? [{ label: "处理掉这件", danger: true, separatorBefore: true, onClick: () => onDispose(item) }] : []),
   ];
   return (
     <>
@@ -101,8 +105,8 @@ function AlertRow({ item, label, color, canDispose, onOpenItem, onOpenDetail, on
         <ListRow
           title={<><span className="mr-2 inline-block size-2 shrink-0 rounded-full align-middle" style={{ background: color }} />{item.name}</>}
           meta={label}
-          onClick={() => onOpenItem(item)}
-          trailing={canDispose ? <button type="button" onClick={() => onDispose(item)} className="shrink-0 rounded-xl px-2 py-1.5 text-xs font-bold" style={{ background: "var(--danger-soft, #ffe8eb)", color: "var(--danger)" }}>处理掉</button> : <ChevronRight size={16} className="shrink-0 muted" />}
+          onClick={() => (readOnly ? onOpenDetail(item) : onOpenItem(item))}
+          trailing={canDispose && !readOnly ? <button type="button" onClick={() => onDispose(item)} className="shrink-0 rounded-xl px-2 py-1.5 text-xs font-bold" style={{ background: "var(--danger-soft, #ffe8eb)", color: "var(--danger)" }}>处理掉</button> : <ChevronRight size={16} className="shrink-0 muted" />}
         />
       </div>
       <ContextMenu menu={context.menu} items={contextItems} onClose={context.close} />

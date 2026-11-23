@@ -103,7 +103,17 @@ try {
   const changed = await api("POST", "/api/auth/password", { cookie: memberCookie, body: { currentPassword: initialPassword, newPassword } });
   check("当前密码正确 → 改密成功(200)", changed.status === 200 && changed.body?.ok === true, `status=${changed.status} body=${JSON.stringify(changed.body).slice(0, 80)}`);
 
-  const oldLogin = await api("POST", "/api/auth/login", { body: { username: memberUser, password: initialPassword } });
+  // 登录接口限速 12 次/分钟/IP。这一步恰好可能撞上 429 —— 那既不是「旧密码还能用」,
+  // 也不该被算成产品缺陷。撞上就等一会儿重来(本机全量回归时确实撞到过)。
+  const loginStatus = async (username, password) => {
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const response = await api("POST", "/api/auth/login", { body: { username, password } });
+      if (response.status !== 429) return response;
+      await new Promise((resolve) => setTimeout(resolve, 11_000));
+    }
+    return { status: 429, body: { error: "登录一直被限速" } };
+  };
+  const oldLogin = await loginStatus(memberUser, initialPassword);
   check("旧密码登不进来了", oldLogin.status === 401, `status=${oldLogin.status}`);
   let freshCookie = null;
   try { freshCookie = await loginCookie(BASE, memberUser, newPassword); } catch { freshCookie = null; }

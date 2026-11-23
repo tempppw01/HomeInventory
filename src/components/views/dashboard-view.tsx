@@ -4,7 +4,7 @@ import {
   AlertTriangle, Bot, Boxes, ChevronDown, ChevronRight, CircleAlert, LayoutGrid, List, QrCode, ShoppingBasket, Sparkles, WalletCards, Zap,
   Package,
   CalendarDays, Warehouse } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import type { DashboardData, Item, ShoppingItem } from "@/types";
 import { isLiquidConsumable } from "@/lib/item-metrics";
 import { itemAiHighlights } from "@/lib/item-ai";
@@ -17,7 +17,7 @@ import { AiInsightsCard } from "@/components/ai-insights-card";
 import { MonthlyBars, RankBars, ShareBar } from "@/components/charts";
 import { monthOverMonthLabel } from "@/lib/chart";
 import { categoryIconMap } from "@/components/shared";
-import { View, expiryDays, expiryDateLabel, expiryAdvice, expiryGroupLabel } from "../shared";
+import { ReadOnlyContext, View, expiryDays, expiryDateLabel, expiryAdvice, expiryGroupLabel } from "../shared";
 import { useConfirm } from "@/components/confirm-dialog";
 import { ContextMenu, useContextMenu, type ContextMenuItem } from "@/components/context-menu";
 import { copyToClipboard } from "@/lib/clipboard";
@@ -61,6 +61,16 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
     id: item.id, name: item.name, category: item.category, type: item.type, unit: item.unit,
     quantity: item.quantity, remainingPercent: item.remainingPercent, consumeRate: item.consumeRate ?? null,
   })));
+  // 概览页此前完全没有处理角色:只读账号看到的「合并」「设位置」「加入采购清单」
+  // 以及首屏那一下「处理这件」,点下去清一色 403(PATCH /api/items/... 等)。
+  // 这里的做法不是把整块藏掉,而是把入口换成本角色做得到的动作:
+  //   · 首屏那一下 —— 只读换成「查看这件」,信息照旧读得到
+  //   · 行内的写按钮(加入采购 / 设位置 / 合并)—— 只读不渲染
+  const readOnly = useContext(ReadOnlyContext);
+  /** 同一个入口,给只读账号换成「去看」而不是「去改」 */
+  const act = (item: Item, doLabel: string, doIt: () => void) => (readOnly
+    ? { action: "查看这件", run: () => onOpenDetail(item) }
+    : { action: doLabel, run: doIt });
   const [recentView, setRecentView] = useState<"cards" | "list">("list");
   useEffect(() => {
     const saved = localStorage.getItem("home-inventory-recent-view-v2");
@@ -73,13 +83,16 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
   // 挑出唯一一件最紧急的事;数量与清单分别交给 Metric 一行和折叠面板,不再重复叙述。
   const focusTone = expired.length ? "danger" : expiring.length ? "warning" : lowStock.length ? "warning" : "success";
   const focus = data.items.length === 0
-    ? { headline: "先录入家里的第一件物品", detail: "记下名称、数量和存放位置,之后就能按房间查找、自动提醒补货。", action: "录入物品", run: onCreate }
+    ? (readOnly
+      // 家里还没有物品,而只读账号又不能录入 —— 给一个「去改」的按钮只会撞 403,那就只留说明。
+      ? { headline: "家里还没有录入物品", detail: "录入物品需要「成员」或「管理员」权限。你可以先浏览概览,或找家人录入第一件物品。", action: "", run: () => undefined }
+      : { headline: "先录入家里的第一件物品", detail: "记下名称、数量和存放位置,之后就能按房间查找、自动提醒补货。", action: "录入物品", run: onCreate })
     : expired[0]
-      ? { headline: `「${expired[0].name}」已经过期`, detail: `${expiryDateLabel(expired[0], now)} —— 处理掉,或者更新保质期。`, action: "处理这件", run: () => onEdit(expired[0]) }
+      ? { headline: `「${expired[0].name}」已经过期`, detail: `${expiryDateLabel(expired[0], now)} —— 处理掉,或者更新保质期。`, ...act(expired[0], "处理这件", () => onEdit(expired[0])) }
       : expiring[0]
-        ? { headline: `「${expiring[0].name}」快到期了`, detail: `${expiryDateLabel(expiring[0], now)} · ${expiryAdvice(expiring[0])}`, action: "现在处理", run: () => onEdit(expiring[0]) }
+        ? { headline: `「${expiring[0].name}」快到期了`, detail: `${expiryDateLabel(expiring[0], now)} · ${expiryAdvice(expiring[0])}`, ...act(expiring[0], "现在处理", () => onEdit(expiring[0])) }
         : lowStock[0]
-          ? { headline: `「${lowStock[0].name}」需要补货`, detail: isLiquidConsumable(lowStock[0]) ? `余量只剩 ${Math.round(lowStock[0].remainingPercent)}%,低于你设的提醒线。` : `还剩 ${lowStock[0].quantity} ${lowStock[0].unit},提醒线是 ${lowStock[0].minQuantity} ${lowStock[0].unit}。`, action: "加入采购清单", run: () => onAddRestock(lowStock[0]) }
+          ? { headline: `「${lowStock[0].name}」需要补货`, detail: isLiquidConsumable(lowStock[0]) ? `余量只剩 ${Math.round(lowStock[0].remainingPercent)}%,低于你设的提醒线。` : `还剩 ${lowStock[0].quantity} ${lowStock[0].unit},提醒线是 ${lowStock[0].minQuantity} ${lowStock[0].unit}。`, ...act(lowStock[0], "加入采购清单", () => onAddRestock(lowStock[0])) }
           : { headline: "今天没有需要处理的事", detail: `${data.items.length} 件物品都在保质期内,库存也够用 —— 可以趁现在做一次盘点。`, action: "盘点一次", run: () => onNavigate("audit") };
   const attentionCount = lowStock.length + expiring.length + expired.length;
   const pendingNames = new Set(pending.map((item) => item.name.trim().toLocaleLowerCase()));
@@ -101,7 +114,7 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
         tone={focusTone}
         headline={focus.headline}
         detail={focus.detail}
-        action={<button onClick={focus.run} className="btn-primary flex items-center gap-1.5">{focus.action}<ChevronRight size={15} /></button>}
+        action={focus.action ? <button onClick={focus.run} className="btn-primary flex items-center gap-1.5">{focus.action}<ChevronRight size={15} /></button> : undefined}
       />
       <div className="mt-4 grid grid-cols-3 gap-3 sm:mt-5 sm:gap-4">
         <Metric icon={CircleAlert} label="低库存" value={<>{lowStock.length}<span className="ml-1 text-sm font-bold muted">项</span></>} tone={lowStock.length ? "warning" : "neutral"} />
@@ -123,7 +136,7 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
       >
         {recentView === "cards"
           ? <div data-testid="recent-cards" className="grid gap-3 sm:grid-cols-2">{data.items.slice(0, 6).map((item) => <ItemCard key={item.id} item={item} onEdit={() => onEdit(item)} onOpenDetail={() => onOpenDetail(item)} onImageUpload={(file) => onImageUpload(item, file)} onDuplicate={() => onDuplicate(item)} onConsume={() => onConsume(item)} onQr={() => onQr(item)} onAi={() => onAi(item)} compact />)}{data.items.length === 0 && <div className="sm:col-span-2"><Empty icon={Boxes} title="还没有物品" text="录入第一件物品后,这里会按更新时间列出最近变动的物品。" action={undefined} /></div>}</div>
-          : <div data-testid="recent-list" className="min-w-0">{data.items.slice(0, 6).map((item) => <RecentItemRow key={item.id} item={item} onEdit={() => onEdit(item)} onQr={() => onQr(item)} onAi={() => onAi(item)} />)}{data.items.length === 0 && <Empty icon={Boxes} title="还没有物品" text="录入第一件物品后,这里会按更新时间列出最近变动的物品。" action={<button type="button" className="btn-ghost" onClick={onCreate}>录入第一件物品</button>} />}</div>}
+          : <div data-testid="recent-list" className="min-w-0">{data.items.slice(0, 6).map((item) => <RecentItemRow key={item.id} item={item} onEdit={() => onEdit(item)} onOpenDetail={() => onOpenDetail(item)} onQr={() => onQr(item)} onAi={() => onAi(item)} />)}{data.items.length === 0 && <div className="sm:col-span-2"><Empty icon={Boxes} title="还没有物品" text="录入第一件物品后,这里会按更新时间列出最近变动的物品。" action={readOnly ? undefined : <button type="button" className="btn-ghost" onClick={onCreate}>录入第一件物品</button>} /></div>}</div>}
       </Panel>
 
       {aiAvailable && <AiInsightsCard
@@ -143,7 +156,7 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
           <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--hairline)" }}>
             <HomeInsightsCompact
               data={data}
-              onRestock={(itemId) => { const target = data.items.find((item) => item.id === itemId); if (target) onAddRestock(target); }}
+              onRestock={readOnly ? undefined : (itemId) => { const target = data.items.find((item) => item.id === itemId); if (target) onAddRestock(target); }}
             />
           </div>
         </details>
@@ -187,7 +200,7 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
                 icon={CircleAlert}
                 title={item.name}
                 meta={isLiquidConsumable(item) ? `余量 ${Math.round(item.remainingPercent)}%` : `建议补 ${Math.max(item.minQuantity - item.quantity, 1)} ${item.unit}`}
-                trailing={<button type="button" onClick={() => onAddRestock(item)} className="btn-ghost min-h-11 shrink-0 px-3 text-xs sm:min-h-10" style={{ color: "var(--primary)" }}>加入</button>}
+                trailing={!readOnly ? <button type="button" onClick={() => onAddRestock(item)} className="btn-ghost min-h-11 shrink-0 px-3 text-xs sm:min-h-10" style={{ color: "var(--primary)" }}>加入</button> : undefined}
               />)}</div>
             </section>}
 
@@ -200,7 +213,7 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
                   icon={Warehouse}
                   title={row.name}
                   meta={`${row.quantity} ${row.unit} · ${row.locationName ? `现在放在「${row.locationName}」` : "还没设位置"}`}
-                  trailing={<button type="button" onClick={() => { const target = data.items.find((entry) => entry.id === row.id); if (target) onEdit(target); }} className="btn-ghost min-h-11 shrink-0 px-3 text-xs sm:min-h-10" style={{ color: "var(--primary)" }}>设位置</button>}
+                  trailing={!readOnly ? <button type="button" onClick={() => { const target = data.items.find((entry) => entry.id === row.id); if (target) onEdit(target); }} className="btn-ghost min-h-11 shrink-0 px-3 text-xs sm:min-h-10" style={{ color: "var(--primary)" }}>设位置</button> : undefined}
                 />)}
                 {fridge.placed.slice(0, 3).map((row) => <ListRow key={row.id} icon={Warehouse} title={row.name} meta={`${row.quantity} ${row.unit} · ${row.locationName ?? '冰箱'}`} />)}
               </div>
@@ -223,7 +236,7 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
                 key={group.key}
                 icon={CircleAlert}
                 title={group.items.map((item) => item.name).join(" / ")}
-                trailing={<button type="button" onClick={async () => {                  const keepName = group.items.find((item) => item.id === group.keepId)?.name ?? "";                  const label = group.items.map((item) => item.name).join(" / ");                  const total = group.items.reduce((sum, item) => sum + item.quantity, 0);                  const unit = group.items[0]?.unit ?? "";                  const ok = await askConfirm(`确定合并「${label}」吗?会以「${keepName}」为准,合计 ${total} ${unit};其余移入回收站,可从回收站恢复。`, { title: "合并重复物品" });                  if (!ok) return;                  await onMerge(group.keepId, group.items.filter((item) => item.id !== group.keepId).map((item) => item.id));                }} className="btn-ghost min-h-11 shrink-0 px-3 text-xs sm:min-h-10" style={{ color: "var(--primary)" }}>合并</button>}
+                trailing={!readOnly ? <button type="button" onClick={async () => {                  const keepName = group.items.find((item) => item.id === group.keepId)?.name ?? "";                  const label = group.items.map((item) => item.name).join(" / ");                  const total = group.items.reduce((sum, item) => sum + item.quantity, 0);                  const unit = group.items[0]?.unit ?? "";                  const ok = await askConfirm(`确定合并「${label}」吗?会以「${keepName}」为准,合计 ${total} ${unit};其余移入回收站,可从回收站恢复。`, { title: "合并重复物品" });                  if (!ok) return;                  await onMerge(group.keepId, group.items.filter((item) => item.id !== group.keepId).map((item) => item.id));                }} className="btn-ghost min-h-11 shrink-0 px-3 text-xs sm:min-h-10" style={{ color: "var(--primary)" }}>合并</button> : undefined}
                 meta={`共 ${group.items.length} 条,建议保留「${group.items.find((item) => item.id === group.keepId)?.name ?? ''}」`}
               />)}</div>
             </section>}
@@ -239,7 +252,9 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
                     icon={AlertTriangle}
                     title={item.name}
                     meta={`${expiryDateLabel(item, now)} · ${expiryAdvice(item)}`}
-                    trailing={<button type="button" onClick={() => isExpired ? onDelete(item) : onEdit(item)} className="btn-ghost min-h-11 shrink-0 px-3 text-xs sm:min-h-10" style={{ color: isExpired ? "var(--danger)" : "var(--primary)" }}>{isExpired ? "处理" : "查看"}</button>}
+                    trailing={readOnly
+                      ? <button type="button" onClick={() => onOpenDetail(item)} className="btn-ghost min-h-11 shrink-0 px-3 text-xs sm:min-h-10" style={{ color: "var(--primary)" }}>查看</button>
+                      : <button type="button" onClick={() => isExpired ? onDelete(item) : onEdit(item)} className="btn-ghost min-h-11 shrink-0 px-3 text-xs sm:min-h-10" style={{ color: isExpired ? "var(--danger)" : "var(--primary)" }}>{isExpired ? "处理" : "查看"}</button>}
                   />;
                 })}</div>
               </div>)}</div>
@@ -262,11 +277,14 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
   </Screen>;
 }
 
-export function RecentItemRow({ item, onEdit, onQr, onAi }: { item: Item; onEdit: () => void; onQr: () => void; onAi: () => void }) {
+export function RecentItemRow({ item, onEdit, onOpenDetail, onQr, onAi }: { item: Item; onEdit: () => void; onOpenDetail: () => void; onQr: () => void; onAi: () => void }) {
   // 右键:编辑 / 二维码 / AI / 复制编号 —— 概览里的这一行也是一个物品,操作应与物品卡片一致。
+  // 只读账号:点整行不再是「编辑」(那会打开编辑弹窗,保存时 403),而是进详情页;
+  // 菜单里的「编辑物品」直接不出现(和物品卡片的做法一致)。
+  const readOnly = useContext(ReadOnlyContext);
   const recentMenu = useContextMenu();
   const recentItems: ContextMenuItem[] = [
-    { label: "编辑物品", onClick: onEdit },
+    ...(readOnly ? [] : [{ label: "编辑物品", onClick: onEdit }]),
     { label: "显示二维码", onClick: onQr },
     { label: "AI 识别与建议", onClick: onAi },
     { label: "复制物品编号", separatorBefore: true, onClick: () => { void copyToClipboard(item.itemCode || item.id); } },
@@ -276,7 +294,7 @@ export function RecentItemRow({ item, onEdit, onQr, onAi }: { item: Item; onEdit
   return <>
     <ListRow
     onContextMenu={recentMenu.onContextMenu}
-    onClick={onEdit}
+    onClick={readOnly ? onOpenDetail : onEdit}
     title={<span className="flex min-w-0 items-center gap-1.5">{item.imageUrl
       ? <span className="size-5 shrink-0 rounded-md bg-cover bg-center" style={{ backgroundImage: `url(${item.imageUrl})` }} />
       : <span className="grid size-5 shrink-0 place-items-center" style={{ color: "var(--muted)" }}><CategoryIcon size={15} /></span>}<span className="truncate">{item.name}</span>{ai.hasHighlights && <Sparkles size={12} className="shrink-0" style={{ color: "var(--primary)" }} />}</span>}

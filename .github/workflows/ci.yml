@@ -100,6 +100,11 @@ jobs:
         run: node scripts/verify-account-ops.mjs
       - name: 账号自助改密码(/api/auth/password,含只读账号与其它会话吊销)
         run: node scripts/verify-account-self-service.mjs
+      # 权限矩阵需要「只读」和「成员」两个真实账号;upsert,可重复执行。
+      - name: 准备权限矩阵用的探针账号(只读 / 成员)
+        run: node scripts/make-probe-accounts.mjs
+      - name: 写接口权限矩阵(只读拦得住、成员不被误伤、设置只给管理员)
+        run: node scripts/verify-write-guards.mjs
       - name: 备份往返日期核对
         run: node scripts/verify-backup-dates.mjs
       - name: 搜索历史与自动备份检查
@@ -485,6 +490,12 @@ jobs:
           PROBE_USER: leadcheck
           PROBE_PASS: Lead#2026
         run: node scripts/verify-role-ui.mjs
+      - name: 只读界面检查(写入口缺席或置灰)
+        env:
+          PROBE_USER: leadcheck
+          PROBE_PASS: Lead#2026
+          PROBE_VIEWER_PASS: View#2026
+        run: node scripts/verify-readonly-ui.mjs
       - name: 登录门禁检查(未登录不该看到数据)
         env:
           PROBE_USER: leadcheck

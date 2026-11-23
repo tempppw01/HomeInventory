@@ -1,9 +1,10 @@
 "use client";
 
 import { Bot, CalendarClock, Check, Lightbulb, PackageCheck, Sparkles, Warehouse, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import type { Item, ItemType } from "@/types";
 import { useEscapeClose } from "@/lib/use-escape-close";
+import { ReadOnlyContext } from "@/components/shared";
 
 export type AiAnalysis = {
   name?: string | null;
@@ -45,6 +46,9 @@ function confidenceText(value: number) {
   return `AI 没太大把握(${percent}%),请以包装上的说明为准`;
 }
 export function AiAssistantModal({ item, onClose, onApplied }: { item: Item; onClose: () => void; onApplied: (message: string) => void }) {
+  // 只读账号可以问 AI、看结论(分析是只读提问),但「应用可用建议」是 PATCH /api/items/...,
+  // 一律 403 —— 所以那颗按钮按角色隐藏,并说明原因,避免点下去只得到一个失败。
+  const readOnly = useContext(ReadOnlyContext);
   // 之前已经分析过:先把上次结论摆出来,不重复请求。
   const [cached] = useState<AiAnalysis | null>(() => item.aiSummary ? {
     summary: item.aiSummary ?? "",
@@ -80,7 +84,7 @@ export function AiAssistantModal({ item, onClose, onApplied }: { item: Item; onC
       <div className="leading-6">{error}</div>
       <button type="button" onClick={() => void run("full")} disabled={loading} className="mt-2 min-h-10 rounded-full px-3 text-xs font-bold" style={{ background: "#fff", color: "#b42318" }}>重试</button>
     </div>}
-    {shownAnalysis && !loading && <div className="mt-5 space-y-3"><div className="rounded-[20px] p-4" style={{ background: "var(--primary-soft)" }}><div className="text-sm font-bold">{shownAnalysis.summary || "AI 已经整理好了"}</div>{typeof shownAnalysis.confidence === "number" && <div className="mt-1 text-xs muted">{confidenceText(shownAnalysis.confidence)}</div>}</div><div className="grid gap-3 sm:grid-cols-2"><Result icon={PackageCheck} title={isMedicine ? "AI 整理的药品信息" : "AI 看到的信息"} text={[shownAnalysis.name, shownAnalysis.category, shownAnalysis.type === "CONSUMABLE" ? "消耗品" : shownAnalysis.type === "DURABLE" ? "耐用品" : null].filter(Boolean).join(" · ") || "没有建议修改"} />{(shownAnalysis.type || item.type) === "CONSUMABLE" && <Result icon={CalendarClock} title={isMedicine ? "有效期" : "保质期"} text={shownAnalysis.suggestedExpiryDate ? `建议到期日 ${shownAnalysis.suggestedExpiryDate}${shownAnalysis.expiryReason ? `，${shownAnalysis.expiryReason}` : ""}` : shownAnalysis.expiryReason || "无法可靠判断"} />}<Result icon={Warehouse} title={isMedicine ? "说明书怎么说的" : "怎么存放"} text={shownAnalysis.storageAdvice || "暂无建议"} /><Result icon={Lightbulb} title={isMedicine ? "适应症、用量与提醒" : "使用与补货"} text={[shownAnalysis.usageAdvice, shownAnalysis.replenishmentAdvice].filter(Boolean).join("；") || "暂无建议"} /></div><button disabled={applying} onClick={apply} className="btn-primary flex w-full items-center justify-center gap-2"><Check size={17} />{applying ? "应用中…" : isMedicine ? "保存药品说明" : "应用可用建议"}</button></div>}
+    {shownAnalysis && !loading && <div className="mt-5 space-y-3"><div className="rounded-[20px] p-4" style={{ background: "var(--primary-soft)" }}><div className="text-sm font-bold">{shownAnalysis.summary || "AI 已经整理好了"}</div>{typeof shownAnalysis.confidence === "number" && <div className="mt-1 text-xs muted">{confidenceText(shownAnalysis.confidence)}</div>}</div><div className="grid gap-3 sm:grid-cols-2"><Result icon={PackageCheck} title={isMedicine ? "AI 整理的药品信息" : "AI 看到的信息"} text={[shownAnalysis.name, shownAnalysis.category, shownAnalysis.type === "CONSUMABLE" ? "消耗品" : shownAnalysis.type === "DURABLE" ? "耐用品" : null].filter(Boolean).join(" · ") || "没有建议修改"} />{(shownAnalysis.type || item.type) === "CONSUMABLE" && <Result icon={CalendarClock} title={isMedicine ? "有效期" : "保质期"} text={shownAnalysis.suggestedExpiryDate ? `建议到期日 ${shownAnalysis.suggestedExpiryDate}${shownAnalysis.expiryReason ? `，${shownAnalysis.expiryReason}` : ""}` : shownAnalysis.expiryReason || "无法可靠判断"} />}<Result icon={Warehouse} title={isMedicine ? "说明书怎么说的" : "怎么存放"} text={shownAnalysis.storageAdvice || "暂无建议"} /><Result icon={Lightbulb} title={isMedicine ? "适应症、用量与提醒" : "使用与补货"} text={[shownAnalysis.usageAdvice, shownAnalysis.replenishmentAdvice].filter(Boolean).join("；") || "暂无建议"} /></div>{readOnly ? <p className="m-0 rounded-[20px] px-4 py-2.5 text-center text-xs muted" style={{ background: "var(--surface-soft)" }}>只读账号可以看 AI 的建议,但不能写回物品。要让建议生效,请让成员或管理员点一下「应用」。</p> : <button disabled={applying} onClick={apply} className="btn-primary flex w-full items-center justify-center gap-2"><Check size={17} />{applying ? "应用中…" : isMedicine ? "保存药品说明" : "应用可用建议"}</button>}</div>}
   </div></div>;
 }
 

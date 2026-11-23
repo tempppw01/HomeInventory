@@ -188,7 +188,9 @@ export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, lo
         })()}
         <button onClick={exportCsv} disabled={items.length === 0} className="btn-ghost flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-xs disabled:opacity-40" aria-label="导出当前筛选为 CSV" title="把当前筛选出的物品导出成 CSV(Excel 可直接打开)"><Download size={15} /><span className="desktop-only">导出</span></button>
         <div className="flex shrink-0 items-center gap-2 md:ml-auto">
-          {selectMode
+          {readOnly
+            ? null
+            : selectMode
             ? <button onClick={exitSelectMode} className="btn-ghost flex items-center gap-1.5 px-3 py-1.5 text-xs">完成</button>
             : <button onClick={() => setSelectMode(true)} disabled={items.length === 0} className="btn-ghost flex items-center gap-1.5 px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40"><CheckSquare size={15} />选择</button>}
         </div>

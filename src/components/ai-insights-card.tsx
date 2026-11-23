@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { addDismissed, filterDismissed, insightKey, parseDismissed } from "@/lib/insight-dismiss";
 import { Sparkles, X } from "lucide-react";
+import { ReadOnlyContext } from "@/components/shared";
 
 async function jsonRequest<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { ...options, headers: { "Content-Type": "application/json", ...options?.headers } });
@@ -28,6 +29,10 @@ type Payload = { headline: string; insights: Insight[]; generatedAt: string; mod
  * 打开页面就自动请求一次,不需要用户点任何按钮;失败时整块自己消失,不打扰主流程。
  */
 export function AiInsightsCard({ aiAvailable, onRestock, onOpenItem }: { aiAvailable: boolean; onRestock: (itemId: string) => void; onOpenItem: (itemId: string) => void }) {
+  // 只读账号看得到建议,但「加到采购清单」是写操作(POST /api/purchases 一类的接口会 403)——
+  // 同一颗按钮换成本角色做得到的动作:去看这件物品。
+  const readOnly = useContext(ReadOnlyContext);
+  const canRestock = (insight: { kind?: string }) => insight.kind === "restock" && !readOnly;
   // 被忽略的建议只存在本机:它们本来就是「这台设备上不想再看到」。
   const [dismissedKeys, setDismissedKeys] = useState<string[]>(() => (typeof window === "undefined" ? [] : parseDismissed(localStorage.getItem("home-inventory-dismissed-insights"))));
   const dismissInsight = (insight: { kind?: string; title: string; itemId?: string | null }) => {
@@ -127,11 +132,11 @@ export function AiInsightsCard({ aiAvailable, onRestock, onOpenItem }: { aiAvail
                   {insight.itemId && (
                     <button
                       type="button"
-                      onClick={() => (insight.kind === "restock" ? onRestock(insight.itemId!) : onOpenItem(insight.itemId!))}
+                      onClick={() => (canRestock(insight) ? onRestock(insight.itemId!) : onOpenItem(insight.itemId!))}
                       className="tap-target mt-1.5 inline-flex min-h-9 items-center rounded-full px-2.5 text-xs font-bold"
                       style={{ background: "var(--primary-soft)", color: "var(--primary)" }}
                     >
-                      {insight.kind === "restock" ? "加到采购清单" : "看看这件"}
+                      {canRestock(insight) ? "加到采购清单" : "看看这件"}
                     </button>
                   )}
                 </span>

@@ -3,7 +3,7 @@
 import {
   CheckCircle2, Plus, Trash2, ListTodo, Repeat2,
 } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { FormEvent, useContext, useState } from "react";
 import type { HouseholdTask, TaskRecurrence } from "@/types";
 import { Badge, Button, Empty, Field, ListRow, Panel, Screen } from "@/components/ui-kit";
 import { useConfirm } from "@/components/confirm-dialog";
@@ -11,10 +11,13 @@ import { ContextMenu, useContextMenu, type ContextMenuItem } from "@/components/
 import { copyToClipboard } from "@/lib/clipboard";
 import { RECURRENCE_LABELS } from "@/lib/task-recurrence";
 import { DatePicker } from "@/components/date-picker";
-import { dateInputValue, taskDatePresets, request } from "../shared";
+import { ReadOnlyContext, dateInputValue, taskDatePresets, request } from "../shared";
 import { Modal } from "./modals";
 export const recurrenceLabels = RECURRENCE_LABELS;
 export function TasksView({ tasks, onAdd, onToggle, onDelete }: { tasks: HouseholdTask[]; onAdd: () => void; onToggle: (task: HouseholdTask) => void; onDelete: (task: HouseholdTask) => void }) {
+  // 只读账号看得到任务,但不能新增 / 完成 / 删除 —— 这些动作接口一律 403,界面上就不该给
+  // (此前整个视图没有处理 readOnly:点下去只会拿到一个看不懂的失败)。
+  const readOnly = useContext(ReadOnlyContext);
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const dueSoon = tasks.filter((task) => new Date(task.dueAt).getTime() <= today.getTime() + 7 * 86400000);
   const summary = tasks.length ? `接下来 7 天有 ${dueSoon.length} 项任务` : "还没有安排任务,从一个会重复的小事开始";
@@ -22,7 +25,7 @@ export function TasksView({ tasks, onAdd, onToggle, onDelete }: { tasks: Househo
     <Screen
       title="家庭任务"
       description="把清洁、保养和日常小事,安排成不会忘记的节奏。"
-      actions={<Button variant="primary" onClick={onAdd} className="flex min-h-11 items-center gap-2" aria-label="安排任务"><Plus size={18} /><span className="desktop-only">安排任务</span></Button>}
+      actions={!readOnly ? <Button variant="primary" onClick={onAdd} className="flex min-h-11 items-center gap-2" aria-label="安排任务"><Plus size={18} /><span className="desktop-only">安排任务</span></Button> : null}
     >
       <Panel
         title="任务清单"
@@ -30,7 +33,7 @@ export function TasksView({ tasks, onAdd, onToggle, onDelete }: { tasks: Househo
         actions={tasks.length ? <span className="shrink-0 text-xs font-bold muted">共 {tasks.length} 项</span> : undefined}
       >
         {tasks.length ? tasks.map((task) => <TaskRow key={task.id} task={task} onToggle={() => onToggle(task)} onDelete={() => onDelete(task)} />)
- : <Empty icon={ListTodo} title="还没有安排任务" text="从一次清洁或保养开始,让家务变得有节奏。" action={<button onClick={onAdd} className="btn-primary min-h-11 px-4">安排第一个任务</button>} />}
+ : <Empty icon={ListTodo} title="还没有安排任务" text="从一次清洁或保养开始,让家务变得有节奏。" action={readOnly ? undefined : <button onClick={onAdd} className="btn-primary min-h-11 px-4">安排第一个任务</button>} />}
       </Panel>
     </Screen>
   );
@@ -53,13 +56,15 @@ export function TaskModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
 
 /** 任务清单的一行:右键可「完成 / 复制任务名 / 删除」。抽成组件是因为 hook 不能写在 map 回调里。 */
 function TaskRow({ task, onToggle, onDelete }: { task: HouseholdTask; onToggle: () => void; onDelete: () => void }) {
+  // 行上的「完成 / 删除」也是写操作,只读账号不该看到。
+  const readOnly = useContext(ReadOnlyContext);
   const context = useContextMenu();
   const due = new Date(task.dueAt);
   const overdue = due.getTime() < new Date().setHours(0, 0, 0, 0);
   const contextItems: ContextMenuItem[] = [
-    { label: "完成这次", onClick: onToggle },
+    ...(readOnly ? [] : [{ label: "完成这次", onClick: onToggle }]),
     { label: "复制任务名", onClick: () => { void copyToClipboard(task.title); } },
-    { label: "删除任务", danger: true, separatorBefore: true, onClick: onDelete },
+    ...(readOnly ? [] : [{ label: "删除任务", danger: true, separatorBefore: true, onClick: onDelete }]),
   ];
   return (
     <>
@@ -77,10 +82,10 @@ function TaskRow({ task, onToggle, onDelete }: { task: HouseholdTask; onToggle: 
           }
           trailing={
             <span className="flex shrink-0 items-center gap-1.5">
-              <Button variant="secondary" size="sm" onClick={onToggle} className="flex min-h-11 min-w-11 items-center justify-center gap-1.5 px-2.5 text-xs font-bold sm:min-h-10" aria-label={`完成「${task.title}」`}>
+              {!readOnly && <Button variant="secondary" size="sm" onClick={onToggle} className="flex min-h-11 min-w-11 items-center justify-center gap-1.5 px-2.5 text-xs font-bold sm:min-h-10" aria-label={`完成「${task.title}」`}>
                 <CheckCircle2 size={17} /><span className="hidden sm:inline">完成</span>
-              </Button>
-              <button onClick={onDelete} className="icon-action min-h-11 min-w-11 sm:min-h-10 sm:min-w-10" aria-label="删除任务"><Trash2 size={15} /></button>
+              </Button>}
+              {!readOnly && <button onClick={onDelete} className="icon-action min-h-11 min-w-11 sm:min-h-10 sm:min-w-10" aria-label="删除任务"><Trash2 size={15} /></button>}
             </span>
           }
         />
