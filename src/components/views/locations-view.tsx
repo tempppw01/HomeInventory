@@ -10,7 +10,7 @@ import { ContextMenu, useContextMenu, ContextMenuItem } from "@/components/conte
 import { useConfirm } from "@/components/confirm-dialog";
 import { Empty, Panel, Screen, Toolbar } from "@/components/ui-kit";
 import { ReadOnlyContext, iconMap, locationPath } from "../shared";
-import { spaceSummary, spaceSummaryText, spaceAlert } from "@/lib/space-summary";
+import { spaceSummary, spaceSummaryText, spaceAlert, spaceDeletePrompt } from "@/lib/space-summary";
 
 export function LocationsView({ locations, items, onAdd, onOpen, onEdit, onToast, onRefresh }: { locations: Location[]; items: Item[]; onAdd: () => void; onOpen: (name: string, id: string) => void; onEdit: (location: Location) => void; onToast: (message: string) => void; onRefresh: () => Promise<void> }) {
   const [selectedLocationId, setSelectedLocationId] = useState("ALL");
@@ -78,7 +78,17 @@ export function LocationCard({ location, locations, items, index, onOpen, onEdit
   const summaryText = spaceSummaryText(summary);
   const alert = spaceAlert(summary);
   const context = useContextMenu();
-  const remove = async () => { if (!(await askConfirm(`确定删除空间“${location.name}”?`, { title: "删除空间", confirmLabel: "确认删除", tone: "danger" }))) return; try { const response = await fetch(`/api/locations/${location.id}`, { method: "DELETE" }); const result = await response.json(); if (!response.ok) throw new Error(result.error || "删除失败"); onToast("空间已删除"); onRefresh(); } catch (error) { onToast(error instanceof Error ? error.message : "删除失败"); } };
+  const remove = async () => {
+    // 文案逻辑抽到 space-summary.ts 里(纯函数、可单测):
+    // 里面有物品时**不再问「确定吗」**,直接说明「还有 N 件,先移走」,并且不发删除请求;
+    // 可以删时,把「下级空间会变成顶级」这条后果也说清楚。
+    const itemCount = items.filter((item) => item.locationId === location.id).length;
+    const childCount = locations.filter((entry) => entry.parentId === location.id).length;
+    const prompt = spaceDeletePrompt(location.name, itemCount, childCount);
+    if (prompt) {
+      const agreed = await askConfirm(prompt.message, { title: prompt.title, confirmLabel: prompt.confirmLabel, cancelLabel: prompt.cancelLabel, tone: prompt.blocked ? "primary" : "danger" });
+      if (prompt.blocked || !agreed) return;
+    } try { const response = await fetch(`/api/locations/${location.id}`, { method: "DELETE" }); const result = await response.json(); if (!response.ok) throw new Error(result.error || "删除失败"); onToast("空间已删除"); onRefresh(); } catch (error) { onToast(error instanceof Error ? error.message : "删除失败"); } };
   const contextItems: ContextMenuItem[] = [{ label: "打开空间", icon: ExternalLink, onClick: () => onOpen(location.name, location.id) }, { label: "编辑空间", icon: Pencil, onClick: () => onEdit(location) }, { label: "复制空间名称", icon: Copy, onClick: async () => { try { await navigator.clipboard.writeText(location.name); onToast("空间名称已复制"); } catch { onToast("复制失败"); } } }, { label: "删除空间", icon: Trash2, danger: true, separatorBefore: true, onClick: remove }];
   return <><motion.button onContextMenu={context.onContextMenu} initial={{ opacity: 0, scale: .97 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: index * .05 }} onClick={() => onOpen(location.name, location.id)} className="surface group relative min-w-0 overflow-hidden p-4 text-left transition hover:border-[color-mix(in_srgb,var(--primary)_38%,var(--border))]"><div className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-20" style={location.thumbnailUrl ? { backgroundImage: `url(${location.thumbnailUrl})` } : undefined} /><div className="relative"><div className="mb-4 flex items-start justify-between gap-3"><div className="grid size-12 shrink-0 place-items-center rounded-2xl" style={{ color: location.color, background: `color-mix(in srgb, ${location.color} 12%, var(--surface-solid))` }}><Icon size={23} /></div><ChevronRight className="mt-1 shrink-0 muted transition group-hover:translate-x-0.5" size={18} /></div><span className="block m-0 truncate text-lg font-black">{location.name}</span><span className="block mb-0 mt-1 truncate text-xs muted">{parent ? locationPath(location, locations) : "顶层空间"}</span><span className="mb-0 mt-1.5 flex items-center gap-1.5 text-sm muted">
   {alert && <span className="size-1.5 shrink-0 rounded-full" aria-hidden data-space-alert={alert} style={{ background: alert === "danger" ? "var(--danger)" : "var(--warning)" }} />}
