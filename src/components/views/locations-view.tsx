@@ -21,7 +21,7 @@ export function LocationsView({ locations, items, onAdd, onOpen, onEdit, onToast
     <Screen
       title="家庭空间"
       description="按房间和收纳位置快速找到物品。"
-      actions={!readOnly ? <button onClick={onAdd} className="btn-primary flex min-h-11 items-center gap-2"><Plus size={18} /><span className="desktop-only">添加空间</span></button> : null}
+      actions={!readOnly ? <button onClick={onAdd} className="btn-primary flex min-h-11 items-center gap-2" aria-label="添加空间"><Plus size={18} /><span className="desktop-only">添加空间</span></button> : null}
     >
       <div className="browse-layout">
         <nav className="browse-rail" aria-label="空间索引">

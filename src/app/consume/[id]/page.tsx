@@ -25,13 +25,17 @@ export default async function ConsumePage({ params }: { params: Promise<{ id: st
       data-bottom-nav-space="none"
       style={{ "--bottom-nav-space": "0px" } as CSSProperties}
     >
-      <Link
-        href="/"
-        className="inline-flex min-h-11 w-fit items-center gap-2 rounded-2xl px-3 text-sm font-bold"
-        style={{ background: "var(--surface-solid)", color: "var(--primary)" }}
-      >
-        <Archive size={18} /> 返回归物
-      </Link>
+      {/* 返回链接包在一个 nav 地标里:此前它挂在 <main> 外面,整页只有 ConsumeScan
+          那块是地标,axe 的 region 规则会判「有内容不在任何地标内」。 */}
+      <nav aria-label="返回归物" className="w-fit">
+        <Link
+          href="/"
+          className="inline-flex min-h-11 w-fit items-center gap-2 rounded-2xl px-3 text-sm font-bold"
+          style={{ background: "var(--surface-solid)", color: "var(--primary)" }}
+        >
+          <Archive size={18} /> 返回归物
+        </Link>
+      </nav>
       <div className="flex flex-1 items-center">
         <ConsumeScan item={{ ...item, liquid: isLiquidConsumable(item) }} />
       </div>

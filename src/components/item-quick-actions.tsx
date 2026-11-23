@@ -94,7 +94,7 @@ export function ItemQuickActions({
               onClick={() => adjustRemaining(-10)}
               disabled={disabled || remainingPercent <= 0}
               className="btn-ghost inline-flex min-h-11 items-center gap-1.5 px-3 text-sm disabled:opacity-50"
-              aria-label="余量减少 10%"
+              aria-label="少 10%,余量减少 10%"
             >
               <Minus size={15} />少 10%
             </button>
@@ -103,7 +103,7 @@ export function ItemQuickActions({
               onClick={() => adjustRemaining(100 - remainingPercent)}
               disabled={disabled || remainingPercent >= 100}
               className="btn-ghost inline-flex min-h-11 items-center gap-1.5 px-3 text-sm disabled:opacity-50"
-              aria-label="余量重置为 100%"
+              aria-label="满上,余量重置为 100%"
             >
               <RotateCcw size={15} />满上
             </button>

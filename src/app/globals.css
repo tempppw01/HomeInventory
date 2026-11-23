@@ -170,8 +170,12 @@
   --success: #3a7153;
   --success-soft: #e4efe7;
   --warning: #8f5c14;
+  /* 淡底色上的文字色。--warning / --danger 直接当文字压在 14~16% 的混色底上时只有
+     4.4:1 左右(axe 实测 4.45 / 4.41),达不到 AA 的 4.5 —— 所以底色淡的地方用这一对深色。 */
+  --warning-strong: #6d4509;
   --warning-soft: #f9eed9;
   --danger: #b4443f;
+  --danger-strong: #8f342f;
   --shadow: 0 14px 34px rgba(74, 50, 30, 0.07);
   --shadow-sm: 0 3px 12px rgba(74, 50, 30, 0.05);
   --shadow-lg: 0 20px 40px rgba(74, 50, 30, 0.14);
@@ -209,8 +213,11 @@
   --success: #86c2a0;
   --success-soft: #24352c;
   --warning: #e6bd7d;
+  /* 深色主题下底色本来就深,原色已经够(实测 7:1);这一对只为与浅色主题对齐命名。 */
+  --warning-strong: #e6bd7d;
   --warning-soft: #3f3321;
   --danger: #e58b84;
+  --danger-strong: #e58b84;
   --shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
   --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.26);
   --shadow-lg: 0 10px 26px rgba(0, 0, 0, 0.36);
@@ -247,8 +254,11 @@
   --success: #86c2a0;
   --success-soft: #24352c;
   --warning: #e6bd7d;
+  /* 深色主题下底色本来就深,原色已经够(实测 7:1);这一对只为与浅色主题对齐命名。 */
+  --warning-strong: #e6bd7d;
   --warning-soft: #3f3321;
   --danger: #e58b84;
+  --danger-strong: #e58b84;
   --shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
   --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.26);
   --shadow-lg: 0 10px 26px rgba(0, 0, 0, 0.36);
@@ -380,8 +390,8 @@ code, pre, kbd, .font-mono, .font-code { font-family: var(--font-mono); font-var
 .ui-badge[data-tone="neutral"] { background: var(--surface-soft); color: var(--muted); }
 .ui-badge[data-tone="primary"] { background: var(--primary-soft); color: var(--primary); }
 .ui-badge[data-tone="success"] { background: var(--success-soft); color: var(--success); }
-.ui-badge[data-tone="warning"] { background: color-mix(in srgb, var(--warning) 14%, var(--surface-solid)); color: var(--warning); }
-.ui-badge[data-tone="danger"] { background: color-mix(in srgb, var(--danger) 12%, var(--surface-solid)); color: var(--danger); }
+.ui-badge[data-tone="warning"] { background: color-mix(in srgb, var(--warning) 14%, var(--surface-solid)); color: var(--warning-strong); }
+.ui-badge[data-tone="danger"] { background: color-mix(in srgb, var(--danger) 12%, var(--surface-solid)); color: var(--danger-strong); }
 .ds-page-shell { min-width: 0; padding: var(--page-padding-y) var(--page-padding-x) var(--space-8); }
 .ds-page-header { display: flex; align-items: end; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--page-section-gap); }
 .ds-page-title { margin: 0; font-size: var(--text-display); font-weight: 900; line-height: var(--leading-title); letter-spacing: var(--tracking-title); text-wrap: balance; }

@@ -18,7 +18,7 @@ export function AskAiAboutItem({ itemName }: { itemName: string }) {
       }}
       className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors md:min-h-10"
       style={{ background: "var(--primary-soft)", color: "var(--primary)" }}
-      aria-label={`问 AI 关于「${itemName}」的问题`}
+      aria-label={`问 AI 关于这件「${itemName}」的问题`}
     >
       <MessageCircleQuestion size={14} />
       问 AI 关于这件

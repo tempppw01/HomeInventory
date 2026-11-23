@@ -173,14 +173,14 @@ await dismissBlockingDialogs(page);
 // ② 余量减少 10% → 数据变化且页面数值立刻更新(不需要刷新)
 {
   const before = { api: await readApi(), ui: await readUi() };
-  await page.locator('button[aria-label="余量减少 10%"]').first().click();
+  await page.locator('button[aria-label="少 10%,余量减少 10%"]').first().click();
   await page.waitForTimeout(2200);
   const after = { api: await readApi(), ui: await readUi() };
 
   check("「少 10%」真的改了数据", after.api.percent === before.api.percent - 10, `${before.api.percent}% → ${after.api.percent}%`);
   check("页面数值立刻跟着更新(无需刷新)", after.ui.percent === after.api.percent, `页面=${after.ui.percent}% 接口=${after.api.percent}%`);
 
-  await page.locator('button[aria-label="余量重置为 100%"]').first().click();
+  await page.locator('button[aria-label="满上,余量重置为 100%"]').first().click();
   await page.waitForTimeout(2200);
   const reset = await readApi();
   check("「满上」把余量重置为 100%", reset.percent === 100, `实际=${reset.percent}%`);
@@ -221,13 +221,13 @@ await dismissBlockingDialogs(page);
   if (!aiAvailable) {
     console.log("      跳过「重新分析」:本环境未配置 AI");
   } else {
-    await page.locator('button[aria-label^="重新分析"]').first().click();
+    await page.locator('button[title^="让 AI 重新看一遍"]').first().click();
     // AI 有延迟,最多等 25 秒看按钮是否变成反馈文案
     let state = null;
     for (let attempt = 0; attempt < 12; attempt += 1) {
       await page.waitForTimeout(2000);
       state = await page.evaluate(() => {
-        const button = document.querySelector('button[aria-label^="重新分析"]');
+        const button = document.querySelector('button[title^="让 AI 重新看一遍"]');
         const text = (document.querySelector("main")?.innerText || "").replace(/\n+/g, " | ");
         return {
           label: (button?.textContent || "").trim(),

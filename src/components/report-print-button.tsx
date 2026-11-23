@@ -10,7 +10,6 @@ export function ReportPrintButton() {
       type="button"
       onClick={() => window.print()}
       className="btn-primary inline-flex min-h-11 items-center gap-2 px-4 text-sm print:hidden"
-      aria-label="打印或存成 PDF"
     >
       打印 / 存成 PDF
     </button>

@@ -93,7 +93,10 @@ export function ReanalyzeAiButton({ item }: { item: ReanalyzeItem }) {
         disabled={loading}
         className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors disabled:opacity-60 md:min-h-10"
         style={{ background: "var(--surface-soft)", color: "var(--foreground)" }}
-        aria-label={`重新分析「${item.name}」`}
+        // 这个按钮的文字会变(重新分析 / 分析中... / 已更新),所以不能用固定的 aria-label ——
+        // 可访问名必须包含当下的可见文字(WCAG 2.5.3),否则语音控制念「已更新」会匹配不上。
+        // 物品名放进 title,视觉用户悬停能看到,读屏也能念到。
+        title={`让 AI 重新看一遍「${item.name}」`}
       >
         {loading ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />}
         {loading ? "分析中…" : done ? "已更新" : "重新分析"}

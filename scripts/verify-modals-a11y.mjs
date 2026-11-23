@@ -31,7 +31,7 @@ const SURFACES = [
   { route: "/items", label: "添加采购项", aria: "添加采购项" },
   { route: "/items", label: "回收站", aria: "回收站" },
   { route: "/items", label: "提醒中心", aria: "查看提醒" },
-  { route: "/items", label: "AI 助手面板", aria: "打开归物助手" },
+  { route: "/items", label: "AI 助手面板", aria: "AI 助手" },
   { route: "/locations", label: "空间相关弹窗", text: "添加" },
   { route: "/tasks", label: "安排任务弹窗", text: "安排任务" },
   { route: "/settings", label: "重置密码弹窗", text: "重置密码" },

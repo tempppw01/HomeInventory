@@ -22,7 +22,7 @@ export function TasksView({ tasks, onAdd, onToggle, onDelete }: { tasks: Househo
     <Screen
       title="家庭任务"
       description="把清洁、保养和日常小事,安排成不会忘记的节奏。"
-      actions={<Button variant="primary" onClick={onAdd} className="flex min-h-11 items-center gap-2"><Plus size={18} /><span className="desktop-only">安排任务</span></Button>}
+      actions={<Button variant="primary" onClick={onAdd} className="flex min-h-11 items-center gap-2" aria-label="安排任务"><Plus size={18} /><span className="desktop-only">安排任务</span></Button>}
     >
       <Panel
         title="任务清单"
@@ -77,7 +77,7 @@ function TaskRow({ task, onToggle, onDelete }: { task: HouseholdTask; onToggle: 
           }
           trailing={
             <span className="flex shrink-0 items-center gap-1.5">
-              <Button variant="secondary" size="sm" onClick={onToggle} className="flex min-h-11 min-w-11 items-center justify-center gap-1.5 px-2.5 text-xs font-bold sm:min-h-10">
+              <Button variant="secondary" size="sm" onClick={onToggle} className="flex min-h-11 min-w-11 items-center justify-center gap-1.5 px-2.5 text-xs font-bold sm:min-h-10" aria-label={`完成「${task.title}」`}>
                 <CheckCircle2 size={17} /><span className="hidden sm:inline">完成</span>
               </Button>
               <button onClick={onDelete} className="icon-action min-h-11 min-w-11 sm:min-h-10 sm:min-w-10" aria-label="删除任务"><Trash2 size={15} /></button>

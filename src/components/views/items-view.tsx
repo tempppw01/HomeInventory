@@ -27,10 +27,11 @@ const TYPE_FILTERS = [["ALL", "全部"], ["DURABLE", "耐用品"], ["CONSUMABLE"
 
 /** 卡片/采购行共用的小徽标:靠字重和淡色面表达状态,不额外画重边框。 */
 function TagBadge({ tone, children }: { tone: "warning" | "danger" | "muted"; children: React.ReactNode }) {
+  // 文字用 -strong 那一档:原色压在 14~16% 的混色底上只有 4.4:1,axe 实测不达 AA。
   const palette = tone === "danger"
-    ? { background: "color-mix(in srgb, var(--danger) 14%, var(--surface-solid))", color: "var(--danger)" }
+    ? { background: "color-mix(in srgb, var(--danger) 14%, var(--surface-solid))", color: "var(--danger-strong)" }
     : tone === "warning"
-      ? { background: "color-mix(in srgb, var(--warning) 16%, var(--surface-solid))", color: "var(--warning)" }
+      ? { background: "color-mix(in srgb, var(--warning) 16%, var(--surface-solid))", color: "var(--warning-strong)" }
       : { background: "var(--surface-soft)", color: "var(--muted)" };
   return <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-bold" style={palette}>{children}</span>;
 }
@@ -128,7 +129,7 @@ export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, lo
   const typeChips = TYPE_FILTERS.map(([id, label]) => <Chip key={id} active={filter === id} onClick={() => setFilter(id)}>{label}</Chip>);
   // 一键筛出该放冰箱的物品;数量来自后台规则引擎写入的 storage。
   const coldCount = allItems.filter((item) => item.storage === "COLD" || item.storage === "COLD_AFTER_OPEN").length;
-  const coldChip = coldCount > 0 ? <Chip active={coldOnly} onClick={() => setColdOnly(!coldOnly)} ariaLabel={`只看需冷藏的物品,共 ${coldCount} 件`}>需冷藏 {coldCount}</Chip> : null;
+  const coldChip = coldCount > 0 ? <Chip active={coldOnly} onClick={() => setColdOnly(!coldOnly)} ariaLabel={`需冷藏 ${coldCount},只看需冷藏的物品`}>需冷藏 {coldCount}</Chip> : null;
   const categoryButtons = categoryOptions.map((category) => {
     const count = category === "ALL" ? allItems.length : category === "MEDICINE" ? allItems.filter((item) => isMedicineCategory(item.category)).length : allItems.filter((item) => item.category === category).length;
     return <button key={category} type="button" className="browse-rail-item" data-active={categoryFilter === category} onClick={() => setCategoryFilter(category)}><span>{category === "ALL" ? "全部分类" : category === "MEDICINE" ? "医药(按用途)" : isMedicineCategory(category) ? medicineCategoryLabel(category) : category}</span><span className="browse-rail-count">{count}</span></button>;
@@ -296,7 +297,7 @@ export function ItemCard({ item, onEdit, onOpenDetail, onImageUpload, onDuplicat
                 className="flex min-h-11 shrink-0 items-center rounded-full px-2 text-[10px] font-bold transition-transform active:scale-95 sm:min-h-0 sm:px-1.5 sm:py-0.5"
                 style={{ background: "var(--warning-soft)", color: "var(--warning)" }}
                 title="物品信息改过,点这里让 AI 重新看一遍"
-                aria-label={`重新分析「${item.name}」`}
+                aria-label={`建议重新分析「${item.name}」`}
               >
                 建议重新分析
               </button>

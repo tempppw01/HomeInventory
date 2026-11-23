@@ -188,7 +188,7 @@ export function AuditView({ items, locations, onRefresh, onToast }: { items: Ite
       <Panel
         title="盘点总览"
         description={history[0] ? `最近盘点:${new Date(history[0].at).toLocaleDateString("zh-CN")} · ${history[0].confirmed}/${history[0].total} 件 · ${history[0].locationName}` : "第一次盘点?先扫一个二维码试试。"}
-        actions={<><button onClick={exportAudit} className="inline-flex min-h-11 items-center px-2 text-xs font-bold" style={{ color: "var(--primary)" }} aria-label="导出盘点结果">导出结果</button><button onClick={restart} className="inline-flex min-h-11 items-center px-2 text-xs font-bold muted transition-colors hover:text-[var(--foreground)] sm:min-h-10">重新开始</button></>}
+        actions={<><button onClick={exportAudit} className="inline-flex min-h-11 items-center px-2 text-xs font-bold" style={{ color: "var(--primary)" }}>导出结果</button><button onClick={restart} className="inline-flex min-h-11 items-center px-2 text-xs font-bold muted transition-colors hover:text-[var(--foreground)] sm:min-h-10">重新开始</button></>}
       >
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
           {/* 「进度 X / Y」必须是一段完整文本(验收套件按文案断言,innerText/textContent 都要能命中),
