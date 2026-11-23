@@ -67,13 +67,19 @@ export async function dismissBlockingDialogs(page) {
     }
     // 连续两次确认「确实没有弹层了」再返回:这两个弹层是异步出现的,
     // 清完就立刻返回的话,正好落在「清完 → 它又弹出来」的缝里,
-    // 下一个动作就会被遮罩挡住(实测让两套检查在不同轮次假失败过)。
+    // 下一个动作就会被遮罩挡住(实测让多套检查在不同轮次假失败过)。
     await page.waitForTimeout(400);
     const stillClear = (await page.locator('[role="dialog"]:visible').count()) === 0;
     if (stillClear) {
       await page.waitForTimeout(150);
-      if ((await page.locator('[role="dialog"]:visible').count()) === 0) return;
+      if ((await page.locator('[role="dialog"]:visible').count()) === 0) return [];
     }
     continue;
   }
+  // 清不掉也要**说出来**:否则失败会落在下游某个无辜的点击上,只报「点了没反应」
+  const leftover = await page.evaluate(() => Array.from(document.querySelectorAll('[role="dialog"]'))
+    .filter((node) => node.getBoundingClientRect().height > 0)
+    .map((node) => node.getAttribute("aria-label") || "(无名弹层)"));
+  if (leftover.length) console.log(`      ⚠ 仍然有浮层没清掉:${leftover.join("、")} —— 后面的点击可能被它们挡住`);
+  return leftover;
 }
