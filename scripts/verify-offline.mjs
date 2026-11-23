@@ -45,14 +45,16 @@ const swState = async () => page.evaluate(async () => {
 });
 
 let state = await swState();
-if (state.registered && !state.controlled) {
-  // 注册发生在首屏空闲之后;再刷一次让它在本次会话里接管页面
+// 注册发生在首屏空闲之后,接管还要等它 active。只刷一次不够稳 ——
+// CI 冷缓存时实测漏过一次,断网导航就落到了通用错误页,报出来却是「说明页没解释原因」。
+for (let attempt = 0; attempt < 5 && !state.controlled; attempt += 1) {
+  await page.evaluate(() => ("serviceWorker" in navigator ? navigator.serviceWorker.ready.then(() => true).catch(() => false) : false));
   await page.reload();
-  await page.waitForTimeout(2600);
+  await page.waitForTimeout(2000);
   state = await swState();
 }
 check("注册了 Service Worker", Boolean(state.registered), JSON.stringify(state));
-check("页面已被 Service Worker 接管", Boolean(state.controlled), JSON.stringify(state));
+check("页面已被 Service Worker 接管", Boolean(state.controlled), `${JSON.stringify(state)} —— 没接管的话,下面断网导航会落到通用错误页,那两条断言不可信`);
 
 // 记下一件在线时看得见的物品,断网后要确认它**不会**出现
 const itemName = await page.evaluate(() => {
