@@ -41,6 +41,19 @@ const SKIP_LABEL = /退出|登出|注销|关闭|取消|返回|稍后|不再提�
  * 不算「界面把用户引到了墙上」。
  */
 const SELF_SERVICE = ["/api/auth/password", "/api/auth/recovery", "/api/auth/logout"];
+/**
+ * AI 接口:只读账号**刻意**可以用(见 src/proxy.ts 的放行清单),所以它们出现在这里
+ * 不算「写入口没收干净」。而它们返回 400 的原因通常与权限无关 ——
+ * CI 里没配 AI Key,点一下「发送问题」就是 400;本机配了就是 200。
+ * 判失败的口径因此分成两层(见 classify):
+ *   · 401 / 403 —— 权限问题,**任何路径**都不许出现
+ *   · 其它 4xx —— 只有非 AI 路径才算「界面把只读引到了写路径上」
+ * 这样「AI 没配 Key」不会把检查染色,而 AI 接口真出权限问题照样红。
+ */
+const AI_PATH_PREFIX = "/api/ai/";
+
+const isPermission = (entry) => / (401|403)$/.test(entry);
+const isAiPath = (entry) => entry.includes(AI_PATH_PREFIX);
 
 const results = [];
 const check = (name, ok, detail = "") => {
@@ -202,7 +215,14 @@ const exercise = async (scope, depth, budget) => {
     await clickAt(point);
     await page.waitForTimeout(620);
     const bad = await readProbe();
-    if (bad.bad.length) failures.push({ where: scope === "page" ? "页面" : "浮层", label: point.label, bad: bad.bad });
+    if (bad.bad.length) {
+      // 权限类 4xx:任何路径都算失败。
+      // AI 路径的其它 4xx:只记一笔(AI 未配置就是这么表现的),不当成产品缺陷。
+      const failuresHere = bad.bad.filter((entry) => isPermission(entry) || !isAiPath(entry));
+      const aiNotesHere = bad.bad.filter((entry) => !isPermission(entry) && isAiPath(entry));
+      if (failuresHere.length) failures.push({ where: scope === "page" ? "页面" : "浮层", label: point.label, bad: failuresHere });
+      aiNotes.push(...aiNotesHere.map((entry) => `${point.label} → ${entry}`));
+    }
 
     if (depth < MAX_DEPTH) {
       const popup = await openPopupSelector();
@@ -276,6 +296,8 @@ if (viewerPass.ok) {
 }
 
 const allFindings = [];
+/** AI 路径上「与权限无关」的 4xx(通常就是 CI 里没配 AI Key),最后统一打印,不判失败 */
+const aiNotes = [];
 if (viewerPass.ok) {
   for (const route of [...READONLY_ROUTES, ...detailRoutes]) {
     await gotoRoute(route);
@@ -431,6 +453,12 @@ if (allFindings.some((entry) => entry.failures.length)) {
   for (const entry of allFindings) {
     for (const failure of entry.failures) console.log(`  ${entry.route} → ${failure.where}「${failure.label}」${failure.bad.join(" / ")}`);
   }
+}
+
+// AI 接口的 4xx 单独说明:这类多半是「这台机器没配 AI」,不是权限问题
+if (aiNotes.length) {
+  console.log(`\nAI 接口的 4xx(${aiNotes.length} 条,已确认不是权限问题,仅记录):`);
+  for (const note of [...new Set(aiNotes)].slice(0, 5)) console.log(`  ${note}`);
 }
 
 const failed = results.filter((entry) => !entry.ok);
