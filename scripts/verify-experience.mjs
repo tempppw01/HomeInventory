@@ -62,10 +62,16 @@ const login = async (page, reducedMotion = "no-preference") => {
       // 只看桌面那个的话,移动端这一段永远等不到,登录「看起来失败」其实早就成功了。
       entered = await page.waitForFunction(() => Boolean(document.querySelector('nav[aria-label="移动端主导航"]') || document.querySelector('[aria-label="概览"]')), null, { timeout: 15000 }).then(() => true).catch(() => false);
       if (entered) break;
-      const limited = await page.evaluate(() => /频繁|稍后再试|too many/i.test(document.body.innerText || ""));
-      if (!limited) break;
-      console.log(`      登录被限速,等 21 秒后重试(${attempt + 1}/4)`);
-      await page.waitForTimeout(21000);
+      // 服务端限速正文是「尝试次数过多,请 N 秒后再试」—— 按它说的秒数等够。
+      // 认不出文案也照样重试:整链里登录失败几乎都是限速,别的失败重试一次也无害。
+      const signal = await page.evaluate(() => {
+        const text = document.body.innerText || "";
+        const match = /请\s*(\d+)\s*秒后再试/.exec(text);
+        return { waitSeconds: match ? Number(match[1]) : 0, limited: /过多|频繁|稍后再试|too many/i.test(text) };
+      });
+      const wait = signal.waitSeconds > 0 ? signal.waitSeconds : 21;
+      console.log(`      登录没成功(${signal.limited ? "被限速" : "原因未识别"}),等 ${wait + 1} 秒后重试(${attempt + 1}/4)`);
+      await page.waitForTimeout((wait + 1) * 1000);
       await page.goto(BASE, { waitUntil: "domcontentloaded" });
       await page.waitForSelector("#auth-username", { timeout: 15000 }).catch(() => {});
     }

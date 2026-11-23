@@ -123,7 +123,80 @@ if (layout && css.labelWidthMm) {
 // 用 4 张标签来验:二维码流程只带 1 件物品,首行永远只有 1 个标签,
 // 那样的断言测不出「每行几列」(第一次就是这么写错的)。
 {
-  await page.emulateMedia({ media: "screen" });
+  // ---------- 标签上的内容:长名字必须读得出来 ----------
+// 建一件名字很长的探针物品(49 字),用真实接口创建,检查完永久删除。
+const LONG_NAME = "打印探针 未漂白厨房用纸 抽取式 三层加厚 整箱十二包 家庭囤货装 母婴可用 超柔亲肤";
+const created = await page.evaluate(async (name) => {
+  const response = await fetch("/api/items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, category: "日用", type: "DURABLE", quantity: 1, unit: "个", minQuantity: 0, remainingPercent: 100 }) });
+  const item = await response.json().catch(() => null);
+  return { ok: response.ok, id: item?.id ?? null, status: response.status };
+}, LONG_NAME);
+check("能建出用于打印的探针物品", created.ok && Boolean(created.id), `status=${created.status}`);
+
+if (created.id) {
+  await page.goto(`${BASE}/items/${created.id}`);
+  await page.waitForTimeout(1500);
+  await page.goto(`${BASE}/items`);
+  await page.waitForTimeout(2500);
+  await dismissBlockingDialogs(page);
+  // 用搜索把它挑出来,免得点到别的物品
+  await page.locator('input[type="search"], input[placeholder*="搜索"], input[aria-label*="搜索"]').first().fill("打印探针");
+  await page.waitForTimeout(1000);
+  await page.locator('main button[aria-label="更多操作"]').first().click({ button: "right" });
+  await page.waitForTimeout(700);
+  await page.locator('[role="menuitem"]:has-text("显示二维码")').first().click();
+  await page.waitForTimeout(800);
+  await page.locator('[role="dialog"] button:has-text("打印")').first().click();
+  await page.waitForTimeout(1400);
+
+  const labelContent = await page.evaluate(() => {
+    const label = document.querySelector('.print-label');
+    if (!label) return null;
+    // 标签内是 [二维码块, 名字, 编号, 摘要] 四段;名字是第二段
+    const name = label.children[1];
+    const style = getComputedStyle(name);
+    const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.2;
+    return {
+      nameText: name.textContent.trim(),
+      nameClientH: name.clientHeight,
+      nameScrollH: name.scrollHeight,
+      linesFit: name.clientHeight / lineHeight,
+      lineHeight,
+      labelOverflow: label.scrollHeight - label.clientHeight,
+      labelOverflowX: label.scrollWidth - label.clientWidth,
+      textOverflow: style.textOverflow,
+      lineClamp: style.webkitLineClamp || style.getPropertyValue("-webkit-line-clamp"),
+      whiteSpace: style.whiteSpace,
+    };
+  });
+
+  check("打印工作室里能读到标签上的名字节点", Boolean(labelContent && labelContent.nameText.length > 10), JSON.stringify(labelContent)?.slice(0, 120));
+  if (labelContent) {
+    // 两行:原来只有一行(nowrap + ellipsis),长名字印出来只剩前十个字
+    check("标签上的长名字最多两行、且两行都真的显示出来", labelContent.linesFit >= 1.8, `linesFit=${labelContent.linesFit.toFixed(2)} clientH=${labelContent.nameClientH}`);
+    check("长名字没有把标签撑破", labelContent.labelOverflow <= 1 && labelContent.labelOverflowX <= 1, `溢出 y=${labelContent.labelOverflow} x=${labelContent.labelOverflowX}`);
+    check("超出两行的部分交给行钳(-webkit-line-clamp: 2)处理,渲染出省略号", labelContent.lineClamp === "2" || labelContent.nameScrollH <= labelContent.nameClientH + 1, `lineClamp=${labelContent.lineClamp} scrollH=${labelContent.nameScrollH} clientH=${labelContent.nameClientH}`);
+  }
+
+  // 标签质量:二维码在且够大、编号在(扫不出来时还能靠编号认)
+  const quality = await page.evaluate(() => {
+    const label = document.querySelector('.print-label');
+    const svg = label?.querySelector('svg');
+    const rect = svg?.getBoundingClientRect();
+    const code = Array.from(label?.children || []).map((child) => (child.textContent || '').trim()).find((text) => /^INV-/.test(text));
+    return { qrW: rect ? Math.round(rect.width) : 0, qrH: rect ? Math.round(rect.height) : 0, hasCode: Boolean(code), code: code?.slice(0, 24) ?? null };
+  });
+  check("标签上有二维码,且尺寸够扫(≥80px)", quality.qrW >= 80 && Math.abs(quality.qrW - quality.qrH) <= 2, JSON.stringify(quality));
+  check("标签上印了物品编号(二维码扫不出来时的兜底)", quality.hasCode, JSON.stringify(quality));
+  // 清理:永久删除探针物品
+  const removed = await page.evaluate(async (id) => {
+    const response = await fetch(`/api/items/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ permanent: true }) });
+    return response.ok;
+  }, created.id);
+  check("打印探针物品已清理", removed, "删除失败,可能留下探针数据");
+}
+
+await page.emulateMedia({ media: "screen" });
   await page.keyboard.press("Escape");
   await page.waitForTimeout(700);
   await page.goto(`${BASE}/items`);

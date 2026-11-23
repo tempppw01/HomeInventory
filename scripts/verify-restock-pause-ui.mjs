@@ -35,6 +35,13 @@ const openMenu = async () => {
   await page.goto(`${BASE}/items`);
   await page.waitForTimeout(2600);
   await dismissBlockingDialogs(page);
+  // 先筛成消耗品:这个入口只对消耗品出现,而「第一张卡片」是谁取决于库里的更新时间,
+  // 别的套件建的耐用品一旦排在前面,这里就会拿到一个本来就没有该入口的物品。
+  const consumableFilter = page.getByRole('button', { name: '消耗品', exact: true }).first();
+  if ((await consumableFilter.count()) > 0) {
+    await consumableFilter.click().catch(() => {});
+    await page.waitForTimeout(900);
+  }
   await page.locator('main button[aria-label="更多操作"]').first().click({ button: "right" });
   await page.waitForTimeout(900);
   return page.evaluate(() => Array.from(document.querySelectorAll('[role="menuitem"]')).map((node) => (node.textContent || "").trim()));
@@ -71,6 +78,8 @@ const clickMenu = (text) => page.evaluate((needle) => {
 // ① 菜单里有入口
 {
   const items = await openMenu();
+  const consumableCards = await page.locator('main button[aria-label="更多操作"]').count();
+  check("筛成消耗品后确实有卡片可点(防止空跑)", consumableCards > 0, `卡片数=${consumableCards}`);
   check("卡片菜单里有「暂停补货提醒」入口", items.some((entry) => entry.includes("暂停补货提醒")), `菜单=${items.join("/")}`);
 }
 
