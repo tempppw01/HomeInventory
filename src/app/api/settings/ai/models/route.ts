@@ -4,6 +4,8 @@ import { modelsUrl } from "@/lib/ai";
 import { providerForBaseUrl } from "@/lib/ai-providers";
 import { prisma } from "@/lib/prisma";
 import { aiModelsSchema } from "@/lib/validation";
+import { providerErrorDetail } from "@/lib/ai-error";
+
 
 export const dynamic = "force-dynamic";
 
@@ -13,17 +15,6 @@ function asRecord(value: unknown): JsonRecord | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : null;
 }
 
-function providerErrorDetail(raw: string) {
-  try {
-    const parsed = asRecord(JSON.parse(raw));
-    const error = asRecord(parsed?.error);
-    const detail = error?.message ?? parsed?.message ?? parsed?.error;
-    if (typeof detail === "string") return detail.slice(0, 300);
-  } catch {
-    // Fall back to the raw response below.
-  }
-  return raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300) || "上游接口未提供错误详情";
-}
 
 function modelId(value: unknown) {
   if (typeof value === "string") return value.trim();

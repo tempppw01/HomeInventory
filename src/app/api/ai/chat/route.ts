@@ -6,6 +6,7 @@ import { AiImageError, compressAiImageDataUrl } from "@/lib/ai-image";
 import { localUploadDataUrl } from "@/lib/oss";
 import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rate-limit";
+import { providerFailure } from "@/lib/ai-analyze";
 
 export const runtime = "nodejs";
 
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
     const toAnthropicContent = (message: Message) => [{ type: "text", text: message.content }, ...(message.attachments || []).filter((attachment: Attachment) => attachment.kind === "image" && attachment.dataUrl).map((attachment: Attachment) => attachment.dataUrl!.startsWith("data:") ? ({ type: "image", source: { type: "base64", media_type: attachment.dataUrl!.match(/^data:(image\/[^;]+);/)?.[1] || "image/jpeg", data: attachment.dataUrl!.split(",")[1] || "" } }) : ({ type: "image", source: { type: "url", url: attachment.dataUrl } }))];
     const response = await call(config.protocol === "anthropic" ? { model: config.model, max_tokens: 1000, system, messages: preparedMessages.map((message: Message) => ({ role: message.role, content: toAnthropicContent(message) })) } : { model: config.model, messages: [{ role: "system", content: system }, ...preparedMessages.map((message: Message) => ({ role: message.role, content: toOpenAiContent(message) }))], temperature: 0.2 });
     const raw = await response.text();
-    if (!response.ok) return NextResponse.json({ error: `AI 接口请求失败（${response.status}）` }, { status: 502 });
+    if (!response.ok) return NextResponse.json({ error: providerFailure(response.status, raw, { remoteImages: preparedMessages.some((message) => (message.attachments || []).some((attachment) => attachment.kind === "image" && typeof attachment.dataUrl === "string" && /^https?:\/\//i.test(attachment.dataUrl))) }) }, { status: 502 });
     let parsed: unknown; try { parsed = JSON.parse(raw); } catch { return NextResponse.json({ error: "AI 返回格式不正确" }, { status: 502 }); }
     const root = parsed as Record<string, unknown>;
     const choices = Array.isArray(root.choices) ? root.choices : [];

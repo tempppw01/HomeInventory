@@ -2,6 +2,7 @@
 // 这里只放无副作用的纯逻辑与一次模型调用,不碰 cookies / NextRequest,方便被路由与后台队列共用。
 import { aiFetch, chatCompletionsUrl, type AiConfig } from "@/lib/ai";
 import { localDateString } from "@/lib/local-date";
+import { providerErrorDetail, providerFailure } from "@/lib/ai-error";
 export type JsonRecord = Record<string, unknown>;
 
 export class AiRequestError extends Error {
@@ -57,24 +58,9 @@ export function extractAnalysis(result: unknown) {
   return extractJson(text);
 }
 
-export function providerErrorDetail(raw: string) {
-  try {
-    const parsed = asRecord(JSON.parse(raw));
-    const error = asRecord(parsed?.error);
-    const detail = error?.message ?? parsed?.message ?? parsed?.error;
-    if (typeof detail === "string") return detail.slice(0, 400);
-  } catch {
-    // Fall back to the raw provider response below.
-  }
-  return raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 400) || "上游接口未提供错误详情";
-}
+// 上游报错的解读统一放在 ai-error 里(纯函数、可单测),这里按原样再导出,调用方不用改。
+export { providerErrorDetail, providerFailure } from "@/lib/ai-error";
 
-export function providerFailure(status: number, raw: string) {
-  const detail = providerErrorDetail(raw);
-  if (status === 401) return `API Key 无效或已过期，请在设置中重新填写后再试。上游返回：${detail}`;
-  if (status === 403) return `API Key 没有访问当前模型的权限。上游返回：${detail}`;
-  return `AI 接口请求失败（${status}）：${detail}`;
-}
 
 export function connectionError(error: unknown, baseUrl: string) {
   const name = error instanceof Error ? error.name : "";
