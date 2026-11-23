@@ -482,6 +482,11 @@ jobs:
           PROBE_USER: leadcheck
           PROBE_PASS: Lead#2026
         run: node scripts/verify-empty-states.mjs
+      - name: 首次使用检查(欢迎引导的三个入口 / 焦点陷阱 / 看过之后不再打扰)
+        env:
+          PROBE_USER: leadcheck
+          PROBE_PASS: Lead#2026
+        run: node scripts/verify-first-run.mjs
       - name: 离线行为检查(Service Worker)
         env:
           PROBE_USER: leadcheck
