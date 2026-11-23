@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
-import { localDateString } from "@/lib/local-date";
+import { localDateString } from "./lib/local-date";
 
 const prisma = new PrismaClient();
 

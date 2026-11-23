@@ -5,6 +5,46 @@
 
 ---
 
+## [v0.1.42] - 2026-11-24
+
+这一版修的是**上一版自己引入的回归**:v0.1.41 让镜像起不来,`docker-publish` 的冒烟测试红了两跑,
+所以 v0.1.41 **没有发布**(tag 在,但没有对应的 Release)。无数据库结构变更。
+
+### 事故经过
+
+v0.1.41 我给 `scripts/backfill-item-codes.ts` 加了 `import { localDateString } from "@/lib/local-date"`
+(为了用本地日,见上一版)。本地一切正常 —— 但 **运行镜像里没有 `src/`,也没有 `tsconfig.json`**:
+Dockerfile 的 runner 阶段只复制 `scripts/`、`prisma/`、`public/` 与 `.next`。
+
+而容器启动时 `docker/entrypoint.sh` 会跑这个脚本(`generate → init-sqlite → seed → backfill → normalize → 启动`),
+于是别名解析失败 → 脚本抛错 → `set -eu` 让容器直接退出 → `/api/health` 永远不通 →
+`Smoke test published image` 报 `FAIL 健康检查可用`,release 步骤被跳过。
+
+### 修复
+
+- 新增 `scripts/lib/local-date.ts`:脚本侧的 `localDateString`。理由写在文件里 ——
+  **scripts/ 是跑在最小镜像里的,不能依赖 `src/` 与 tsconfig 的 paths**;
+- `backfill-item-codes.ts` 改用相对导入 `./lib/local-date`;
+- 新增单测 `scripts/unit/script-local-date.test.mjs`(3 项):
+  两份实现喂同一批时刻(含凌晨、闰日、跨年)必须**逐个一致**;
+  以及一条静态检查 —— **`scripts/**/*.ts` 里不许出现 `from "@/..."`**,正是这次的坑。
+
+### 验证(在模拟的镜像条件下)
+
+用一个空 tsconfig(等于没有 paths)跑脚本,复现容器里的条件:
+
+- 新写法(相对导入)→ `Item codes ready (0 backfilled).` ✓
+- 旧写法(`@/lib/local-date`)→ **`Error: Cannot find module '@/lib/local-date'`** ✗ —— 与容器里的失败一致。
+
+迁移套件 12/12 仍全绿;单测新增 3 项。
+
+### 教训(写下来免得再犯)
+
+「本地全绿」不等于「镜像能用」:容器是个**只带必要文件的最小环境**,而启动脚本正是跑在里面。
+这条现在有了静态守卫(不许 `@/` 别名),下次改 scripts/ 时会立刻被拦住。
+
+---
+
 ## [v0.1.41] - 2026-11-24
 
 这一轮查的是**两个只在升级路径上跑、却会改写用户数据的迁移脚本** —— `npm run db:backfill`
