@@ -105,7 +105,10 @@ export default async function ReportPage() {
   );
 
   return (
-    <div className="mx-auto max-w-[820px] px-4 py-8 print:p-0" data-bottom-nav-space="none" style={{ "--bottom-nav-space": "0px" } as CSSProperties}>
+    // 这是全站唯一用 div 当根元素的页面 —— 其它页面都由 (app) 的 PageShell 提供 <main>。
+    // 缺了 main 地标,读屏的「跳到主内容」里就没有这个页面;
+    // 也让一批「按 main 取范围」的检查在这里空跑(什么都测不到却全绿)。
+    <main className="mx-auto max-w-[820px] px-4 py-8 print:p-0" data-bottom-nav-space="none" style={{ "--bottom-nav-space": "0px" } as CSSProperties}>
       <div className="mb-4 flex flex-wrap items-center gap-2 print:hidden">
         <Link href="/" className="btn-ghost inline-flex min-h-11 items-center gap-2 px-3 text-sm"><Archive size={16} />归物</Link>
         <ReportPrintButton />
@@ -163,6 +166,6 @@ export default async function ReportPage() {
           <Sparkles size={12} />数据来自归物 HomeInventory,按当前库存实时汇总
         </footer>
       </article>
-    </div>
+    </main>
   );
 }

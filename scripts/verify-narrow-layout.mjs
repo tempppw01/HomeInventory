@@ -87,8 +87,9 @@ for (let i = 0; i < 5; i += 1) {
 
 // ============ 1. 各页面在 320px 下不横向滚动 ============
 {
-  const routes = ["/", "/items", "/locations", "/tasks", "/audit", "/settings"];
+  const routes = ["/", "/items", "/locations", "/tasks", "/audit", "/settings", "/report"];
   const offenders = [];
+  const missingMain = [];
   for (const route of routes) {
     await page.goto(BASE + route);
     await page.waitForTimeout(2200);
@@ -96,10 +97,15 @@ for (let i = 0; i < 5; i += 1) {
       docWidth: document.documentElement.clientWidth,
       scrollWidth: document.documentElement.scrollWidth,
       boundary: (document.querySelector("main")?.innerText || "").includes("页面没能加载出来"),
+      hasMain: Boolean(document.querySelector("main")),
     }));
     if (state.scrollWidth > state.docWidth + 2 || state.boundary) offenders.push(`${route}(scroll=${state.scrollWidth}/${state.docWidth},boundary=${state.boundary})`);
+    if (!state.hasMain) missingMain.push(route);
   }
   check("窄屏下各页面无横向滚动、无错误边界", offenders.length === 0, offenders.join(" | "));
+  // 页面没有 main 地标时,所有「按 main 取范围」的检查都会空跑(什么都没测到却全绿)——
+  // /report 就是这样一路绿了很久:它是全站唯一用 div 当根元素的页面。
+  check("每个页面都有 main 地标", missingMain.length === 0, `缺 main:${missingMain.join(", ")}`);
 // 窄屏物品页的搜索框:此前它和「空间 / 排序 / 导出 / 选择」挤在同一行,
 // 在 390px 上被压到只剩「搜」一个字,占位提示完全看不见 —— 而搜索是主要操作。
 // 现在它独占一行,这里量一下真实可见宽度。
@@ -230,7 +236,7 @@ for (let i = 0; i < 5; i += 1) {
   // 「/items/__detail__」是占位:物品详情页的地址带物品 id,运行时再解析成真实链接。
   // 它此前不在这条扫描里 —— 而详情页刚新增了「上传照片」入口(v0.1.16),
   // 新控件必须被同一条触摸目标底线管住。
-  const routes = ["/", "/items", "/locations", "/tasks", "/audit", "/settings", "/items/__detail__"];
+  const routes = ["/", "/items", "/locations", "/tasks", "/audit", "/settings", "/report", "/items/__detail__"];
   const offenders = [];
   const scanned = [];
   for (const route of routes) {
