@@ -96,6 +96,8 @@ function useAppState() {
   // mutation still refetches explicitly through refresh().
   const snapshotMaxAgeMs = 15_000;
   const lastLoadedAt = useRef(0);
+  // 首屏/刷新失败的原因。有它在,界面才能给出「为什么读不到、该怎么办」,而不是崩成通用错误页。
+  const [loadError, setLoadError] = useState<string | null>(null);
   const pendingLoad = useRef<Promise<void> | null>(null);
 
   const refresh = useCallback(async () => {
@@ -103,8 +105,11 @@ function useAppState() {
       const result = await request<DashboardData>("/api/dashboard");
       lastLoadedAt.current = Date.now();
       setData(result);
+      setLoadError(null);
     } catch (error) {
-      setToast(error instanceof Error ? error.message : "载入失败");
+      const message = error instanceof Error ? error.message : "载入失败";
+      setLoadError(message);
+      setToast(message);
     } finally {
       setLoading(false);
     }
@@ -126,7 +131,8 @@ function useAppState() {
     let active = true;
     request<DashboardData>("/api/dashboard")
       .then((result) => { if (active) { lastLoadedAt.current = Date.now(); setData(result); } })
-      .catch((error) => { if (active) setToast(error instanceof Error ? error.message : "载入失败"); })
+      .then((result) => { if (active) setLoadError(null); return result; })
+      .catch((error) => { if (active) { const message = error instanceof Error ? error.message : "载入失败"; setLoadError(message); setToast(message); } })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
@@ -458,6 +464,8 @@ function useAppState() {
 
   return {
     data, loading, refresh, ensureFresh, aiAvailable: data?.aiAvailable ?? false,
+    // 加载失败的原因(界面据此给出可照做的说明)
+    loadError, setLoading,
     // 临期窗口:物品卡片与提醒中心要用同一个值(此前卡片硬编码 30 天)
     expiryReminderDays,
     setToastAction,

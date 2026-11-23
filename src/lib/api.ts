@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { canAdmin, canWrite, requireUser } from "@/lib/account-auth";
+import { SCHEMA_DRIFT_HINT, isSchemaDriftError } from "@/lib/schema-drift";
 
 export async function requireWritableUser() {
   const user = await requireUser();
@@ -42,6 +43,11 @@ export function apiError(error: unknown) {
     if (code === "P2002" || code === "P2003" || code === "P2014") return 409;
     return null;
   })();
+  // 库结构比应用旧(升级时忘了同步):不是临时故障,必须说清怎么解决,别让用户反复刷新。
+  if (isSchemaDriftError(error)) {
+    console.error("[schema] 数据库结构与应用不一致:", error instanceof Error ? error.message : error);
+    return NextResponse.json({ error: SCHEMA_DRIFT_HINT, code: "SCHEMA_OUTDATED" }, { status: 503 });
+  }
   if (knownStatus === null) console.error(error);
   if (error instanceof Error && error.message === "UNAUTHORIZED") {
     return NextResponse.json({ error: "请先登录" }, { status: 401 });

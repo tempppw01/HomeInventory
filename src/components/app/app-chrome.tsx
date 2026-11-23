@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
-import { Bell, Bot, Info, Monitor, Moon, PanelLeftClose, Plus, Settings, Sun, Trash2 } from "lucide-react";
+import { Bell, Bot, Info, Monitor, Moon, PanelLeftClose, Plus, RefreshCw, Settings, Sun, Trash2 } from "lucide-react";
 import { PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
 import type { Item } from "@/types";
 
@@ -38,7 +38,7 @@ import { ItemModal } from "@/components/views/item-modal";
 export function AppChrome({ children }: { children?: React.ReactNode }) {
   const app = useApp();
   const {
-    data, loading, refresh, view, openView, beginNavigation, search, setSearch, locationFilter, changeLocationFilter,
+    data, loading, setLoading, refresh, loadError, view, openView, beginNavigation, search, setSearch, locationFilter, changeLocationFilter,
     typeFilter, categoryFilter, changeTypeFilter, changeCategoryFilter, filteredItems,
     readOnly, role, aiAvailable, lowStock, pendingShopping, tasks, expiring, expired, totalValue, now,
     theme, cycleTheme, setThemeMode, density, motionMode, setDensity, setMotionMode,
@@ -140,7 +140,9 @@ export function AppChrome({ children }: { children?: React.ReactNode }) {
           <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: .22 }}>
             {children}
             {readOnly && <div className="mb-4 rounded-2xl px-3 py-2 text-xs font-bold" style={{ background: "var(--surface-soft)", color: "var(--muted)" }}>只读账号:可以查看和搜索,不能新增或修改数据。</div>}
-            {loading ? <LoadingView /> : view === "dashboard" ? (
+            {loading ? <LoadingView /> : !data ? (
+              <LoadFailedView message={loadError} onRetry={() => { setLoading(true); void refresh(); }} />
+            ) : view === "dashboard" ? (
               <DashboardView data={{ ...data!, items: data!.items.filter((item) => item.quantity > 0) }} now={now} lowStock={lowStock} expiring={expiring} expired={expired} pending={pendingShopping} totalValue={totalValue} onNavigate={openView} onEdit={openEdit} onOpenDetail={openDetail} onImageUpload={uploadItemImage} onDuplicate={duplicateItem} onConsume={consume} onDelete={removeItem} onAddRestock={addRestockSuggestion} onQr={setQrItem} onAi={setAiItem} onAlerts={() => setModal("notifications")} onCreate={() => setModal("item")} onMerge={mergeItems} aiAvailable={aiAvailable} onOpenCategory={(category) => { changeCategoryFilter(category === "医药" ? "MEDICINE" : category); openView("items"); }} />
             ) : view === "items" ? (
               <ItemsView locationFilter={locationFilter} onChangeLocationFilter={changeLocationFilter} allItems={data!.items.filter((item) => item.quantity > 0)} locations={data!.locations} items={filteredItems} shopping={data!.shopping} search={search} setSearch={setSearch} filter={typeFilter} setFilter={changeTypeFilter} categoryFilter={categoryFilter} setCategoryFilter={changeCategoryFilter} onEdit={openEdit} onOpenDetail={openDetail} onImageUpload={uploadItemImage} onDuplicate={duplicateItem} onConsume={consume} onRemainingChange={updateRemaining} onPauseRestock={pauseRestock} onDelete={removeItem} onQr={setQrItem} onAi={setAiItem} onPrint={setPrintItems} onToast={setToast} onCopy={(item) => copyText(item.itemCode || item.id, "物品编号已复制")} onToggleShopping={toggleShopping} onFavoriteShopping={toggleFavoriteShopping} onAddShopping={() => setModal("shopping")} onCreate={() => setModal("item")} onToastWithUndo={(message, undo) => { setToast(message); setToastAction({ label: "撤销", onClick: async () => { try { await undo(); setToastAction(null); setToast("已恢复"); await refresh(); } catch (error) { setToast(error instanceof Error ? error.message : "撤销失败"); } } }); }} onBatchAi={() => { if (!aiAvailable) { setToast(role === "ADMIN" ? "AI 还没配置,先到设置里填好 API Key 再批量识别" : "AI 还没配置,请联系管理员在设置里配置"); if (role === "ADMIN") openView("settings"); return; } setModal("batch-ai"); }} onDeleteShopping={removeShopping} />
@@ -269,3 +271,24 @@ function AssistantLauncher({ onOpen }: { onOpen: () => void }) {
   return <button onClick={() => { if (suppressClickRef.current) { suppressClickRef.current = false; return; } onOpen(); }} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} className={`assistant-fab fixed bottom-[calc(76px+env(safe-area-inset-bottom))] right-4 z-[90] grid size-12 touch-none select-none place-items-center rounded-full text-[var(--on-primary)] shadow-xl transition-transform duration-200 hover:scale-105 md:bottom-5 md:right-5 md:size-14 ${dodging ? "pointer-events-none translate-x-[130%] opacity-0" : "translate-x-0 opacity-100"}`} style={mobileStyle} aria-label="打开归物助手" title="归物助手:可在手机上沿屏幕边缘拖动"><Bot size={21} /></button>;
 }
 
+
+/**
+ * 首屏数据读不到时的界面。
+ *
+ * 此前这里会**崩成通用错误页**:provider 只是弹了 toast,而视图仍用 data! 渲染 → 渲染期抛错。
+ * 结果是任何一次加载失败都只看到「页面没能加载出来 / 可以重试一次」,
+ * 连「库结构比应用旧,请先运行 npm run db:push」这种照做就好的说明都被顶掉。
+ */
+function LoadFailedView({ message, onRetry }: { message: string | null; onRetry: () => void }) {
+  return (
+    <div className="surface rounded-[var(--radius-card)] p-6 text-center sm:p-8" role="alert" data-load-failed="1">
+      <h2 className="mb-0 text-lg font-black">没能读到家里的数据</h2>
+      <p className="mx-auto mb-0 mt-2 max-w-[46ch] text-sm leading-6" data-error-source={message ? "server" : undefined}>
+        {message ?? "可能是网络或服务暂时不可用。数据没有被改动。"}
+      </p>
+      <button type="button" onClick={onRetry} className="btn-primary mx-auto mt-5 flex min-h-11 items-center justify-center gap-2 px-5">
+        <RefreshCw size={16} /> 重新加载
+      </button>
+    </div>
+  );
+}

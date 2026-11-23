@@ -46,6 +46,7 @@ const DEV_ONLY = new Map([
   ["READONLY_PAGE_BUDGET", "只读界面检查每次点多少个按钮(本机调试用)"],
   ["READONLY_DIALOG_BUDGET", "只读界面检查每个浮层里点多少个按钮(本机调试用)"],
   ["TZ", "单测固定时区用(UTC 日 vs 本地日的用例必须与机器时区解耦)"],
+  ["BASE_OLD_URL", "升级失败体验检查里「结构旧」实例的地址(脚本专用)"],
   ["ADMIN_PASSWORD", "仅初始化脚本用"],
 ]);
 

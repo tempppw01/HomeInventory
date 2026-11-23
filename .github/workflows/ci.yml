@@ -576,6 +576,34 @@ jobs:
           PROBE_USER: leadcheck
           PROBE_PASS: Lead#2026
         run: node scripts/verify-first-run-journey.mjs
+      # 「库结构比应用旧」的失败体验:自建部署最常见的升级失误 ——
+      # 换了镜像却没同步库结构。这里由 ci.db 复制出 old.db 并删掉两列来模拟。
+      - name: 准备「结构比应用旧」的库(复制 ci.db 后删两列)
+        run: |
+          cp data/ci.db data/old.db
+          node -e "
+            const { DatabaseSync } = require('node:sqlite');
+            const db = new DatabaseSync('data/old.db');
+            for (const col of ['consumeRate', 'storage']) db.exec('ALTER TABLE Item DROP COLUMN ' + col);
+            db.close();
+            console.log('old.db 已就绪');
+          "
+      - name: 启动「结构旧」实例(3004)
+        run: |
+          DATABASE_URL="file:../data/old.db" PORT=3004 node node_modules/next/dist/bin/next start > server-old.log 2>&1 &
+          for i in $(seq 1 30); do
+            # 注意:这个实例的 /api/health 本来就该回 503,不能用 curl -fsS 等
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 http://127.0.0.1:3004/api/health || true)
+            if [ "$code" = "503" ] || [ "$code" = "200" ]; then echo "ready ($code)"; break; fi
+            sleep 2
+          done
+      - name: 升级失败体验检查(结构比应用旧:health 如实、接口给命令、页面不崩)
+        env:
+          BASE_URL: http://127.0.0.1:3001
+          BASE_OLD_URL: http://127.0.0.1:3004
+          PROBE_USER: leadcheck
+          PROBE_PASS: Lead#2026
+        run: node scripts/verify-schema-outdated.mjs
       - name: 失败时打印服务日志
         if: failure()
         run: tail -100 server.log

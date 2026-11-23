@@ -232,7 +232,17 @@ export async function request<T>(url: string, options?: RequestInit): Promise<T>
       const response = await fetch(url, { ...options, headers: { "Content-Type": "application/json", ...options?.headers } });
       const text = await response.text();
       const result = text ? JSON.parse(text) : {};
-      if (!response.ok) throw new Error(result.error || "操作失败");
+      if (!response.ok) {
+        // 标记「这是服务端给的说明」:错误页要原样呈现它(比如库结构旧时要照做的命令),
+        // 而 JS 自身的异常仍然走那套「稍后重试」的安抚文案。
+        const failure = new Error(result.error || "操作失败");
+        Object.assign(failure, {
+          fromServer: true,
+          status: response.status,
+          code: typeof result.code === "string" ? result.code : undefined,
+        });
+        throw failure;
+      }
       return result as T;
     } catch (error) {
       if (attempt === 0 && retryable) continue;
