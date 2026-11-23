@@ -65,6 +65,15 @@ export async function dismissBlockingDialogs(page) {
       await page.waitForTimeout(400);
       continue;
     }
-    return;
+    // 连续两次确认「确实没有弹层了」再返回:这两个弹层是异步出现的,
+    // 清完就立刻返回的话,正好落在「清完 → 它又弹出来」的缝里,
+    // 下一个动作就会被遮罩挡住(实测让两套检查在不同轮次假失败过)。
+    await page.waitForTimeout(400);
+    const stillClear = (await page.locator('[role="dialog"]:visible').count()) === 0;
+    if (stillClear) {
+      await page.waitForTimeout(150);
+      if ((await page.locator('[role="dialog"]:visible').count()) === 0) return;
+    }
+    continue;
   }
 }

@@ -8,6 +8,7 @@ import { normalizeItemQuantity } from "@/lib/item-metrics";
 import { itemInsight } from "@/lib/item-insight";
 import { enqueueItemAnalysis } from "@/lib/ai-queue";
 import { ensureRestockSuggestion } from "@/lib/restock-suggestion";
+import { compressedJson } from "@/lib/next-json";
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,8 +23,12 @@ export async function GET(request: NextRequest) {
       include: { location: true },
       orderBy: { updatedAt: "desc" },
     });
+    // 导出分支**一个字节都不动**:那是备份用的完整转储,格式就是契约
     if (exportData) return new NextResponse(JSON.stringify(items, null, 2), { headers: { "Content-Type": "application/json", "Content-Disposition": "attachment; filename=home-inventory-items.json" } });
-    return NextResponse.json(items);
+    // 列表响应只需要位置的名字:界面读 item.location 的地方全都在读 .name,
+    // 而整份位置实体(icon/color/parentId/时间戳)在**每一行**里重复出现,
+    // 1200 件物品时占了整份载荷的约 1/5。完整字段请走 /api/dashboard 的 locations。
+    return compressedJson(items.map(({ location, ...rest }) => ({ ...rest, location: location ? { id: location.id, name: location.name } : null })), request);
   } catch (error) {
     return apiError(error);
   }

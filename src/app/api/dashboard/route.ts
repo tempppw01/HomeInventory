@@ -1,20 +1,26 @@
-import { NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/api";
 import { requireUser } from "@/lib/account-auth";
 import { getAiConfig } from "@/lib/ai";
 import { monthlyBuckets } from "@/lib/chart";
+import { compressedJson } from "@/lib/next-json";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     await requireUser();
     const now = new Date();
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const sixMonthStart = new Date(now.getFullYear(), now.getMonth() - 5, 1);
     const [items, locations, shopping, priceRecords, consumptionLogs, preferences, tasks] = await Promise.all([
-      prisma.item.findMany({ where: { deletedAt: null }, include: { location: true }, orderBy: { updatedAt: "desc" } }),
+      // 物品只带位置的 id 与名字:界面读 item.location 的地方**全都是读 .name**
+      // (物品卡片、搜索结果、盘点清单、AI 队列),而 `include: { location: true }` 会把
+      // icon/color/thumbnailUrl/parentId/createdAt/updatedAt 一起塞进**每一行** ——
+      // 1200 件物品时那 197 字节/行里,真正被用到的只有名字。整份 location 实体在下面的
+      // `locations` 里本来就有(7 条 1.6 KB),需要完整字段的界面从那里取。
+      prisma.item.findMany({ where: { deletedAt: null }, include: { location: { select: { id: true, name: true } } }, orderBy: { updatedAt: "desc" } }),
       prisma.location.findMany({ include: { parent: { select: { id: true, name: true } }, _count: { select: { items: true } } }, orderBy: { createdAt: "asc" } }),
       prisma.shoppingItem.findMany({ orderBy: [{ status: "asc" }, { priority: "desc" }, { createdAt: "desc" }] }),
       prisma.priceRecord.findMany({ where: { purchasedAt: { gte: sixMonthStart } }, orderBy: { purchasedAt: "desc" } }),
@@ -43,7 +49,9 @@ export async function GET() {
       const previous = consumption.get(entry.itemName);
       consumption.set(entry.itemName, { itemName: entry.itemName, count: (previous?.count || 0) + 1, lastUsedAt: previous?.lastUsedAt || entry.createdAt.toISOString() });
     });
-    return NextResponse.json({
+    // 这份响应带着整份库存(1200 件时约 1 MB),必须压:Next 的 compress **不覆盖**
+    // route handler,实测 standalone(Docker 路径)与 next start 都是原样发出去的。
+    return compressedJson({
       items: itemsWithAiTime,
       locations,
       shopping,
@@ -53,7 +61,7 @@ export async function GET() {
       aiAvailable: Boolean(await getAiConfig()),
       preferences: { expiryReminderDays: preferences.expiryReminderDays, lowStockReminder: preferences.lowStockReminder, weeklyReviewEnabled: preferences.weeklyReviewEnabled, weeklyReviewDay: preferences.weeklyReviewDay },
       tasks,
-    });
+    }, request);
   } catch (error) {
     return apiError(error);
   }

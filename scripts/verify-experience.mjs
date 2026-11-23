@@ -3,7 +3,7 @@
 //
 //   BASE_URL=http://127.0.0.1:3001 PROBE_PASS=... node scripts/verify-experience.mjs
 import { launchChromium } from "./lib/browser.mjs";
-import { loginAndConfirm } from "./lib/probe-auth.mjs";
+import { dismissBlockingDialogs, loginAndConfirm } from "./lib/probe-auth.mjs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 
 const BASE = process.env.BASE_URL || "http://127.0.0.1:3001";
@@ -385,17 +385,32 @@ const login = async (page, reducedMotion = "no-preference") => {
   await login(api);
   // 全新安装不再写入示范数据,库里可能一件物品都没有 —— 那就自己建一条临时
   // 物品给 /items/[id] 与 /consume/[id] 用,检查完再彻底删掉,避免假失败。
+  // 全新安装不再写入示范数据,库里可能一件物品都没有 —— 那就自己建一条临时
+  // 物品给 /items/[id] 与 /consume/[id] 用,检查完再彻底删掉,避免假失败。
+  //
+  // 这条曾经以「id=no created=false」的形式报过一次假失败:整链跑完前序套件后活跃物品恰好为空,
+  // 而那次创建没成功却**说不出原因**。所以改成重试一次,并把状态码与错误正文带回来 ——
+  // 下次红了能直接看出是 401、404 还是 500,而不是又猜一遍。
   const fixture = await api.evaluate(async () => {
-    const response = await fetch("/api/dashboard");
-    const body = await response.json();
-    const existing = body?.items?.[0]?.id ?? null;
-    if (existing) return { id: existing, created: false };
-    const created = await fetch("/api/items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "验收探针临时物品", category: "日用", type: "DURABLE", quantity: 1, minQuantity: 0, remainingPercent: 100, unit: "件", price: null, purchaseDate: null, expiryDate: null, locationId: null, notes: null, imageUrl: null, recordPurchase: false, purchaseStore: null }) });
-    const item = await created.json().catch(() => null);
-    return { id: item?.id ?? null, created: created.ok };
+    const attempt = async () => {
+      const response = await fetch("/api/dashboard", { cache: "no-store" });
+      if (!response.ok) return { id: null, created: false, note: `读取概览失败 ${response.status}` };
+      const body = await response.json().catch(() => null);
+      const existing = body?.items?.[0]?.id ?? null;
+      if (existing) return { id: existing, created: false, note: "用的是库里已有的物品" };
+      const created = await fetch("/api/items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "验收探针临时物品", category: "日用", type: "DURABLE", quantity: 1, minQuantity: 0, remainingPercent: 100, unit: "件", price: null, purchaseDate: null, expiryDate: null, locationId: null, notes: null, imageUrl: null, recordPurchase: false }) });
+      const text = await created.text();
+      if (created.ok) { const item = JSON.parse(text); return { id: item?.id ?? null, created: true, note: "刚建了临时物品" }; }
+      return { id: null, created: false, note: `创建失败 ${created.status} ${text.slice(0, 80)}` };
+    };
+    const first = await attempt();
+    if (first.id) return first;
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    const second = await attempt();
+    return second.id ? second : { ...second, note: `${first.note} → 重试后仍失败:${second.note}` };
   });
   const itemId = fixture.id;
-  check("取到/建到一件物品 id", Boolean(itemId), `id=${itemId ? "yes" : "no"} created=${fixture.created}`);
+  check("取到/建到一件物品 id", Boolean(itemId), `id=${itemId ? "yes" : "no"} created=${fixture.created} ${fixture.note ?? ""}`);
 
   if (itemId) {
     const response = await page.goto(`${BASE}/items/${itemId}`, { waitUntil: "domcontentloaded" });
@@ -440,7 +455,17 @@ const login = async (page, reducedMotion = "no-preference") => {
   const page = await context.newPage();
   await login(page);
 
-  await page.locator('nav[aria-label="移动端主导航"] button:has-text("物品")').first().click();
+  // 底部导航可能被自动弹层的遮罩盖住(「欢迎使用」「提醒中心」都是自己会弹的),
+  // 那会让这一行 30 秒超时并**崩掉整个脚本**,后面的检查全部不执行 —— 看不出任何原因。
+  // 所以先清一层再点,点不动就重试一次;仍然点不动才判失败,并说清是哪一步。
+  const mobileNav = page.locator('nav[aria-label="移动端主导航"] button:has-text("物品")').first();
+  let navClicked = false;
+  for (let attempt = 0; attempt < 3 && !navClicked; attempt += 1) {
+    await dismissBlockingDialogs(page);
+    navClicked = await mobileNav.click({ timeout: 6000 }).then(() => true).catch(() => false);
+    if (!navClicked) await page.waitForTimeout(800);
+  }
+  check("移动端底部导航可点(没被自动弹层盖住)", navClicked, "底部导航点不动");
   await page.waitForTimeout(1500);
 
   const sizes = await page.evaluate(() => {

@@ -121,6 +121,8 @@ jobs:
         run: node scripts/verify-members-and-sysinfo.mjs
       - name: 导入接口检查
         run: node scripts/verify-import.mjs
+      - name: 首屏载荷预算(gzip / 单件体积 / 导出契约)
+        run: node scripts/verify-payload-budget.mjs
       - name: 跨用户数据隔离检查
         run: node scripts/verify-user-isolation.mjs
       - name: 并发行为检查

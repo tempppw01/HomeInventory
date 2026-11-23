@@ -72,6 +72,7 @@ const critical = [
   "scripts/verify-role-ui.mjs",
   "scripts/verify-readonly-ui.mjs",
   "scripts/verify-write-guards.mjs",
+  "scripts/verify-payload-budget.mjs",
   "scripts/verify-auth-gate.mjs",
 ];
 const dropped = critical.filter((file) => !allRuns.includes(file));

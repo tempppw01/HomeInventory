@@ -44,7 +44,7 @@
 | CI 工作流自检 | 每个步骤有 run/uses、引用的脚本存在、关键作业与检查仍在(工作流无效时 CI 根本不会跑,所以这条放在本地 test:unit 最前) |
 | 两份 schema 同步 | MySQL 用的 `schema.mysql.prisma` 必须与 `schema.prisma` 的表/字段完全一致(容器启动时会用它覆盖正式 schema) |
 
-**257 条**(最近一次全绿)。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
+**263 条**(最近一次全绿)。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
 以便直接测引用了其他模块的文件。
 
 ## 二、API 层(需要服务在跑,CI 里在 `api` 作业)
@@ -65,6 +65,7 @@
 | `verify-concurrency` | 并发写入不产生重复采购建议(含自愈)、并发消耗是原子的 | 9 |
 | `verify-user-isolation` | 跨用户隔离:聊天记录与搜索历史只属于各自账号,覆盖写入不影响别人 | 10 |
 | `verify-import` | 导入接口:合法数据进库并自动建空间、逐行报错、1000 行截断、1000 个编号互不相同、只读 403 | 13 |
+| `verify-payload-budget` | **首屏载荷预算**:gzip 真的生效且**无损**、声明不压缩就不压、`vary` 有声明、压缩比 ≤1/3、单件体积预算、`item.location` 只带 id/name、**导出分支仍是不压缩的完整转储** | 14 |
 | `verify-members-and-sysinfo` | 家庭成员增删(含删号时一并清理)、只读 403;系统信息需登录且不泄露连接串/密钥 | 19 |
 | `verify-image-upload` | 图片上传(本地存储):落盘、读回、大小与类型限制、删除物品时清理文件 | 10 |
 | `verify-upgrade-path` | 旧版本库 → `prisma db push` → 数据不丢、新表新字段可用 | 10 |
@@ -75,7 +76,7 @@
 | --- | --- | --- | --- |
 | `verify-modals-a11y` | 10 个弹窗 × 7 项(名称/焦点/围栏/Esc/归还...) | 71 | 无障碍 |
 | `verify-entry-fixes` | 录入、盘点扫码、日期选择、购物等流程修复;设置页面板数与上传入口命中区 | 68 | 流程 |
-| `verify-experience` | 总体体验(含**只读角色**看不到写入口) | 43 | 流程 |
+| `verify-experience` | 总体体验(含**只读角色**看不到写入口) | 44 | 流程 |
 | `verify-a11y` | 焦点可见、图标按钮有名字、Tab 顺序、**文件输入框能 Tab 到**、AI 模型选择器的 listbox 键盘模型(含**入口被自动弹层挡住时明确报出**) | 35 | 无障碍 |
 | `verify-role-ui` | 成员 / 只读看不到管理员专属设置且有说明、**两者都有「我的密码」与「恢复码」**、成员调管理员接口一律 403 | 25 | 流程 |
 | `verify-item-detail` | 详情页骨架、余量加减真的改数据、上次补货、**无照片时顶部 96px 且就地可上传(含只读看不到入口)** | 24 | 流程 |
