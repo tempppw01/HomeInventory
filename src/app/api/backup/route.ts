@@ -13,16 +13,20 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     await requireAdminUser();
-    const [items, locations, shopping, priceRecords, members, activities] = await Promise.all([
+    const [items, locations, shopping, priceRecords, members, activities, tasks, audits, preferences] = await Promise.all([
       prisma.item.findMany({ orderBy: { createdAt: "asc" } }),
       prisma.location.findMany({ orderBy: { createdAt: "asc" } }),
       prisma.shoppingItem.findMany({ orderBy: { createdAt: "asc" } }),
       prisma.priceRecord.findMany({ orderBy: { purchasedAt: "asc" } }),
       prisma.householdMember.findMany({ orderBy: { createdAt: "asc" } }),
       prisma.activityLog.findMany({ orderBy: { createdAt: "asc" } }),
+      // 任务 / 盘点记录 / 偏好设置此前**根本没有进备份** —— 换机恢复时会静默丢掉这三样。
+      prisma.householdTask.findMany({ orderBy: { createdAt: "asc" } }),
+      prisma.auditRecord.findMany({ orderBy: { finishedAt: "asc" } }),
+      prisma.householdPreference.findMany(),
     ]);
     const backup = {
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       items: items.map((row) => ({
         ...row,
@@ -34,6 +38,9 @@ export async function GET() {
       priceRecords,
       members,
       activities,
+      tasks,
+      audits,
+      preferences,
     };
     return new NextResponse(JSON.stringify(backup, null, 2), {
       headers: {

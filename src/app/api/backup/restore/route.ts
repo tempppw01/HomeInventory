@@ -6,7 +6,7 @@ import { createItemCode } from "@/lib/item-code";
 import { normalizeItemQuantity } from "@/lib/item-metrics";
 import { itemSchema, locationSchema, shoppingSchema } from "@/lib/validation";
 
-type BackupPayload = { items?: unknown[]; locations?: unknown[]; shopping?: unknown[]; priceRecords?: unknown[]; members?: unknown[] };
+type BackupPayload = { items?: unknown[]; locations?: unknown[]; shopping?: unknown[]; priceRecords?: unknown[]; members?: unknown[]; activities?: unknown[]; tasks?: unknown[]; audits?: unknown[]; preferences?: unknown[] };
 
 /** Safely merges a trusted export into the current household without deleting existing records. */
 export async function POST(request: NextRequest) {
@@ -16,11 +16,13 @@ export async function POST(request: NextRequest) {
     if (!Array.isArray(body.items) && !Array.isArray(body.locations) && !Array.isArray(body.shopping)) {
       return NextResponse.json({ error: "备份文件中没有可恢复的数据" }, { status: 400 });
     }
+    // 逐行处理几千行时,Prisma 交互式事务的默认上限(5 秒)远远不够 —— 大备份会直接 P2028。
+    // 这里放宽到 2 分钟,并把等待连接的时间也放宽(默认 2 秒)。
     const result = await prisma.$transaction(async (tx) => {
       const locationIdMap = new Map<string, string>();
       const itemIdMap = new Map<string, string>();
       const locationParentMap = new Map<string, string | null>();
-      let locations = 0, items = 0, shopping = 0, priceRecords = 0, members = 0;
+      let locations = 0, items = 0, shopping = 0, priceRecords = 0, members = 0, activities = 0, tasks = 0, audits = 0, preferences = 0;
       // 校验不过的行会被跳过 —— 必须记下来并回报,否则用户以为全都恢复了。
       let skippedTotal = 0;
       const skippedExamples: { collection: string; row: number; name: string | null; reason: string }[] = [];
@@ -101,9 +103,78 @@ export async function POST(request: NextRequest) {
         await tx.householdMember.create({ data: { name: source.name.trim(), color: typeof source.color === "string" ? source.color : "#7c3aed" } });
         members += 1;
       }
+      // ---------- 任务 / 盘点记录 / 偏好设置 / 活动记录 ----------
+      // 用户/成员 id 在别的安装上没有意义,一律置空;物品 id 通过 itemIdMap 映射到新库。
+      const parseDate = (value: unknown) => {
+        if (typeof value !== "string" || !value) return null;
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? null : date;
+      };
+      for (const row of (body.tasks || []).slice(0, 500)) {
+        const source = row as Record<string, unknown>;
+        const title = typeof source.title === "string" ? source.title.trim() : "";
+        const dueAt = parseDate(source.dueAt);
+        if (!title || !dueAt) { noteSkipped("tasks", (body.tasks || []).indexOf(row), source.title, "缺少标题或到期时间"); continue; }
+        const duplicate = await tx.householdTask.findFirst({ where: { title, dueAt } });
+        if (duplicate) continue;
+        await tx.householdTask.create({ data: {
+          title,
+          description: typeof source.description === "string" ? source.description : null,
+          dueAt,
+          recurrence: typeof source.recurrence === "string" ? source.recurrence : "NONE",
+          status: source.status === "DONE" ? "DONE" : "OPEN",
+          completedAt: parseDate(source.completedAt),
+          nextDueAt: parseDate(source.nextDueAt),
+        } });
+        tasks += 1;
+      }
+      for (const row of (body.audits || []).slice(0, 500)) {
+        const source = row as Record<string, unknown>;
+        const finishedAt = parseDate(source.finishedAt);
+        const total = Number(source.total);
+        if (!finishedAt || !Number.isFinite(total)) { noteSkipped("audits", (body.audits || []).indexOf(row), null, "缺少结束时间或总数"); continue; }
+        const locationName = typeof source.locationName === "string" ? source.locationName : "全部空间";
+        const duplicate = await tx.auditRecord.findFirst({ where: { finishedAt, locationName, total } });
+        if (duplicate) continue;
+        await tx.auditRecord.create({ data: { total, confirmed: Number.isFinite(Number(source.confirmed)) ? Number(source.confirmed) : 0, locationName, finishedAt } });
+        audits += 1;
+      }
+      for (const row of (body.preferences || []).slice(0, 1)) {
+        const source = row as Record<string, unknown>;
+        const data = {
+          expiryReminderDays: Number.isFinite(Number(source.expiryReminderDays)) ? Number(source.expiryReminderDays) : 7,
+          lowStockReminder: source.lowStockReminder !== false,
+          weeklyReviewEnabled: source.weeklyReviewEnabled !== false,
+          weeklyReviewDay: Number.isFinite(Number(source.weeklyReviewDay)) ? Number(source.weeklyReviewDay) : 0,
+        };
+        await tx.householdPreference.upsert({ where: { id: "default" }, create: { id: "default", ...data }, update: data });
+        preferences += 1;
+      }
+      // 活动记录:备份文件里一直都有,但此前恢复端**完全没处理**。这里导入最近 2000 条,
+      // 并把「还有多少条没导」如实回报 —— 不假装全都恢复了。
+      const ACTIVITY_LIMIT = 2000;
+      const activityRows = (body.activities || []);
+      const recentActivities = activityRows.slice(-ACTIVITY_LIMIT).reverse();
+      for (const row of recentActivities) {
+        const source = row as Record<string, unknown>;
+        const createdAt = parseDate(source.createdAt);
+        const action = typeof source.action === "string" ? source.action : "";
+        if (!action || !createdAt) continue;
+        const duplicate = await tx.activityLog.findFirst({ where: { action, createdAt, itemName: typeof source.itemName === "string" ? source.itemName : null } });
+        if (duplicate) continue;
+        await tx.activityLog.create({ data: {
+          action,
+          createdAt,
+          itemId: typeof source.itemId === "string" ? itemIdMap.get(source.itemId) ?? null : null,
+          itemName: typeof source.itemName === "string" ? source.itemName : null,
+          detail: typeof source.detail === "string" ? source.detail : null,
+        } });
+        activities += 1;
+      }
+      const activitiesNotImported = Math.max(0, activityRows.length - recentActivities.length);
       await tx.activityLog.create({ data: { action: "BACKUP_RESTORE", userId: user.id, detail: `合并恢复：${items} 件物品、${locations} 个空间、${shopping} 条采购、${priceRecords} 条价格记录、${members} 位成员` } });
-      return { locations, items, shopping, priceRecords, members, skipped: { total: skippedTotal, examples: skippedExamples } };
-    });
+      return { locations, items, shopping, priceRecords, members, activities, tasks, audits, preferences, notImported: { activities: activitiesNotImported }, skipped: { total: skippedTotal, examples: skippedExamples } };
+    }, { timeout: 120_000, maxWait: 10_000 });
     return NextResponse.json(result);
   } catch (error) { return apiError(error); }
 }

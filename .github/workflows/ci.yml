@@ -125,6 +125,9 @@ jobs:
       # 实测就抓到:backfill 的编号日期取的是 UTC 日,与在线路径的本地日不一致。
       - name: 迁移脚本检查(编号回填用本地日 / 幂等 / normalize 只动耐用品)
         run: node scripts/verify-migrations.mjs
+      # 完整备份的覆盖面与体积:导出会随数据增长,恢复必须能吃得下(默认 proxy 上限只有 10 MB)
+      - name: 完整备份的覆盖面与体积(≥10MB 也要能恢复 / 任务·盘点·偏好都在备份里)
+        run: node scripts/verify-backup-scope.mjs
       # 老备份里的坏行必须被报出来(实测:4 行只剩 1 行,响应却只说恢复了 1 件)
       - name: 恢复报告检查(跳过的行要给出总数 / 行号 / 中文原因)
         run: node scripts/verify-restore-report.mjs
