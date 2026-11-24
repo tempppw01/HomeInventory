@@ -14,7 +14,13 @@ export function DataTools({ role, onToast }: { role: "ADMIN" | "MEMBER" | "VIEWE
   const [members, setMembers] = useState<{ id: string; name: string; color: string }[]>([]);
   const [name, setName] = useState("");
   const [activity, setActivity] = useState<{ id: string; action: string; itemName: string | null; createdAt: string }[]>([]);
-  const load = () => { fetch("/api/members").then((r) => r.json()).then(setMembers).catch(() => undefined); fetch("/api/activity").then((r) => r.json()).then(setActivity).catch(() => undefined); };
+  // 接口一次最多给 100 条;这个数是**真实总数**(来自 X-Total-Count),用来把「截断」说清楚。
+  const [activityTotal, setActivityTotal] = useState<number | null>(null);
+  const load = () => { fetch("/api/members").then((r) => r.json()).then(setMembers).catch(() => undefined); fetch("/api/activity").then((r) => {
+  const header = r.headers.get("x-total-count");
+  if (header && /^\d+$/.test(header)) setActivityTotal(Number(header));
+  return r.json();
+}).then(setActivity).catch(() => undefined); };
   useEffect(load, []);
   const addMember = async () => { if (!name.trim()) return; const response = await fetch("/api/members", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) }); if (response.ok) { setName(""); load(); onToast("成员已添加"); } };
   const importFile = async (file?: File) => {
@@ -123,7 +129,7 @@ export function DataTools({ role, onToast }: { role: "ADMIN" | "MEMBER" | "VIEWE
 
     <SettingsRow
       icon={History}
-      title="最近操作"
+      title={activityTotal !== null && activityTotal > 5 ? `最近操作(共 ${activityTotal} 条,只列最近 5 条)` : "最近操作"}
       stacked
       control={<div className="w-full">{activity.slice(0, 5).map((entry) => <ListRow key={entry.id} title={<span className="block whitespace-normal break-words">{activityLabel(entry.action)} · {entry.itemName || "物品"}</span>} trailing={<span className="shrink-0 text-xs muted">{new Date(entry.createdAt).toLocaleDateString("zh-CN")}</span>} />)}</div>}
     />

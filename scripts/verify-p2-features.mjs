@@ -165,6 +165,49 @@ console.log("已清理");
   });
   record("接口带上了真实总数(X-Total-Count)", scanProbe.total >= 0, JSON.stringify(scanProbe));
 
+  // 数据页「最近操作」:标题要带总数与「只列最近 5 条」
+  await page.goto(`${BASE}/settings`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2800);
+  await dismissBlockingDialogs(page);
+  {
+    const group = page.locator('summary:has-text("数据安全"), summary:has-text("数据与部署")').first();
+    if (await group.count()) { await group.click().catch(() => {}); await page.waitForTimeout(2000); }
+  }
+  const recentCopy = await page.evaluate(() => {
+    const text = (document.body.innerText || "").replace(/\s+/g, " ");
+    const match = /最近操作[^。]{0,40}/.exec(text);
+    return match ? match[0] : null;
+  });
+  record(
+    "数据页「最近操作」带上真实总数并说明只列最近 5 条",
+    Boolean(recentCopy) && /共 \d+ 条/.test(recentCopy) && /只列最近 5 条/.test(recentCopy),
+    `实际=${recentCopy ?? "(没找到)"}`,
+  );
+
+  // 详情页「变更记录」:要给出真实总数,并在超出时说明「以下是最近 N 条」
+  {
+    const candidates = await page.evaluate(async () => {
+      const dash = await (await fetch("/api/dashboard", { cache: "no-store" })).json();
+      return (dash.items || []).filter((item) => item.quantity > 0).slice(0, 6).map((item) => ({ id: item.id, name: item.name }));
+    });
+    let copy = null;
+    for (const candidate of candidates) {
+      await page.goto(`${BASE}/items/${candidate.id}`, { waitUntil: "domcontentloaded" });
+      await page.waitForTimeout(1500);
+      copy = await page.evaluate(() => {
+        const text = (document.body.innerText || "").replace(/\s+/g, " ");
+        const index = text.indexOf("变更记录");
+        return index >= 0 ? text.slice(index, index + 60) : null;
+      });
+      if (copy && /共 \d+ 条/.test(copy)) break;
+    }
+    record(
+      "详情页「变更记录」给出真实总数,超出时说明「以下是最近 12 条」",
+      Boolean(copy) && /共 \d+ 条/.test(copy) && !/^变更记录 最近 12 条,倒序$/.test(copy),
+      `实际=${copy ?? "(没找到)"}`,
+    );
+  }
+
   await page.goto(`${BASE}/settings`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(3000);
   await dismissBlockingDialogs(page);

@@ -53,6 +53,8 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
     orderBy: { createdAt: "desc" },
     take: 12,
   });
+  // 变更记录只列最近 12 条,但总数要说清 —— 否则用户不知道「更早还有多少」。
+  const historyTotal = await prisma.activityLog.count({ where: { itemId: item.id } });
   // 「AI 说」是什么时候算的:history 已经按时间倒序取过了,直接找最近一条 AI 分析。
   const aiAnalyzedAt = history.find((entry) => entry.action === "AI_ANALYZE")?.createdAt ?? null;
   const aiTimeText = relativeTimeText(aiAnalyzedAt);
@@ -160,7 +162,7 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
           )}
 
           {history.length > 0 && (
-            <Panel title="变更记录" description="最近 12 条,倒序">
+            <Panel title="变更记录" description={historyTotal > history.length ? `共 ${historyTotal} 条,以下是最近 ${history.length} 条` : `共 ${historyTotal} 条,倒序`}>
               <ul className="m-0 list-none space-y-2 p-0">
                 {history.map((entry) => (
                   <li key={entry.id} className="flex items-start gap-3 border-t pt-2 text-xs first:border-t-0 first:pt-0" style={{ borderColor: "var(--hairline)" }}>
