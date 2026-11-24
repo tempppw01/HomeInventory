@@ -183,18 +183,19 @@ jobs:
         run: |
           SHA="${GITHUB_SHA}"
           echo "检查提交 $SHA 的 CI 结果"
-          for i in $(seq 1 60); do
+          # 60 次 × 10 秒只有 10 分钟,而 CI 全套要 17 分钟上下 —— 第一次就等超时了。放宽到 30 分钟。
+          for i in $(seq 1 180); do
             LINE=$(gh run list --repo "${GITHUB_REPOSITORY}" --workflow CI --commit "$SHA" --limit 1 --json status,conclusion --jq '.[0] | "\(.status) \(.conclusion)"' 2>/dev/null || echo "")
             case "$LINE" in
               "completed success") echo "CI 已通过"; exit 0 ;;
               completed*)
                 echo "CI 没通过:$LINE —— 不发 Release,先修 CI"
                 exit 1 ;;
-              "") echo "还没找到这个提交的 CI 运行,10 秒后重试($i/60)"; sleep 10 ;;
-              *) echo "CI $LINE,10 秒后重试($i/60)"; sleep 10 ;;
+              "") echo "还没找到这个提交的 CI 运行,10 秒后重试($i/180)"; sleep 10 ;;
+              *) echo "CI $LINE,10 秒后重试($i/180)"; sleep 10 ;;
             esac
           done
-          echo "等了 10 分钟还没等到 CI 结果,不发 Release"
+          echo "等了 30 分钟还没等到 CI 结果,不发 Release"
           exit 1
       - name: Create GitHub Release
         env:

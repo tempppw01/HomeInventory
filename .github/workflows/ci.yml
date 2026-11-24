@@ -410,6 +410,8 @@ jobs:
     needs: static
     env:
       DATABASE_URL: file:../data/hygiene.db
+      # 图片上传默认写 /app/data/uploads,CI 里不可写 —— 与 api 作业一样显式指定
+      LOCAL_UPLOAD_DIR: ${{ github.workspace }}/data/uploads
       PROBE_USER: leadcheck
       PROBE_PASS: Lead#2026
       BASE_URL: http://127.0.0.1:3001
