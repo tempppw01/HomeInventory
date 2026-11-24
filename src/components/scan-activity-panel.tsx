@@ -20,6 +20,8 @@ type ScanActivity = {
 export function ScanActivityPanel({ onToast }: { onToast: (message: string) => void }) {
   const askConfirm = useConfirm();
   const [records, setRecords] = useState<ScanActivity[]>([]);
+  // 服务端一次最多给 100 条;这里的 total 是**真实总数**(来自 X-Total-Count)。
+  const [total, setTotal] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [undoing, setUndoing] = useState<string | null>(null);
@@ -32,6 +34,8 @@ export function ScanActivityPanel({ onToast }: { onToast: (message: string) => v
       if (!activityResponse.ok) throw new Error(activity.error || "扫码记录加载失败");
       setIsAdmin(session.user?.role === "ADMIN");
       setRecords(Array.isArray(activity) ? activity : []);
+      const totalHeader = activityResponse.headers.get("x-total-count");
+      setTotal(totalHeader && /^\d+$/.test(totalHeader) ? Number(totalHeader) : null);
     } catch (error) {
       onToast(error instanceof Error ? error.message : "扫码记录加载失败");
     } finally {
@@ -62,12 +66,12 @@ export function ScanActivityPanel({ onToast }: { onToast: (message: string) => v
 
   // 与其它设置面板同一节奏:分组标题走 SettingsRow,记录行走 ListRow + 发丝线,不再套内层卡片。
   return <div>
-    <SettingsRow icon={History} title="扫码消耗记录" control={<SettingsBadge tone="muted">{records.length} 条</SettingsBadge>} />
+    <SettingsRow icon={History} title="扫码消耗记录" control={<SettingsBadge tone="muted">共 {total ?? records.length} 条</SettingsBadge>} />
     {loading
       ? <div className="flex items-center gap-2 py-3 text-xs muted"><LoaderCircle size={14} className="animate-spin" />正在加载...</div>
       : records.length === 0
         ? <p className="mb-0 py-3 text-xs muted">还没有扫码消耗记录。</p>
-        : <div className="max-h-80 overflow-y-auto border-t pr-1" style={{ borderColor: "var(--hairline)" }}>{records.slice(0, 12).map((record) => <ListRow
+        : <div className="max-h-80 overflow-y-auto border-t pr-1" style={{ borderColor: "var(--hairline)" }}>{records.length > 12 && <p className="mb-0 py-2 text-xs muted">以下只列最近 12 条(共 {total ?? records.length} 条{total !== null && total > records.length ? ",更早的未在此显示" : ""})。</p>}{records.slice(0, 12).map((record) => <ListRow
           key={record.id}
           icon={record.action === "CONSUME" ? History : Undo2}
           title={<span className="block whitespace-normal break-words">{record.action === "CONSUME" ? "扫码消耗" : "撤销消耗"} · {record.itemName || "物品"}</span>}

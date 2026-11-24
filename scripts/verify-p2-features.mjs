@@ -155,6 +155,46 @@ await page.evaluate(async (list) => {
   for (const id of list) await fetch(`/api/items/${id}`, { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ permanent: true }) });
 }, ids);
 console.log("已清理");
+// 6) 列表截断必须说清:扫码消耗记录面板
+{
+  // 先拿接口的真实总数(接口一次最多给 100 条,总数在响应头里)
+  const scanProbe = await page.evaluate(async () => {
+    const response = await fetch("/api/activity?scan=1", { cache: "no-store" });
+    const rows = await response.json();
+    return { returned: Array.isArray(rows) ? rows.length : 0, total: Number(response.headers.get("x-total-count") ?? "-1") };
+  });
+  record("接口带上了真实总数(X-Total-Count)", scanProbe.total >= 0, JSON.stringify(scanProbe));
+
+  await page.goto(`${BASE}/settings`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(3000);
+  await dismissBlockingDialogs(page);
+  // 面板在折叠的分组里,先展开它
+  const group = page.locator('summary:has-text("数据安全"), summary:has-text("数据与部署")').first();
+  if (await group.count()) { await group.click().catch(() => {}); await page.waitForTimeout(2200); }
+  const panel = await page.evaluate(() => {
+    const text = (document.body.innerText || "").replace(/\s+/g, " ");
+    const index = text.indexOf("扫码消耗记录");
+    const badge = /扫码消耗记录[^0-9]{0,20}共 (\d+) 条/.exec(text);
+    return {
+      found: index >= 0,
+      snippet: index >= 0 ? text.slice(index, index + 110) : text.slice(0, 120),
+      badgeTotal: badge ? Number(badge[1]) : null,
+      hasTruncationNote: /以下只列最近 12 条/.test(text),
+    };
+  });
+  record("设置页能看到「扫码消耗记录」面板(防止空跑)", panel.found, panel.snippet);
+  record(
+    "徽标显示的是真实总数,而不是被接口上限截断的 100",
+    panel.badgeTotal !== null && panel.badgeTotal === scanProbe.total && panel.badgeTotal >= scanProbe.returned,
+    `徽标=${panel.badgeTotal} 接口总数=${scanProbe.total} 接口返回条数=${scanProbe.returned}`,
+  );
+  record(
+    "列表被截断时明确说明「以下只列最近 12 条」",
+    scanProbe.total > 12 ? panel.hasTruncationNote : true,
+    panel.snippet,
+  );
+}
+
 await browser.close();
 
 const failed = results.filter((row) => !row.ok);
