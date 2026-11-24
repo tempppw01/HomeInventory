@@ -36,6 +36,9 @@ jobs:
       # 镜像里的启动脚本不许引用镜像里没有的东西(v0.1.41 那次事故:@/ 别名让容器起不来)
       - name: 镜像资源边界检查(启动脚本的依赖必须都在镜像里)
         run: node scripts/verify-image-assets.mjs
+      # 覆盖地图是「哪些行为有断言」的唯一索引,它说假话比没有更糟(本轮就量到两处漂移)
+      - name: 覆盖地图一致性(套件都在表里 / 无幽灵行 / 单测条数与实际一致)
+        run: node scripts/verify-coverage-map.mjs
       - name: MySQL schema 合法性校验
         env:
           DATABASE_URL: mysql://user:pass@localhost:3306/db

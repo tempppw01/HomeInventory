@@ -44,7 +44,7 @@
 | CI 工作流自检 | 每个步骤有 run/uses、引用的脚本存在、关键作业与检查仍在(工作流无效时 CI 根本不会跑,所以这条放在本地 test:unit 最前) |
 | 两份 schema 同步 | MySQL 用的 `schema.mysql.prisma` 必须与 `schema.prisma` 的表/字段完全一致(容器启动时会用它覆盖正式 schema) |
 
-**300 条**(最近一次全绿)。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
+**308 条**(最近一次全绿)。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
 以便直接测引用了其他模块的文件。
 
 ## 二、API 层(需要服务在跑,CI 里在 `api` 作业)
@@ -60,6 +60,11 @@
 | `verify-account-self-service` | 自助改密码与自助恢复码:401/400 矩阵、旧密码失效、其它设备会话被吊销、只读也能改自己的凭据但改家庭数据仍 403、恢复码端到端重置 | 26 |
 | `verify-search-history-and-backup` | 搜索历史去重与上限、自动备份真的写文件(含「这个文件是刚写的」) | 14 |
 | `verify-backup-dates` | 备份里的日期格式 | 12 |
+| `verify-schema-sync` | SQLite 与 MySQL 两份 schema 没有漂开 | 4 |
+| `verify-config-docs` | 环境变量与文档一致:代码里用到的都在文档或白名单里 | 4 |
+| `verify-coverage-map` | 覆盖地图不许说假话:套件都在表里、没有幽灵行、单测条数与实际一致 | 8 |
+| `verify-ci-workflow` | CI 工作流自检:作业/步骤/引用的脚本都还在、关键检查没被删 | 11 |
+| `verify-api-guards` | 写接口守卫与 proxy 位置的那几条关键断言 | 5 |
 | `verify-image-assets` | 镜像资源边界:启动脚本的相对导入必须都在镜像会复制的目录里、不许 @/ 别名、Dockerfile 仍在复制它们 | 9 |
 | `verify-task-recurrence` | 完成 → 下次到期 → 撤销复原 | 7 |
 | `verify-restock-pause` | 暂停补货期内不生成采购建议 | 6 |

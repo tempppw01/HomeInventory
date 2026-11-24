@@ -69,6 +69,7 @@ const critical = [
   "scripts/verify-api-guards.mjs",
   "scripts/verify-config-docs.mjs",
   "scripts/verify-image-assets.mjs",
+  "scripts/verify-coverage-map.mjs",
   "scripts/verify-schema-sync.mjs",
   "scripts/verify-role-ui.mjs",
   "scripts/verify-readonly-ui.mjs",
