@@ -59,7 +59,7 @@ const missingScripts = [...referencedScripts].filter((file) => !existsSync(file)
 check("CI 引用的脚本都存在", missingScripts.length === 0, missingScripts.join(", "));
 
 // ④ 关键作业还在
-for (const name of ["static", "unit", "api", "ui-flows", "ui-a11y", "ui-layout"]) {
+for (const name of ["static", "unit", "api", "mysql-runtime", "ui-flows", "ui-a11y", "ui-layout"]) {
   check(`作业「${name}」仍在`, Boolean(jobs[name]), `现有作业:${jobNames.join(", ")}`);
 }
 

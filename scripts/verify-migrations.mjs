@@ -14,9 +14,7 @@
 // 用法:DATABASE_URL=file:../data/ci.db node scripts/verify-migrations.mjs  (需要一个跑着的服务)
 
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { PrismaClient } from "@prisma/client";
 
 const BASE = process.env.BASE_URL || "http://127.0.0.1:3001";
 const USER = process.env.PROBE_USER || "bgs";
@@ -28,13 +26,10 @@ const check = (name, ok, detail = "") => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok ? "" : "  → " + detail}`);
 };
 
-/** 从 DATABASE_URL(file:../data/ci.db)推出数据库文件路径 */
-const databaseFile = (() => {
-  // DATABASE_URL 是相对 prisma/ 目录写的(../data/ci.db),从项目根算就是 data/ci.db
-  const raw = (process.env.DATABASE_URL ?? "file:../data/home-inventory.db").replace(/^file:/, "").split("?")[0];
-  return path.isAbsolute(raw) ? raw : path.resolve(process.cwd(), raw.replace(/^\.\.\//, ""));
-})();
-check("能从 DATABASE_URL 推出数据库文件", existsSync(databaseFile), `文件=${databaseFile}`);
+// 用 Prisma 直连(哪种库都行:SQLite 与 MySQL 都能跑同一套断言)
+const prisma = new PrismaClient();
+console.log(`      数据库:${(process.env.DATABASE_URL ?? "(未设置)").split("?")[0].replace(/:[^:@/]+@/, ":***@")}`);
+
 
 const { loginCookie } = await import("./lib/probe-login.mjs");
 const cookie = await loginCookie(BASE, USER, PASS);
@@ -67,19 +62,10 @@ check("造出三件探针物品", Boolean(legacyId && durableId && consumableId)
 
 // 把「老数据」那一件改成:没有编号 + 创建时间是本地 3 月 5 日凌晨(UTC 日还是 3 月 4 日)
 const localEarlyMorning = new Date(2026, 2, 5, 0, 30, 0, 0);
-{
-  const db = new DatabaseSync(databaseFile);
-  db.prepare("UPDATE Item SET itemCode = NULL, createdAt = ? WHERE id = ?").run(localEarlyMorning.toISOString(), legacyId);
-  // 另外两件也清掉编号,确认脚本会给它们补上(而不是只处理边界那一件)
-  db.prepare("UPDATE Item SET itemCode = NULL WHERE id IN (?, ?)").run(durableId, consumableId);
-  db.close();
-}
-const readItem = (id) => {
-  const db = new DatabaseSync(databaseFile);
-  const row = db.prepare("SELECT id, itemCode, type, expiryDate, createdAt FROM Item WHERE id = ?").get(id);
-  db.close();
-  return row;
-};
+await prisma.item.update({ where: { id: legacyId }, data: { itemCode: null, createdAt: localEarlyMorning } });
+// 另外两件也清掉编号,确认脚本会给它们补上(而不是只处理边界那一件)
+await prisma.item.updateMany({ where: { id: { in: [durableId, consumableId] } }, data: { itemCode: null } });
+const readItem = (id) => prisma.item.findUnique({ where: { id }, select: { id: true, itemCode: true, type: true, expiryDate: true, createdAt: true } });
 
 // ---------- 跑 backfill ----------
 const runScript = (file) => execFileSync("npx", ["tsx", file], { encoding: "utf8", shell: true, env: process.env }).trim();
@@ -93,7 +79,7 @@ try {
 }
 console.log(`      脚本输出:${output}`);
 
-const legacy = readItem(legacyId);
+const legacy = await readItem(legacyId);
 check("老数据补上了编号", Boolean(legacy.itemCode), `itemCode=${legacy.itemCode ?? "(空)"}`);
 check("编号格式是 INV-<8位日期>-<6位大写>", /^INV-\d{8}-[0-9A-F]{6}$/.test(String(legacy.itemCode ?? "")), `实际=${legacy.itemCode}`);
 
@@ -102,14 +88,14 @@ const codeDate = String(legacy.itemCode ?? "").slice(4, 12);
 check("编号里的日期取本地创建日(2026-03-05),不是 UTC 日(2026-03-04)", codeDate === "20260305", `编号=${legacy.itemCode} 日期段=${codeDate}`);
 
 // ---------- 幂等 ----------
-const beforeRerun = readItem(legacyId).itemCode;
+const beforeRerun = (await readItem(legacyId)).itemCode;
 runScript("scripts/backfill-item-codes.ts");
-const afterRerun = readItem(legacyId).itemCode;
+const afterRerun = (await readItem(legacyId)).itemCode;
 check("重复跑不会改已有编号(幂等)", beforeRerun === afterRerun, `${beforeRerun} → ${afterRerun}`);
 
 // ---------- 与在线路径同一口径 ----------
 const freshId = await makeItem(`迁移探针·新建${STAMP}`, "DURABLE");
-const fresh = readItem(freshId);
+const fresh = await readItem(freshId);
 const todayLocal = (() => { const d = new Date(); return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`; })();
 check("在线新建的编号同样用本地日(两条路径口径一致)", String(fresh.itemCode ?? "").slice(4, 12) === todayLocal, `编号=${fresh.itemCode} 期望日期段=${todayLocal}`);
 
@@ -123,8 +109,8 @@ try {
 }
 console.log(`      脚本输出:${normalizeOutput}`);
 
-const durableAfter = readItem(durableId);
-const consumableAfter = readItem(consumableId);
+const durableAfter = await readItem(durableId);
+const consumableAfter = await readItem(consumableId);
 check("耐用品上多余的到期日被清掉", durableAfter.expiryDate === null, `expiryDate=${durableAfter.expiryDate}`);
 check("消耗品的到期日**不能**被清掉", Boolean(consumableAfter.expiryDate), `expiryDate=${consumableAfter.expiryDate}`);
 
@@ -132,8 +118,11 @@ check("消耗品的到期日**不能**被清掉", Boolean(consumableAfter.expiry
 for (const id of [legacyId, durableId, consumableId, freshId]) {
   if (id) await api("DELETE", `/api/items/${id}`, { permanent: true });
 }
-const leftovers = [legacyId, durableId, consumableId, freshId].filter((id) => id && readItem(id));
+const leftovers = [];
+for (const id of [legacyId, durableId, consumableId, freshId]) { if (id && (await readItem(id))) leftovers.push(id); }
 check("探针数据已清理", leftovers.length === 0, `还剩:${leftovers.join(",")}`);
+
+await prisma.$disconnect();
 
 const failed = results.filter((entry) => !entry.ok);
 console.log(`\n${results.length - failed.length}/${results.length} 通过`);

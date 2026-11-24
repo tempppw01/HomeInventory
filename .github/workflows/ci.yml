@@ -367,6 +367,74 @@ jobs:
         if: failure()
         run: tail -100 server.log
 
+  # MySQL 运行时检查:真在 MySQL 上起服务,跑 api 契约与迁移脚本。
+  # 这条路径(compose + schema.mysql.prisma + DATABASE_PROVIDER=mysql)此前只有静态 schema 比对,
+  # 从没真跑过 —— 而 prisma.ts 曾把 SQLite 的连接池参数套到 MySQL 上(v0.1.46 已改成只对 file: 生效)。
+  mysql-runtime:
+    name: MySQL 运行时检查(契约 + 迁移脚本)
+    timeout-minutes: 25
+    runs-on: ubuntu-latest
+    needs: static
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: rootpw
+          MYSQL_DATABASE: homeinventory
+        ports:
+          - "3306:3306"
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -prootpw"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    env:
+      DATABASE_PROVIDER: mysql
+      DATABASE_URL: mysql://root:rootpw@127.0.0.1:3306/homeinventory
+      PROBE_USER: bgs
+      PROBE_PASS: Ci#Bootstrap2026
+      BASE_URL: http://127.0.0.1:3001
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: 用 MySQL 版 schema 生成客户端并建表
+        run: |
+          npx prisma generate --schema prisma/schema.mysql.prisma
+          npx prisma db push --schema prisma/schema.mysql.prisma --skip-generate
+      - run: npm run build
+      - name: 初始化管理员(MySQL 上是空库)
+        run: |
+          node -e "
+            const { PrismaClient } = require('@prisma/client');
+            const { randomBytes, scryptSync } = require('node:crypto');
+            const salt = randomBytes(16).toString('hex');
+            const hash = salt + ':' + scryptSync(process.env.PROBE_PASS, salt, 64).toString('hex');
+            (async () => {
+              const prisma = new PrismaClient();
+              await prisma.user.create({ data: { username: process.env.PROBE_USER, displayName: 'CI', passwordHash: hash, role: 'ADMIN' } });
+              await prisma.$disconnect();
+            })();
+          "
+      - name: 启动服务
+        run: |
+          PORT=3001 node node_modules/next/dist/bin/next start > server.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:3001/api/health > /dev/null; then echo ready; break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:3001/api/health
+      - name: API 契约(在 MySQL 上)
+        run: node scripts/api-contract-test.mjs
+      - name: 迁移脚本(在 MySQL 上:编号回填用本地创建日 / 幂等 / normalize 只动耐用品)
+        run: node scripts/verify-migrations.mjs
+      - name: 失败时打印服务日志
+        if: failure()
+        run: tail -100 server.log
+
   ui-flows:
     name: 界面检查·流程(体验 / 录入修复 / P2)
     timeout-minutes: 25
