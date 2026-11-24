@@ -6,7 +6,7 @@ import { DatabaseBackup, X, Download, Upload, Users, UserPlus, History, ShieldCh
 import { ScanActivityPanel } from "@/components/scan-activity-panel";
 import { activityLabel } from "@/lib/activity-label";
 import { csvToItems, importResultText } from "@/lib/csv-import";
-import { SettingsBadge, SettingsRow, SettingsSection } from "@/components/settings-primitives";
+import { SettingsBadge, SettingsRow, SettingsSection, SettingsSelect } from "@/components/settings-primitives";
 import { ListRow } from "@/components/ui-kit";
 import { useConfirm } from "@/components/confirm-dialog";
 
@@ -195,10 +195,16 @@ export function DataTools({ role, onToast }: { role: "ADMIN" | "MEMBER" | "VIEWE
       {isAdmin && (autoBackup?.fileNames?.length ?? 0) > 0 && (
         <div className="flex flex-wrap items-center gap-2 px-1 pb-3">
           <span className="text-xs muted">从服务器上的备份恢复:</span>
-          <select className="input h-9 min-h-9 text-xs" value={serverFile} onChange={(event) => setServerFile(event.target.value)}>
-            {(autoBackup?.fileNames ?? []).map((name) => <option key={name} value={name}>{name}</option>)}
-          </select>
-          <button type="button" className="btn-ghost h-9 min-h-9 px-3 text-xs" onClick={() => restoreFromServerFile(serverFile || autoBackup?.fileNames?.at(-1) || "")}>恢复这一份</button>
+          {/* 用共享的 SettingsSelect(设置页有一条约定检查:下拉必须来自它),
+              控件高度也必须是 40px(可达性检查)。 */}
+          <SettingsSelect
+            ariaLabel="从服务器上的备份恢复"
+            value={serverFile || (autoBackup?.fileNames?.at(-1) ?? "")}
+            onChange={(value) => setServerFile(value)}
+            options={(autoBackup?.fileNames ?? []).map((name) => [name, name] as const)}
+            className="min-h-10"
+          />
+          <button type="button" className="btn-ghost h-10 min-h-10 px-3 text-xs" onClick={() => restoreFromServerFile(serverFile || autoBackup?.fileNames?.at(-1) || "")}>恢复这一份</button>
         </div>
       )}
 
