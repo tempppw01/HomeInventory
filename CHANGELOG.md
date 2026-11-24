@@ -5,6 +5,57 @@
 
 ---
 
+## [v0.1.46] - 2026-11-24
+
+这一轮把**一直没验过的 MySQL 路径**真跑起来了,并修掉走向它时发现的一个参数问题。无数据库结构变更。
+
+### 背景
+
+仓库里一直有 `docker-compose.mysql.yml`、`prisma/schema.mysql.prisma`、`DATABASE_PROVIDER=mysql`
+(容器启动时会切换 schema),但**从来没有一次真的在 MySQL 上跑起来** —— 只有静态的 schema 比对。
+
+### 找到的问题:SQLite 的连接池调参被无条件套到 MySQL 上
+
+`src/lib/prisma.ts` 对**任何** `DATABASE_URL` 都追加 `connection_limit=1&socket_timeout=20`:
+
+- 对 SQLite 是对的(单写者,实测 20 并发创建会挂掉 12 个);
+- 对 MySQL 就是错的 —— 它能并发,强制 1 条连接只会让请求排队,**不报错,但白丢并发能力**。
+
+顺带用一个本地生成的 MySQL 客户端做了验证:Prisma 的 MySQL 连接器**会忽略** `socket_timeout`
+(两个 URL 都能解析、只是连不上服务器),所以这不是「MySQL 起不来」的硬故障 ——
+但确实是把一套上下文里的调参复制到了另一套里。
+
+修法:抽成 `src/lib/prisma-url.ts` 的纯函数 `withPoolParams`,**只对 `file:`(SQLite)生效**,
+已带 `connection_limit` 的 URL 原样返回。补 4 条单测(单测 308 → **312**)。
+
+### 新增 CI 作业:mysql-runtime
+
+`mysql:8.4` service container + 健康检查,用 MySQL 版 schema 生成客户端并 `db push`,
+构建、建号、起服务,然后跑:
+
+- **API 契约测试**(59 项)在 MySQL 上;
+- **迁移脚本**(11 项:编号回填用本地创建日 / 幂等 / normalize 只动耐用品)在 MySQL 上。
+
+已列入 `verify-ci-workflow` 的「必须有」作业清单 —— 不许被顺手删掉。
+`verify-migrations` 顺带从直连 SQLite 文件改成用 Prisma,同一套断言现在两种库都能跑(12 → 11 项,少了那条 SQLite 专用的前置)。
+
+### 结果
+
+**七个作业全绿**,其中 MySQL 运行时检查首次跑通(构建 → 建号 → 起服务 → 契约 → 迁移脚本)。
+
+### 过程中的两笔账(都不算产品问题,但值得记)
+
+1. MySQL 作业第一次红在「初始化管理员」:内联的 `node -e` 里 `await prisma.$disconnect()`,
+   而 `$disconnect` 在双引号里被 shell 当成变量展开成了空串 → `prisma.()`,日志里就是 `[eval]:9`。
+   根除办法不是加转义,而是**不写内联脚本** —— 改用仓库里已有的 `scripts/make-probe-accounts.mjs`;
+2. 我写的补丁脚本找终止标记时找了个不存在的字符串,把「找结尾」扫到了文件尾 —— 这类**改 CI 的脚本**
+   现在都改成「按行定位 + 找不到就立刻报错」,而不是猜。
+
+**顺带说明**:这一轮加完 4 条单测后忘了同步文档,是新加的覆盖地图校验器当场报的
+「地图写的单测条数(308)与实际声明数(312)一致 → 差 4 条」—— 上一版的那条守卫立刻派上了用场。
+
+---
+
 ## [v0.1.45] - 2026-11-24
 
 这一轮查的是**文档有没有在说假话** —— 具体是 `docs/verification.md` 那张「覆盖地图」:

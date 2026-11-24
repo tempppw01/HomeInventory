@@ -1,6 +1,6 @@
 {
   "name": "home-inventory",
-  "version": "0.1.45",
+  "version": "0.1.46",
   "private": true,
   "engines": {
     "node": ">=22"
