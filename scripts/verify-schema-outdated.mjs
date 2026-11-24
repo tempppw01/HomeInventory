@@ -79,6 +79,8 @@ check("响应里带 SCHEMA_OUTDATED 标记,便于界面识别", oldItems.json?.c
 check("说明是可照做的:给出命令、Docker 提示与下一步", /db:push/.test(String(oldItems.json?.error ?? "")) && /Docker/.test(String(oldItems.json?.error ?? "")) && /刷新/.test(String(oldItems.json?.error ?? "")), String(oldItems.json?.error ?? "(无)").slice(0, 160));
 
 // ---------- 3 老库:页面 ----------
+// 先清掉「看过引导」的标记:这样如果引导真的要弹,就会弹出来盖住失败态 —— 正是要测的点
+await oldSession.page.evaluate(() => localStorage.removeItem("home-inventory-welcome-seen"));
 await oldSession.page.goto(`${OLD}/items`, { waitUntil: "domcontentloaded" });
 await oldSession.page.waitForTimeout(3200);
 const pageState = await oldSession.page.evaluate(() => {
@@ -95,6 +97,93 @@ check("页面显示的是「没能读到家里的数据」失败态", pageState.
 check("页面**不再**崩成通用错误页(「页面没能加载出来」)", !pageState.genericCrash, pageState.snippet);
 check("页面上就能看到那条命令", pageState.hasHint, pageState.snippet);
 check("失败态提供重新加载入口", pageState.hasRetry, pageState.snippet);
+
+// ---------- 3b 引导不能盖住这条说明 ----------
+const overlayState = await oldSession.page.evaluate(() => ({
+  guideOpen: Boolean(document.querySelector('[role="dialog"][aria-label="欢迎使用"]')),
+  failureVisible: Boolean(document.querySelector('[data-load-failed]')),
+}));
+check(
+  "数据读不到时不弹首次使用引导(它会盖住「请先运行 db:push」这条唯一能照做的说明)",
+  !overlayState.guideOpen && overlayState.failureVisible,
+  JSON.stringify(overlayState),
+);
+
+// ---------- 3c 对比度与点击目标 ----------
+const a11y = await oldSession.page.evaluate(() => {
+  const parse = (value) => {
+    const match = /rgba?\(([^)]+)\)/.exec(value || "");
+    if (!match) return null;
+    const parts = match[1].split(/[,\s/]+/).filter(Boolean).map(Number);
+    return { r: parts[0], g: parts[1], b: parts[2] };
+  };
+  const luminance = ({ r, g, b }) => {
+    const channel = (c) => { const x = c / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+  };
+  const ratio = (fg, bg) => { const a = luminance(fg), b = luminance(bg); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05); };
+  const backgroundOf = (el) => {
+    let node = el;
+    while (node) {
+      const bg = getComputedStyle(node).backgroundColor;
+      if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") return bg;
+      node = node.parentElement;
+    }
+    return getComputedStyle(document.body).backgroundColor;
+  };
+  const view = document.querySelector('[data-load-failed]');
+  const message = view?.querySelector('[data-error-source]');
+  const button = view?.querySelector('button');
+  const contrastOf = (el) => {
+    if (!el) return null;
+    const fg = parse(getComputedStyle(el).color);
+    const bg = parse(backgroundOf(el));
+    return fg && bg ? Number(ratio(fg, bg).toFixed(2)) : null;
+  };
+  return {
+    role: view ? view.getAttribute("role") : null,
+    messageContrast: contrastOf(message),
+    buttonContrast: contrastOf(button),
+    buttonHeight: button ? Math.round(button.getBoundingClientRect().height) : null,
+    overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  };
+});
+check("失败态用 role=alert 播报(读屏用户能立刻听到)", a11y.role === "alert", JSON.stringify(a11y));
+check("说明文字的对比度 ≥ 4.5:1", typeof a11y.messageContrast === "number" && a11y.messageContrast >= 4.5, `对比度=${a11y.messageContrast}`);
+check("按钮文字对比度 ≥ 4.5:1 且高度 ≥ 44px", typeof a11y.buttonContrast === "number" && a11y.buttonContrast >= 4.5 && a11y.buttonHeight >= 44, JSON.stringify(a11y));
+// 真的切到 320px 再量一次(之前在桌面宽度量,名不副实)
+const desktopViewport = oldSession.page.viewportSize();
+await oldSession.page.setViewportSize({ width: 320, height: 780 });
+await oldSession.page.waitForTimeout(600);
+const narrow = await oldSession.page.evaluate(() => {
+  const view = document.querySelector('[data-load-failed]');
+  const button = view?.querySelector('button');
+  return {
+    overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    buttonHeight: button ? Math.round(button.getBoundingClientRect().height) : null,
+    viewWidth: view ? Math.round(view.getBoundingClientRect().width) : null,
+  };
+});
+check("失败态在 320px 宽下不横向溢出", narrow.overflow <= 0, JSON.stringify(narrow));
+check("320px 下按钮仍然够大(≥44px 高)", typeof narrow.buttonHeight === "number" && narrow.buttonHeight >= 44, JSON.stringify(narrow));
+if (desktopViewport) await oldSession.page.setViewportSize(desktopViewport);
+
+// ---------- 3d 键盘能到达并触发重试 ----------
+let reachedTab = null;
+for (let i = 0; i < 30; i += 1) {
+  await oldSession.page.keyboard.press("Tab");
+  const inView = await oldSession.page.evaluate(() => Boolean(document.activeElement?.closest("[data-load-failed]")));
+  if (inView) { reachedTab = i + 1; break; }
+}
+check("键盘能 Tab 到「重新加载」", reachedTab !== null, `走了 30 步仍未到达`);
+if (reachedTab !== null) {
+  const retries = [];
+  oldSession.page.on("request", (request) => { if (request.url().includes("/api/dashboard")) retries.push(1); });
+  await oldSession.page.keyboard.press("Enter");
+  await oldSession.page.waitForTimeout(2500);
+  check("回车会真的再请求一次(不是个假按钮)", retries.length > 0, `请求数=${retries.length}`);
+  check("重试后仍然是失败态(库结构没变就不该假装好了)", await oldSession.page.evaluate(() => Boolean(document.querySelector("[data-load-failed]"))), "失败态消失了");
+}
 
 // ---------- 4 正常库不受影响 ----------
 const healthySession = await loggedInPage(HEALTHY);

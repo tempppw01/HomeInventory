@@ -183,7 +183,7 @@ export function AppChrome({ children }: { children?: React.ReactNode }) {
       {!chatOpen && <AssistantLauncher onOpen={() => setChatOpen(true)} />}
       {chatOpen && <AiChat onClose={() => { setChatOpen(false); setChatSeed(null); }} seed={chatSeed} items={(data?.items ?? []).map((item) => ({ id: item.id, name: item.name }))} onOpenItem={(id) => { const target = data?.items.find((item) => item.id === id); if (!target) return; setChatOpen(false); openDetail(target); }} />}
       {printItems && <PrintStudio items={printItems} onClose={() => setPrintItems(null)} />}
-      {showWelcome && <WelcomeModal hasDemoData={data?.items.some((item) => item.itemCode?.startsWith("INV-DEMO-")) ?? false} onClose={() => dismissWelcome()} onAction={(action) => dismissWelcome(action)} />}
+      {showWelcome && !loadError && <WelcomeModal hasDemoData={data?.items.some((item) => item.itemCode?.startsWith("INV-DEMO-")) ?? false} onClose={() => dismissWelcome()} onAction={(action) => dismissWelcome(action)} />}
       <AnimatePresence>{toast && <motion.div initial={{ opacity: 0, y: 20, x: "-50%" }} animate={{ opacity: 1, y: 0, x: "-50%" }} exit={{ opacity: 0, y: 12, x: "-50%" }} role="status" aria-live="polite" className="fixed bottom-24 left-1/2 z-[70] flex max-w-[calc(100vw-32px)] items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-white shadow-2xl md:bottom-8" style={{ background: "#24242d" }}><span className="min-w-0">{toast}</span>{toastAction && <button type="button" onClick={() => void toastAction.onClick()} className="shrink-0 rounded-lg px-2 py-1 text-xs font-black" style={{ background: "rgba(255,255,255,.16)" }}>{toastAction.label}</button>}</motion.div>}</AnimatePresence>
     </div>
   );
