@@ -76,6 +76,7 @@
 | `verify-image-upload` | 图片上传(本地存储):落盘、读回、大小与类型限制、删除物品时清理文件 | 10 |
 | `verify-migrations` | 迁移脚本:编号回填用**本地创建日**、幂等、字母表与在线一致、normalize 只动耐用品(SQLite 与 MySQL 都跑) | 11 | 升级 |
 | `verify-backup-scope` | 完整备份的覆盖面(任务/盘点/偏好/活动记录都在)与体积(超过默认 10 MB 也能恢复) | 20 | 升级 |
+| `verify-backup-migration` | **换机迁移**:备份恢复进空库实例,物品一件不少、位置重新映射、重复恢复幂等(需两个实例) | 19 | 升级 |
 | `verify-upgrade-path` | 旧版本库 → `prisma db push` → 数据不丢、新表新字段可用 | 10 |
 | `verify-restore-report` | 恢复老备份时跳过的行必须报出来:总数 / 行号 / **中文原因并点名字段** | 8 | 升级 |
 

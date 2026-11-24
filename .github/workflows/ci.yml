@@ -650,6 +650,15 @@ jobs:
           PROBE_USER: leadcheck
           PROBE_PASS: Lead#2026
         run: node scripts/verify-first-run-journey.mjs
+      # 换机迁移:把 3001 的完整备份恢复进**空库实例**(3002),核对一件不少。
+      # 此前恢复端的去重按「名称+位置」判重复 —— 空库上同名物品会被丢掉大半,实测 333 件只进 23 件。
+      - name: 换机迁移检查(备份恢复进空库实例:物品一件不少 / 重复恢复幂等)
+        env:
+          SOURCE_URL: http://127.0.0.1:3001
+          TARGET_URL: http://127.0.0.1:3002
+          PROBE_USER: leadcheck
+          PROBE_PASS: Lead#2026
+        run: node scripts/verify-backup-migration.mjs
       # 「库结构比应用旧」的失败体验:自建部署最常见的升级失误 ——
       # 换了镜像却没同步库结构。这里由 ci.db 复制出 old.db 并删掉两列来模拟。
       - name: 准备「结构比应用旧」的库(复制 ci.db 后删两列)

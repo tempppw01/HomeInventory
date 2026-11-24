@@ -25,6 +25,13 @@ export async function POST(request: NextRequest) {
       let locations = 0, items = 0, shopping = 0, priceRecords = 0, members = 0, activities = 0, tasks = 0, audits = 0, preferences = 0;
       // 校验不过的行会被跳过 —— 必须记下来并回报,否则用户以为全都恢复了。
       let skippedTotal = 0;
+      // 「与库里已有记录重复」而跳过的,也要计数 —— 否则换机迁移时用户完全看不出少了什么。
+      let duplicatedTotal = 0;
+      const duplicatedExamples: { collection: string; name: string | null }[] = [];
+      const noteDuplicated = (collection: string, name: unknown) => {
+        duplicatedTotal += 1;
+        if (duplicatedExamples.length < 10) duplicatedExamples.push({ collection, name: typeof name === "string" ? name.slice(0, 40) : null });
+      };
       const skippedExamples: { collection: string; row: number; name: string | null; reason: string }[] = [];
       // 把 zod 的英文原文翻成中文,并点出是哪个字段 —— 用户要按这个去改备份文件。
       const FIELD_LABELS: Record<string, string> = {
@@ -66,10 +73,17 @@ export async function POST(request: NextRequest) {
         const parsed = itemSchema.omit({ recordPurchase: true, purchaseStore: true }).safeParse({ ...source, purchaseDate: typeof source.purchaseDate === "string" ? localDateOf(source.purchaseDate) : source.purchaseDate, expiryDate: typeof source.expiryDate === "string" ? localDateOf(source.expiryDate) : source.expiryDate, locationId: typeof source.locationId === "string" ? locationIdMap.get(source.locationId) || null : null });
         if (!parsed.success) { noteSkipped("items", (body.items || []).indexOf(row), source.name, describeIssue(parsed.error.issues[0] ?? {})); continue; }
         const data = parsed.data;
-        const duplicate = await tx.item.findFirst({ where: { name: data.name, locationId: data.locationId, deletedAt: null } });
-        const restored = duplicate || await tx.item.create({ data: { ...data, quantity: normalizeItemQuantity(data.quantity, data.unit), itemCode: createItemCode() } });
+        // 优先按 itemCode 判重:它唯一且备里就有 —— 换机到空库时同名物品不会被误判成「重复」。
+        // 只有老备份(没有 itemCode)才退回按名称+位置判重。
+        const sourceCode = typeof source.itemCode === "string" && source.itemCode.trim() ? source.itemCode.trim() : null;
+        const duplicate = sourceCode
+          ? await tx.item.findFirst({ where: { itemCode: sourceCode } })
+          : await tx.item.findFirst({ where: { name: data.name, locationId: data.locationId, deletedAt: null } });
+        // 保留备份里的编号(用户可能已经把编号贴成标签);没有编号的老备份才新生成。
+        // 编号被占用的情况在去重那一步已经排除了(按编号判重)。
+        const restored = duplicate || await tx.item.create({ data: { ...data, quantity: normalizeItemQuantity(data.quantity, data.unit), itemCode: sourceCode ?? createItemCode() } });
         if (typeof source.id === "string") itemIdMap.set(source.id, restored.id);
-        if (duplicate) continue;
+        if (duplicate) { noteDuplicated("items", data.name); continue; }
         items += 1;
       }
       for (const row of (body.shopping || []).slice(0, 1000)) {
@@ -77,7 +91,7 @@ export async function POST(request: NextRequest) {
         const parsed = shoppingSchema.safeParse(source);
         if (!parsed.success) { noteSkipped("shopping", (body.shopping || []).indexOf(row), source.name, describeIssue(parsed.error.issues[0] ?? {})); continue; }
         const duplicate = await tx.shoppingItem.findFirst({ where: { name: parsed.data.name, status: "PENDING" } });
-        if (duplicate) continue;
+        if (duplicate) { noteDuplicated("shopping", parsed.data.name); continue; }
         await tx.shoppingItem.create({ data: { ...parsed.data, status: source.status === "PURCHASED" ? "PURCHASED" : "PENDING" } });
         shopping += 1;
       }
@@ -173,7 +187,7 @@ export async function POST(request: NextRequest) {
       }
       const activitiesNotImported = Math.max(0, activityRows.length - recentActivities.length);
       await tx.activityLog.create({ data: { action: "BACKUP_RESTORE", userId: user.id, detail: `合并恢复：${items} 件物品、${locations} 个空间、${shopping} 条采购、${priceRecords} 条价格记录、${members} 位成员` } });
-      return { locations, items, shopping, priceRecords, members, activities, tasks, audits, preferences, notImported: { activities: activitiesNotImported }, skipped: { total: skippedTotal, examples: skippedExamples } };
+      return { locations, items, shopping, priceRecords, members, activities, tasks, audits, preferences, notImported: { activities: activitiesNotImported }, skipped: { total: skippedTotal, examples: skippedExamples }, duplicated: { total: duplicatedTotal, examples: duplicatedExamples } };
     }, { timeout: 120_000, maxWait: 10_000 });
     return NextResponse.json(result);
   } catch (error) { return apiError(error); }
