@@ -13,6 +13,7 @@ export async function loginAndConfirm(page, base, user, pass) {
   await page.waitForTimeout(1800);
 
   const needsLogin = (await page.locator("#auth-username").count()) > 0;
+  let limitedSeen = false;
   if (needsLogin) {
     // 登录接口限速 12 次/分钟/IP:连续跑多个套件时很容易撞上(实测过一次),
     // 这时页面会停在登录页、看起来像「账号失效」。这里识别出限速就等一等再试。
@@ -26,6 +27,7 @@ export async function loginAndConfirm(page, base, user, pass) {
       if (!stillLogin) break;
       const limited = await page.evaluate(() => /频繁|稍后再试|too many/i.test(document.body.innerText || ""));
       if (!limited) break;
+      limitedSeen = true;
       console.log("      登录被限速,等待 20 秒后重试");
       await page.waitForTimeout(20000);
     }
@@ -37,7 +39,14 @@ export async function loginAndConfirm(page, base, user, pass) {
   }));
 
   if (state.loginForm) {
-    return { ok: false, detail: `仍停在登录页(${state.head || "无内容"})——账号或密码可能已失效` };
+    return {
+      ok: false,
+      // 把「限流」和「密码不对」分开说:实测有一次连续跑套件撞上限流,而报错写的是「账号或密码可能已失效」,
+      // 我照着这句话去找密码问题,查了半天才发现只是 12 次/分钟的登录限流。
+      detail: limitedSeen
+        ? `仍停在登录页(${state.head || "无内容"})——**登录被限流**(12 次/分钟/IP),不是密码错;稍后重跑即可`
+        : `仍停在登录页(${state.head || "无内容"})——账号或密码可能已失效`,
+    };
   }
   return { ok: true, detail: "已进入应用" };
 }

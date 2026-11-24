@@ -24,9 +24,12 @@ const BASE = process.env.BASE_URL || "http://127.0.0.1:3001";
 const USER = process.env.PROBE_USER || "bgs";
 const PASS = process.env.PROBE_PASS || "GuiWu-2026-Home";
 
-/** 默认挑「快 + 历史上会留东西」的几个;完整清单可以用 --suites=... 指定。 */
+/** 默认这一组:都是**在空库上也能自己跑通**的套件(CI 里是空库)——
+ * 实测 verify-import 与 verify-task-recurrence 依赖前面套件留下的数据,空库上会失败,
+ * 所以不放进默认列表(那是另一个问题:套件之间的隐式依赖)。 */
+const DEFAULT_SUITES = "verify-payload-budget,api-contract-test,verify-members-and-sysinfo,verify-user-isolation,verify-image-upload,verify-restock-pause,verify-shopping-purchase,auth-matrix-test,backup-roundtrip-test";
 const suitesArg = process.argv.find((arg) => arg.startsWith("--suites="));
-const SUITES = (suitesArg ? suitesArg.slice("--suites=".length) : "verify-payload-budget,api-contract-test,verify-import,verify-task-recurrence")
+const SUITES = (suitesArg ? suitesArg.slice("--suites=".length) : DEFAULT_SUITES)
   .split(",").map((name) => name.trim()).filter(Boolean);
 
 const results = [];
@@ -76,7 +79,15 @@ const grew = (before, after) => {
 };
 
 const baseline = await snapshot();
-check("快照读到了(防止空跑)", Object.values(baseline).some((rows) => rows.length > 0), JSON.stringify(Object.fromEntries(Object.entries(baseline).map(([key, rows]) => [key, rows.length]))));
+// 「防止空跑」不能要求库里已经有数据 —— CI 是**空库**,那样这条检查自己就会红
+// (实测就是这么把 api 作业弄红的)。这里要确认的是「快照真的读到了状态」:
+// 六个类别都拿到了数组、健康检查通,而不是「里面有几行」。
+const health = await fetch(BASE + "/api/health").then((res) => res.status).catch(() => 0);
+check(
+  "快照读得到(六个类别都是数组,服务健康)",
+  health === 200 && Object.values(baseline).every(Array.isArray),
+  `health=${health} ${JSON.stringify(Object.fromEntries(Object.entries(baseline).map(([key, rows]) => [key, Array.isArray(rows) ? rows.length : "读取失败"])))}`,
+);
 
 const env = { ...process.env, BASE_URL: BASE, PROBE_USER: USER, PROBE_PASS: PASS };
 for (const suite of SUITES) {

@@ -173,6 +173,29 @@ jobs:
       # 必须 checkout:发布说明来自仓库里的 .github/release-notes/<tag>.md,
       # 没有这一步工作区是空的,文件判断永远为假(踩过:v0.0.8 发出去只有 Full Changelog)。
       - uses: actions/checkout@v5
+      # 发布前先确认**这个 tag 的 CI 是绿的**。
+      # 由来:v0.1.65 与 v0.1.66 的 Release 都发出去了,而它们的 CI 是红的
+      # (docker-publish 与 ci.yml 是两个工作流,发布作业只等镜像构建,不等 CI)。
+      # 用户看到「有新版本」就会去升级,所以「绿了才发」比「快发」重要。
+      - name: 等 CI 对这个提交通过(红了就不发 Release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA="${GITHUB_SHA}"
+          echo "检查提交 $SHA 的 CI 结果"
+          for i in $(seq 1 60); do
+            LINE=$(gh run list --repo "${GITHUB_REPOSITORY}" --workflow CI --commit "$SHA" --limit 1 --json status,conclusion --jq '.[0] | "\(.status) \(.conclusion)"' 2>/dev/null || echo "")
+            case "$LINE" in
+              "completed success") echo "CI 已通过"; exit 0 ;;
+              completed*)
+                echo "CI 没通过:$LINE —— 不发 Release,先修 CI"
+                exit 1 ;;
+              "") echo "还没找到这个提交的 CI 运行,10 秒后重试($i/60)"; sleep 10 ;;
+              *) echo "CI $LINE,10 秒后重试($i/60)"; sleep 10 ;;
+            esac
+          done
+          echo "等了 10 分钟还没等到 CI 结果,不发 Release"
+          exit 1
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
