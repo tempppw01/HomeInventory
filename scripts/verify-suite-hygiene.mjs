@@ -24,10 +24,11 @@ const BASE = process.env.BASE_URL || "http://127.0.0.1:3001";
 const USER = process.env.PROBE_USER || "bgs";
 const PASS = process.env.PROBE_PASS || "GuiWu-2026-Home";
 
-/** 默认这一组:都是**在空库上也能自己跑通**的套件(CI 里是空库)——
- * 实测 verify-import 与 verify-task-recurrence 依赖前面套件留下的数据,空库上会失败,
- * 所以不放进默认列表(那是另一个问题:套件之间的隐式依赖)。 */
-const DEFAULT_SUITES = "verify-payload-budget,api-contract-test,verify-members-and-sysinfo,verify-user-isolation,verify-image-upload,verify-restock-pause,verify-shopping-purchase,auth-matrix-test,backup-roundtrip-test";
+/** 默认这一组:都是**在空库上也能自己跑通**的套件(CI 里是空库)。
+ * 注意 verify-import 与 verify-task-recurrence 也在其中 —— 上一版我把它们当成「依赖前面套件
+ * 留下的数据」写进了说明,那是测量错误:真正的原因是当时 BASE_URL 指向空库、DATABASE_URL 还指向
+ * 主库(见上面那条「必须同一个库」的断言)。它们本身是自足的。 */
+const DEFAULT_SUITES = "verify-payload-budget,api-contract-test,verify-members-and-sysinfo,verify-user-isolation,verify-image-upload,verify-restock-pause,verify-shopping-purchase,auth-matrix-test,backup-roundtrip-test,verify-import,verify-task-recurrence";
 const suitesArg = process.argv.find((arg) => arg.startsWith("--suites="));
 const SUITES = (suitesArg ? suitesArg.slice("--suites=".length) : DEFAULT_SUITES)
   .split(",").map((name) => name.trim()).filter(Boolean);
@@ -88,6 +89,46 @@ check(
   health === 200 && Object.values(baseline).every(Array.isArray),
   `health=${health} ${JSON.stringify(Object.fromEntries(Object.entries(baseline).map(([key, rows]) => [key, Array.isArray(rows) ? rows.length : "读取失败"])))}`,
 );
+
+// ---------- BASE_URL 与 DATABASE_URL 必须是同一个库 ----------
+// 由来:我拿一个空库实例(3002)验「套件在空库上能不能自己跑」时,BASE_URL 指向空库,
+// 而 DATABASE_URL 还是主库 —— 于是 verify-import 里「直接读库核对」的那条检查读到 0 行,
+// 报出来像是「套件依赖前面套件留下的数据」。我照着这个结论把它从默认列表里移了出去,
+// 后来才发现套件本身没问题,是我的环境没对齐。
+// 这里就把「两边是不是同一个库」变成守卫的第一条断言:不一致时明确说出来,别让后面的失败被误读。
+{
+  const probeName = `卫生自检-${Date.now().toString(36).slice(-5)}`;
+  const created = await fetch(BASE + "/api/items", {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json" },
+    body: JSON.stringify({ name: probeName, category: "日用", type: "CONSUMABLE", unit: "件", quantity: 1, minQuantity: 0, remainingPercent: 100 }),
+  }).then((res) => res.json()).catch(() => null);
+  const createdId = created?.id ?? created?.item?.id ?? null;
+  let dbSees = null;
+  try {
+    const { PrismaClient } = await import("@prisma/client");
+    const prisma = new PrismaClient();
+    dbSees = await prisma.item.findFirst({ where: { name: probeName }, select: { id: true } });
+    if (createdId) await prisma.item.deleteMany({ where: { id: createdId } });
+    await prisma.$disconnect();
+  } catch (error) {
+    dbSees = { error: String(error.message).slice(0, 120) };
+  }
+  if (createdId) await fetch(`${BASE}/api/items/${createdId}`, { method: "DELETE", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ permanent: true }) }).catch(() => undefined);
+  const sameDatabase = Boolean(dbSees && !dbSees.error && dbSees.id === createdId);
+  check(
+    "BASE_URL 与 DATABASE_URL 指向同一个库(否则套件里「直接读库核对」的检查会误导)",
+    sameDatabase,
+    `接口建的 id=${createdId ?? "(建失败)"},按 DATABASE_URL 读库看到 ${dbSees?.error ?? dbSees?.id ?? "null"} —— 两边不是同一个库时请对齐后再跑`,
+  );
+  if (!sameDatabase) {
+    // 立刻停:继续跑下去只会产出「缺数据」「逻辑不对」这类误导性的失败。
+    console.log("\n库没对齐,后面的套件不跑了。请让 DATABASE_URL 指向 BASE_URL 那台服务用的库。");
+    const early = results.filter((entry) => !entry.ok);
+    console.log(`\n${results.length - early.length}/${results.length} 通过`);
+    process.exit(1);
+  }
+}
 
 const env = { ...process.env, BASE_URL: BASE, PROBE_USER: USER, PROBE_PASS: PASS };
 for (const suite of SUITES) {
