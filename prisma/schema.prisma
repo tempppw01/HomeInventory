@@ -244,6 +244,11 @@ model ShoppingItem {
   status     ShoppingStatus @default(PENDING)
   source     String         @default("manual")
   isFavorite Boolean        @default(false)
+  // 采购入库的记账:入了多少、入到哪件物品、什么时候入的。
+  // 有了这三个字段,重复点「已购买」不会重复加库存,撤销也能把量退回去。
+  stockedAt      DateTime?
+  stockedQuantity Float?
+  stockedItemId  String?
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
 

@@ -131,6 +131,9 @@ jobs:
       # 每日自动备份:与手动导出同构(此前漂成 version 1、少任务/盘点/偏好)、保留策略、状态可查
       - name: 自动备份检查(负载同构 / 保留最近 N 份 / 状态接口)
         run: node scripts/verify-auto-backup.mjs
+      # 采购闭环:标记「已购买」只该入库一次,撤销要退回(修之前 10 → 13 → 16 → 19)
+      - name: 采购闭环检查(只入一次库 / 撤销退回 / 记账在采购项上)
+        run: node scripts/verify-shopping-purchase.mjs
       # 老备份里的坏行必须被报出来(实测:4 行只剩 1 行,响应却只说恢复了 1 件)
       - name: 恢复报告检查(跳过的行要给出总数 / 行号 / 中文原因)
         run: node scripts/verify-restore-report.mjs

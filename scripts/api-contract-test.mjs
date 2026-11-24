@@ -236,11 +236,16 @@ const baseItem = { name: "T-基础物品", category: "日用", type: "CONSUMABLE
   const after = await call("GET", `/api/items/${targetId}`);
   record("shopping", "采购完成应把采购数量加进库存物品", Number(after.body?.quantity) === startQty + 3, `quantity=${after.body?.quantity}(期望 ${startQty + 3})`);
 
-  // 撤销:只把采购项改回待采购,不回收已入库的数量(界面上也是这个语义)。
+  // 撤销:界面上那个按钮叫「撤销」,所以**库存也要退回去** —— 否则撤销之后账面仍然虚高。
   const undo = await call("PATCH", `/api/shopping/${purchaseId}`, { status: "PENDING" });
   record("shopping", "撤销采购完成应回到待采购", undo.status === 200 && undo.body?.status === "PENDING", `status=${undo.status} state=${undo.body?.status}`);
   const afterUndo = await call("GET", `/api/items/${targetId}`);
-  record("shopping", "撤销后库存数量保持不变(只回退采购状态)", Number(afterUndo.body?.quantity) === startQty + 3, `quantity=${afterUndo.body?.quantity}(期望 ${startQty + 3})`);
+  record("shopping", "撤销后库存退回原值(而不是虚高)", Number(afterUndo.body?.quantity) === startQty, `quantity=${afterUndo.body?.quantity}(期望 ${startQty})`);
+
+  // 再标记一次:只加一次 —— 这一条挡住「来回切换把库存越堆越多」。
+  const again = await call("PATCH", `/api/shopping/${purchaseId}`, { status: "PURCHASED", replenishItemId: targetId });
+  const afterAgain = await call("GET", `/api/items/${targetId}`);
+  record("shopping", "撤销后再标记已购买只加一次库存", again.status === 200 && Number(afterAgain.body?.quantity) === startQty + 3, `quantity=${afterAgain.body?.quantity}(期望 ${startQty + 3})`);
 }
 
 // ============ 5c. 盘点历史(服务端留存)============

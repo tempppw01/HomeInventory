@@ -434,8 +434,17 @@ function useAppState() {
         if (await askConfirm(`“${item.name}”已买到。${label}`, { title: "顺便入库", confirmLabel: "入库" })) replenishItemId = matches[0].id;
       }
     }
-    await request(`/api/shopping/${item.id}`, { method: "PATCH", body: JSON.stringify({ status, replenishItemId }) });
-    setToast(replenishItemId ? "采购已完成,并已入库" : status === "PURCHASED" ? "采购项已完成" : "已恢复为待采购");
+    const result = await request<{ stocked?: boolean; reverted?: boolean }>(`/api/shopping/${item.id}`, { method: "PATCH", body: JSON.stringify({ status, replenishItemId }) });
+    // 按服务端的真实结果说话:重复点「已购买」不会再入一次库,撤销会把库存退回去。
+    setToast(
+      result?.stocked
+        ? "采购已完成,并已入库"
+        : result?.reverted
+          ? "已撤销采购,库存已退回"
+          : status === "PURCHASED"
+            ? "采购项已完成(之前已入过库,这次没有重复加)"
+            : "已恢复为待采购",
+    );
     // 误点「已购买」是最容易发生的操作失误,给一次撤销机会(与删除物品、消耗的交互保持一致)。
     setToastAction(status === "PURCHASED" ? { label: "撤销", onClick: async () => {
       try {
