@@ -22,6 +22,7 @@
 
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import { PrismaClient } from "@prisma/client";
 
 const DB_FILE = "data/sqlite-init-check.db";
@@ -41,6 +42,17 @@ const cleanup = () => {
   for (const suffix of ["", "-journal", "-wal", "-shm"]) {
     const file = DB_FILE + suffix;
     if (existsSync(file)) { try { rmSync(file); } catch { /* 忽略:进程可能还握着句柄 */ } }
+  }
+};
+
+/** 结构指纹:对象个数 + 名称清单摘要。prisma db push 若改了结构,这个值就会变。 */
+const snapshotObjects = () => {
+  const db = new DatabaseSync(DB_FILE, { readOnly: true });
+  try {
+    const rows = db.prepare("SELECT type, name FROM sqlite_master WHERE sql IS NOT NULL ORDER BY type, name").all();
+    return `${rows.length}:${rows.map((row) => `${row.type}:${row.name}`).join(",")}`;
+  } finally {
+    db.close();
   }
 };
 
@@ -128,6 +140,24 @@ if (built) {
   } finally {
     await prisma.$disconnect().catch(() => undefined);
   }
+
+  // 手写的 DDL 与 Prisma 期望的结构是否一致:让 prisma db push 当裁判。
+  // 实测(修之前)它会**悄悄再建 4 个索引**(ActivityLog 的 itemId/memberId/createdAt、Item.deletedAt),
+  // 而它只回一句「now in sync」——不看结构差异根本发现不了。容器建出来的库因此一直少这几个索引,
+  // 而 ActivityLog 是最大的表(实测本地 4 万行以上),详情页历史与扫码记录都靠它们。
+  // 现在新鲜库与 Prisma 完全一致:db push 会直接说 already in sync。
+  const before = snapshotObjects();
+  const pushOutput = execFileSync("npx", ["prisma", "db", "push", "--schema", "prisma/schema.prisma", "--skip-generate"], {
+    encoding: "utf8",
+    shell: true,
+    env: { ...process.env, DATABASE_URL: `file:../${DB_FILE}` },
+  });
+  const after = snapshotObjects();
+  const alreadyInSync = /already in sync/i.test(pushOutput);
+  const beforeCount = before.split(":")[0];
+  const afterCount = after.split(":")[0];
+  const added = after.split(":")[1].split(",").filter((name) => !before.split(":")[1].split(",").includes(name));
+  check("db push 认为这个库与 Prisma 完全一致(没有少索引 / 少外键)", alreadyInSync && before === after, `对象 ${beforeCount} → ${afterCount};db push 补了:${added.join(", ") || "无"}`);
 }
 
 cleanup();

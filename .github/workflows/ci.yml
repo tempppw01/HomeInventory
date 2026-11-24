@@ -82,6 +82,12 @@ jobs:
       # 由来:它悄悄漏过 2 张表 + 5 个字段,导致容器第一次启动就 500、盘点与搜索历史一直 503。
       - name: 全新 SQLite 库检查(init-sqlite.ts 与 schema.prisma 是否一致、能否真的写入)
         run: node scripts/verify-sqlite-init.mjs
+      # 容器**升级**路径:用旧版本的建库脚本造一个真实的老库,再让当前的 init-sqlite.ts 升级它。
+      # 需要 git 历史里的旧标签(浅克隆要显式取);取不到时套件会明确 SKIP 并给出原因。
+      - name: 取回旧版本标签(升级路径检查用)
+        run: git fetch --depth 1 origin tag v0.1.56 || true
+      - name: 容器升级路径检查(老库补齐表/列/索引、数据不丢、孤儿引用修复、幂等)
+        run: node scripts/verify-sqlite-upgrade.mjs
       - name: 初始化数据库与管理员账号
         run: |
           mkdir -p data

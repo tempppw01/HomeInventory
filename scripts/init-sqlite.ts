@@ -57,14 +57,17 @@ const statements = [
     "thumbnailUrl" TEXT,
     "parentId" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "Location_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "Location" ("id") ON DELETE SET NULL ON UPDATE CASCADE
   )`,
   `CREATE TABLE IF NOT EXISTS "HouseholdMember" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "name" TEXT NOT NULL,
     "color" TEXT NOT NULL DEFAULT '#7c3aed',
+    "userId" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "HouseholdMember_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
   )`,
   `CREATE TABLE IF NOT EXISTS "ActivityLog" (
     "id" TEXT NOT NULL PRIMARY KEY,
@@ -72,6 +75,7 @@ const statements = [
     "itemId" TEXT,
     "itemName" TEXT,
     "memberId" TEXT,
+    "userId" TEXT,
     "detail" TEXT,
     "undoOfId" TEXT,
     "undoneAt" DATETIME,
@@ -80,7 +84,8 @@ const statements = [
     "scanRequestId" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ActivityLog_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
-    CONSTRAINT "ActivityLog_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "HouseholdMember" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+    CONSTRAINT "ActivityLog_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "HouseholdMember" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT "ActivityLog_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
   )`,
   `CREATE TABLE IF NOT EXISTS "Item" (
     "id" TEXT NOT NULL PRIMARY KEY,
@@ -214,6 +219,12 @@ const statements = [
   `CREATE INDEX IF NOT EXISTS "AiChatMessage_userId_updatedAt_idx" ON "AiChatMessage"("userId", "updatedAt")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "HouseholdMember_userId_key" ON "HouseholdMember"("userId")`,
   `CREATE INDEX IF NOT EXISTS "ActivityLog_userId_idx" ON "ActivityLog"("userId")`,
+  // 这四个索引此前只在 prisma db push 建出来的库里存在 —— 容器(SQLite)建的库没有。
+  // ActivityLog 是最大的表(实测本地 4 万行以上),详情页历史、扫码记录、回收站都靠它们。
+  `CREATE INDEX IF NOT EXISTS "ActivityLog_itemId_idx" ON "ActivityLog"("itemId")`,
+  `CREATE INDEX IF NOT EXISTS "ActivityLog_memberId_idx" ON "ActivityLog"("memberId")`,
+  `CREATE INDEX IF NOT EXISTS "ActivityLog_createdAt_idx" ON "ActivityLog"("createdAt")`,
+  `CREATE INDEX IF NOT EXISTS "Item_deletedAt_idx" ON "Item"("deletedAt")`,
   `CREATE INDEX IF NOT EXISTS "Item_type_idx" ON "Item"("type")`,
   `CREATE INDEX IF NOT EXISTS "Item_category_idx" ON "Item"("category")`,
   `CREATE INDEX IF NOT EXISTS "Item_locationId_idx" ON "Item"("locationId")`,
@@ -313,6 +324,13 @@ async function main() {
   if (!ossColumns.some((column) => column.name === "directory")) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "OssSetting" ADD COLUMN "directory" TEXT NOT NULL DEFAULT 'home-inventory'`);
   }
+  // 老库里补不上外键(SQLite 的 ALTER 不支持加约束),那就用**同样的语义**把孤儿引用清掉:
+  // 删掉一个空间后,子空间的 parentId 原本仍指向已删除的行(实测:容器建的库就是这样,
+  // 而 prisma db push 建出来的库会按 ON DELETE SET NULL 置空),界面上那个子空间就无处挂靠 ——
+  // 东西还在、树上看不到,是这类应用最容易被当成「数据丢了」的情形。
+  await prisma.$executeRawUnsafe(`UPDATE "Location" SET "parentId" = NULL WHERE "parentId" IS NOT NULL AND "parentId" NOT IN (SELECT "id" FROM "Location")`);
+  await prisma.$executeRawUnsafe(`UPDATE "ActivityLog" SET "userId" = NULL WHERE "userId" IS NOT NULL AND "userId" NOT IN (SELECT "id" FROM "User")`);
+  await prisma.$executeRawUnsafe(`UPDATE "HouseholdMember" SET "userId" = NULL WHERE "userId" IS NOT NULL AND "userId" NOT IN (SELECT "id" FROM "User")`);
   await prisma.$executeRawUnsafe(`UPDATE "Item" SET "expiryDate" = NULL WHERE "type" = 'DURABLE' AND "expiryDate" IS NOT NULL`);
   // 存放建议与自动标签(后台规则引擎写入)
   for (const statement of [
