@@ -133,10 +133,18 @@ if (userId) {
   const actorId = actor.body?.id ?? actor.body?.user?.id ?? null;
   check("为这条检查建出一个临时账号", (actor.status === 200 || actor.status === 201) && Boolean(actorId), `status=${actor.status}`);
 
-  const dash = await call(admin.cookie, "GET", "/api/dashboard");
-  const items = Array.isArray(dash.body?.items) ? dash.body.items : [];
-  const target = items.find((entry) => entry.quantity > 0 && entry.type === "CONSUMABLE") ?? items.find((entry) => entry.quantity > 0);
-  check("有可用物品来做这条检查(防止空跑)", Boolean(target), `物品数=${items.length}`);
+  // 自带物品:不再依赖库里恰好还有库存(前面的套件会把消耗品消耗光 —— 实测这条因此假红过)。
+  const targetCreated = await call(admin.cookie, "POST", "/api/items", {
+    name: `${NAME}审计物品`,
+    category: "其他",
+    type: "CONSUMABLE",
+    quantity: 2,
+    unit: "个",
+    minQuantity: 0,
+    remainingPercent: 100,
+  });
+  const target = targetCreated.body?.id ? { id: targetCreated.body.id, name: targetCreated.body.name } : null;
+  check("为这条检查建出一件待消耗的物品", Boolean(target), `status=${targetCreated.status}`);
 
   if (actorId && target) {
     const actorSession = await loginRaw(actorName, actorPass);
@@ -157,6 +165,7 @@ if (userId) {
     check("历史里显示成「账号已删除」而不是「公开扫码」", label === "账号已删除", `实际=${label}`);
 
     if (record?.id) await call(admin.cookie, "POST", `/api/activity/${record.id}/undo`);
+    if (target) await call(admin.cookie, "DELETE", `/api/items/${target.id}`, { permanent: true });
   }
 }
 
