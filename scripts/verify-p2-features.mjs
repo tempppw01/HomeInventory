@@ -178,6 +178,18 @@ console.log("已清理");
     const match = /最近操作[^。]{0,40}/.exec(text);
     return match ? match[0] : null;
   });
+  // 自动备份的状态必须能在界面上看到(此前完全没有显示,失败也被 .catch(() => undefined) 吞掉)
+  const autoBackupCopy = await page.evaluate(() => {
+    const text = (document.body.innerText || "").replace(/\s+/g, " ");
+    const index = text.indexOf("自动备份状态");
+    return index >= 0 ? text.slice(index, index + 120) : null;
+  });
+  record(
+    "设置页显示自动备份状态(含上次成功时间或「还没成功过」)",
+    Boolean(autoBackupCopy) && /(上次成功|还没有成功执行过|正在读取)/.test(autoBackupCopy),
+    autoBackupCopy ?? "(没找到这一行)",
+  );
+
   record(
     "数据页「最近操作」带上真实总数并说明只列最近 5 条",
     Boolean(recentCopy) && /共 \d+ 条/.test(recentCopy) && /只列最近 5 条/.test(recentCopy),
@@ -186,20 +198,30 @@ console.log("已清理");
 
   // 详情页「变更记录」:要给出真实总数,并在超出时说明「以下是最近 N 条」
   {
-    const candidates = await page.evaluate(async () => {
-      const dash = await (await fetch("/api/dashboard", { cache: "no-store" })).json();
-      return (dash.items || []).filter((item) => item.quantity > 0).slice(0, 6).map((item) => ({ id: item.id, name: item.name }));
+    // 自己造一条历史:挑一件在库物品,改一下备注(会产生一条 UPDATE 活动记录),
+    // 再打开它的详情页 —— 这样不依赖「库里恰好有带历史的物品」(试过两种找法都不稳)。
+    const seeded = await page.evaluate(async () => {
+      const all = await (await fetch("/api/items?includeDeleted=1", { cache: "no-store" })).json();
+      const live = (Array.isArray(all) ? all : []).find((item) => !item.deletedAt);
+      if (!live) return null;
+      const stamp = new Date().toISOString().slice(11, 19);
+      const response = await fetch(`/api/items/${live.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: `变更记录检查 ${stamp}` }),
+      });
+      return { id: live.id, name: live.name, patched: response.status };
     });
     let copy = null;
-    for (const candidate of candidates) {
-      await page.goto(`${BASE}/items/${candidate.id}`, { waitUntil: "domcontentloaded" });
-      await page.waitForTimeout(1500);
+    if (seeded) {
+      await page.goto(`${BASE}/items/${seeded.id}`, { waitUntil: "domcontentloaded" });
+      await page.waitForTimeout(2400);
       copy = await page.evaluate(() => {
         const text = (document.body.innerText || "").replace(/\s+/g, " ");
         const index = text.indexOf("变更记录");
         return index >= 0 ? text.slice(index, index + 60) : null;
       });
-      if (copy && /共 \d+ 条/.test(copy)) break;
+      record("改一下备注就能产生一条变更记录(前置成立)", seeded.patched === 200, `PATCH=${seeded.patched}`);
     }
     record(
       "详情页「变更记录」给出真实总数,超出时说明「以下是最近 12 条」",

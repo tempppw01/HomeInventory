@@ -128,6 +128,9 @@ jobs:
       # 完整备份的覆盖面与体积:导出会随数据增长,恢复必须能吃得下(默认 proxy 上限只有 10 MB)
       - name: 完整备份的覆盖面与体积(≥10MB 也要能恢复 / 任务·盘点·偏好都在备份里)
         run: node scripts/verify-backup-scope.mjs
+      # 每日自动备份:与手动导出同构(此前漂成 version 1、少任务/盘点/偏好)、保留策略、状态可查
+      - name: 自动备份检查(负载同构 / 保留最近 N 份 / 状态接口)
+        run: node scripts/verify-auto-backup.mjs
       # 老备份里的坏行必须被报出来(实测:4 行只剩 1 行,响应却只说恢复了 1 件)
       - name: 恢复报告检查(跳过的行要给出总数 / 行号 / 中文原因)
         run: node scripts/verify-restore-report.mjs

@@ -139,7 +139,10 @@ function useAppState() {
     const key = "home-inventory-auto-backup-check";
     if (role !== "ADMIN") return;
     if (localStorage.getItem(key) === localDateString()) return;
-    fetch("/api/backup/auto", { method: "POST" }).then(() => localStorage.setItem(key, localDateString())).catch(() => undefined);
+    fetch("/api/backup/auto", { method: "POST" })
+      .then((response) => { localStorage.setItem(key, localDateString()); if (!response.ok) throw new Error("自动备份失败"); })
+      // 失败要说出来:以前这里是 .catch(() => undefined),连续几天没备份用户也看不出来。
+      .catch((error) => setToast(`自动备份没做成:${error instanceof Error ? error.message : "未知原因"} —— 可在「设置 · 数据安全」里手动导出一份`));
   }, [role]);
 
   // Real navigation now happens through the URL. The shell still fires the same

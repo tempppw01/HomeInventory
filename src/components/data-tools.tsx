@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-html-link-for-pages */
 import { useEffect, useState } from "react";
 import { MAX_BACKUP_BYTES, backupTooLargeMessage } from "@/lib/backup-limits";
-import { X, Download, Upload, Users, UserPlus, History, ShieldCheck } from "lucide-react";
+import { DatabaseBackup, X, Download, Upload, Users, UserPlus, History, ShieldCheck } from "lucide-react";
 import { ScanActivityPanel } from "@/components/scan-activity-panel";
 import { activityLabel } from "@/lib/activity-label";
 import { csvToItems, importResultText } from "@/lib/csv-import";
@@ -17,12 +17,28 @@ export function DataTools({ role, onToast }: { role: "ADMIN" | "MEMBER" | "VIEWE
   const [activity, setActivity] = useState<{ id: string; action: string; itemName: string | null; createdAt: string }[]>([]);
   // 接口一次最多给 100 条;这个数是**真实总数**(来自 X-Total-Count),用来把「截断」说清楚。
   const [activityTotal, setActivityTotal] = useState<number | null>(null);
-  const load = () => { fetch("/api/members").then((r) => r.json()).then(setMembers).catch(() => undefined); fetch("/api/activity").then((r) => {
+  // 自动备份状态:界面上要能看出它有没有在跑(此前完全没有显示)。
+  const [autoBackup, setAutoBackup] = useState<{ lastAutoBackupAt: string | null; keep: number; files: number; stale: boolean } | null>(null);
+  const load = () => { fetch("/api/members").then((r) => r.json()).then(setMembers).catch(() => undefined);
+    if (role === "ADMIN") fetch("/api/backup/auto").then((r) => (r.ok ? r.json() : null)).then((data) => data && setAutoBackup(data)).catch(() => undefined); fetch("/api/activity").then((r) => {
   const header = r.headers.get("x-total-count");
   if (header && /^\d+$/.test(header)) setActivityTotal(Number(header));
   return r.json();
 }).then(setActivity).catch(() => undefined); };
   useEffect(load, []);
+
+  // 自动备份状态单独拉:渲染期不能调 Date.now()(react-hooks/purity),所以在这里算好「是否过期」。
+  useEffect(() => {
+    if (role !== "ADMIN") return;
+    fetch("/api/backup/auto")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!data) return;
+        const last = data.lastAutoBackupAt ? new Date(data.lastAutoBackupAt).getTime() : null;
+        setAutoBackup({ ...data, stale: last === null || Date.now() - last > 2 * 86400000 });
+      })
+      .catch(() => undefined);
+  }, [role]);
   const addMember = async () => { if (!name.trim()) return; const response = await fetch("/api/members", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) }); if (response.ok) { setName(""); load(); onToast("成员已添加"); } };
   const importFile = async (file?: File) => {
     if (!file) return;
@@ -76,6 +92,9 @@ export function DataTools({ role, onToast }: { role: "ADMIN" | "MEMBER" | "VIEWE
   const isAdmin = role === "ADMIN";
   // 只读账号能看能导出,但不能写(导入/加成员都会被 403 拒绝)
   const isViewer = role === "VIEWER";
+
+  // 超过两天没成功备份就提示 —— 这类「静静没在跑」的事必须让人看见(state.stale 在请求回调里算)。
+  const autoBackupStale = Boolean(autoBackup?.stale);
 
   return <SettingsSection
     icon={ShieldCheck}
@@ -136,8 +155,24 @@ export function DataTools({ role, onToast }: { role: "ADMIN" | "MEMBER" | "VIEWE
       </div>}
     />
 
-    <SettingsRow
+      <SettingsRow
+        icon={DatabaseBackup}
+        title="自动备份状态"
+        description="每天首次打开时自动备份一次;超过保留份数的旧备份会被清理"
+        control={<SettingsBadge tone={autoBackupStale ? "warning" : "muted"}>{autoBackupStale ? "可能没在跑" : `保留最近 ${autoBackup?.keep ?? "?"} 份`}</SettingsBadge>}
+      />
+      <p className="mb-0 px-1 pb-2 text-xs muted">
+        {autoBackup === null
+          ? "正在读取自动备份状态…"
+          : autoBackup.lastAutoBackupAt
+            ? `上次成功:${new Date(autoBackup.lastAutoBackupAt).toLocaleString("zh-CN")};目录里现有 ${autoBackup.files} 份。`
+            : "还没有成功执行过。请确认服务端 data/backups 目录可写。"}
+        {autoBackupStale ? " 已经超过两天没有成功备份,点上面的「导出完整备份」先手动存一份。" : ""}
+      </p>
+
+          <SettingsRow
       icon={History}
+      
       title={activityTotal !== null && activityTotal > 5 ? `最近操作(共 ${activityTotal} 条,只列最近 5 条)` : "最近操作"}
       stacked
       control={<div className="w-full">{activity.slice(0, 5).map((entry) => <ListRow key={entry.id} title={<span className="block whitespace-normal break-words">{activityLabel(entry.action)} · {entry.itemName || "物品"}</span>} trailing={<span className="shrink-0 text-xs muted">{new Date(entry.createdAt).toLocaleDateString("zh-CN")}</span>} />)}</div>}

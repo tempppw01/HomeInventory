@@ -21,6 +21,7 @@
 | `DATABASE_PROVIDER` | 由 `DATABASE_URL` 推断 | 显式指定 `sqlite` 或 `mysql` |
 | `LOCAL_UPLOAD_DIR` | `./data/uploads`(容器内 `/app/data/uploads`) | 物品照片的存放目录 |
 | `BACKUP_DIR` | 上传目录下的 `backups/` | **自动备份**的存放目录;想把备份放到另一块盘就改这里 |
+| `BACKUP_KEEP` | `14` | 自动备份保留最近几份(更旧的自动清理);备份会随活动记录增长,默认按两周留 |
 | `IMAGE_STORAGE_MODE` | `local` | `local` / `oss` / `both` |
 | `OSS_REGION` `OSS_BUCKET` `OSS_ACCESS_KEY_ID` `OSS_ACCESS_KEY_SECRET` | 空 | 用对象存储时的凭据(也可以只填在设置页) |
 | `OSS_ENDPOINT` `OSS_DIRECTORY` `OSS_PUBLIC_BASE_URL` | 空 / `home-inventory` / 空 | 自建 S3 兼容服务时用 |

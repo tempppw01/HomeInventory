@@ -1,6 +1,6 @@
 {
   "name": "home-inventory",
-  "version": "0.1.53",
+  "version": "0.1.54",
   "private": true,
   "engines": {
     "node": ">=22"
@@ -20,7 +20,7 @@
     "db:normalize": "tsx scripts/normalize-items.ts",
     "db:setup": "npm run db:generate && npm run db:init:sqlite && npm run db:seed && npm run db:backfill && npm run db:normalize",
     "test:unit": "node scripts/verify-ci-workflow.mjs && node --experimental-strip-types --import ./scripts/lib/register-alias.mjs --test \"scripts/unit/*.test.mjs\" && node scripts/verify-api-guards.mjs && node scripts/verify-config-docs.mjs && node scripts/verify-schema-sync.mjs",
-    "test:api": "node scripts/api-contract-test.mjs && node scripts/verify-task-recurrence.mjs && node scripts/verify-backup-dates.mjs && node scripts/verify-restore-report.mjs && node scripts/verify-backup-scope.mjs && node scripts/verify-account-ops.mjs && node scripts/verify-account-self-service.mjs && node scripts/verify-search-history-and-backup.mjs && node scripts/verify-restock-pause.mjs && node scripts/verify-concurrency.mjs && node scripts/verify-image-upload.mjs && node scripts/verify-user-isolation.mjs && node scripts/verify-import.mjs && node scripts/verify-members-and-sysinfo.mjs && node scripts/verify-write-guards.mjs && node scripts/verify-payload-budget.mjs",
+    "test:api": "node scripts/api-contract-test.mjs && node scripts/verify-task-recurrence.mjs && node scripts/verify-backup-dates.mjs && node scripts/verify-restore-report.mjs && node scripts/verify-backup-scope.mjs && node scripts/verify-auto-backup.mjs && node scripts/verify-account-ops.mjs && node scripts/verify-account-self-service.mjs && node scripts/verify-search-history-and-backup.mjs && node scripts/verify-restock-pause.mjs && node scripts/verify-concurrency.mjs && node scripts/verify-image-upload.mjs && node scripts/verify-user-isolation.mjs && node scripts/verify-import.mjs && node scripts/verify-members-and-sysinfo.mjs && node scripts/verify-write-guards.mjs && node scripts/verify-payload-budget.mjs",
     "test:auth": "node scripts/auth-matrix-test.mjs",
     "test:backup": "node scripts/backup-roundtrip-test.mjs",
     "test:edge": "node scripts/edge-input-test.mjs",
