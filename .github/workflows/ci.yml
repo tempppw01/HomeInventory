@@ -391,8 +391,8 @@ jobs:
     env:
       DATABASE_PROVIDER: mysql
       DATABASE_URL: mysql://root:rootpw@127.0.0.1:3306/homeinventory
-      PROBE_USER: bgs
-      PROBE_PASS: Ci#Bootstrap2026
+      PROBE_USER: leadcheck
+      PROBE_PASS: Lead#2026
       BASE_URL: http://127.0.0.1:3001
     steps:
       - uses: actions/checkout@v5
@@ -406,19 +406,9 @@ jobs:
           npx prisma generate --schema prisma/schema.mysql.prisma
           npx prisma db push --schema prisma/schema.mysql.prisma --skip-generate
       - run: npm run build
-      - name: 初始化管理员(MySQL 上是空库)
-        run: |
-          node -e "
-            const { PrismaClient } = require('@prisma/client');
-            const { randomBytes, scryptSync } = require('node:crypto');
-            const salt = randomBytes(16).toString('hex');
-            const hash = salt + ':' + scryptSync(process.env.PROBE_PASS, salt, 64).toString('hex');
-            (async () => {
-              const prisma = new PrismaClient();
-              await prisma.user.create({ data: { username: process.env.PROBE_USER, displayName: 'CI', passwordHash: hash, role: 'ADMIN' } });
-              await prisma.$disconnect();
-            })();
-          "
+      # 用仓库里已有的建号脚本 —— 别再写内联 node -e:上次那句 $disconnect 被 shell 展开成了 prisma.()
+      - name: 初始化账号(MySQL 上是空库)
+        run: node scripts/make-probe-accounts.mjs
       - name: 启动服务
         run: |
           PORT=3001 node node_modules/next/dist/bin/next start > server.log 2>&1 &
