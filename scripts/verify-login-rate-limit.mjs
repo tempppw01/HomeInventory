@@ -32,6 +32,9 @@ const attempt = async ({ username, forwarded, password = "wrong-password-for-pro
 };
 
 const STAMP = Date.now().toString(36).slice(-5);
+// 用真实账号验证「正确密码不会被限流」:变量与其它套件一致(已在配置文档白名单里)。
+const USER_FOR_LIMIT = process.env.PROBE_USER || "bgs";
+const PROCESS_PASS = process.env.PROBE_PASS || "GuiWu-2026-Home";
 const victim = `rate-${STAMP}`;          // 一个不存在的账号名:用来量"按账号"那一层
 const neighbour = `rate-${STAMP}-b`;
 
@@ -52,6 +55,17 @@ const neighbour = `rate-${STAMP}-b`;
   check("每个请求换一个 X-Forwarded-For,打同一个账号也会被拦(修之前 0 次)", blocked >= 1, `statuses=${statuses.join(",")}`);
 }
 
+// ---------- 2.5 正常登录不该被限流拖住(只数失败) ----------
+// 由来:此前成功登录也计数 —— CI 里 25 个套件连着登录把窗口打满,后面的套件要等 345 秒
+// (作业从 5m30s 变成 11m35s)。限流该数的是失败,不是「登录得多」。
+{
+  const statuses = [];
+  for (let index = 0; index < 15; index += 1) {
+    const result = await attempt({ username: USER_FOR_LIMIT, forwarded: "203.0.113.90", password: PROCESS_PASS });
+    statuses.push(result.status);
+  }
+  check("连续 15 次正确密码登录全部成功(限流只数失败)", statuses.every((status) => status === 200), "statuses=" + statuses.join(","));
+}
 // ---------- 3 换一个账号不该被连累 ----------
 {
   const first = await attempt({ username: neighbour, forwarded: "192.0.2.50" });

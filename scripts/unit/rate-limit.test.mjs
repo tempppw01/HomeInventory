@@ -8,7 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { clientAddress, rateLimit } from "../../src/lib/rate-limit.ts";
+import { clientAddress, rateLimit, resetRateLimit } from "../../src/lib/rate-limit.ts";
 
 const uniqueKey = (label) => `${label}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
@@ -51,4 +51,23 @@ test("只有一段时就是它;没有 XFF 时退回 x-real-ip,再退回 unknown"
   assert.equal(clientAddress(new Request("http://localhost/", { headers: { "x-forwarded-for": " , 5.5.5.5 , " } })), "5.5.5.5");
   assert.equal(clientAddress(new Request("http://localhost/", { headers: { "x-real-ip": "7.7.7.7" } })), "7.7.7.7");
   assert.equal(clientAddress(new Request("http://localhost/")), "unknown");
+});
+test("只读判断(increment:false)不消耗额度 —— 正常登录不该被自己的限流拖住", () => {
+  const key = uniqueKey("peek");
+  for (let index = 0; index < 20; index += 1) {
+    assert.equal(rateLimit(key, 3, 60_000, { increment: false }).ok, true, "只读判断不该把额度用掉");
+  }
+  // 真正记账之后才会被拦
+  rateLimit(key, 3, 60_000);
+  rateLimit(key, 3, 60_000);
+  rateLimit(key, 3, 60_000);
+  assert.equal(rateLimit(key, 3, 60_000, { increment: false }).ok, false);
+});
+
+test("resetRateLimit 清掉计数(登录成功后", () => {
+  const key = uniqueKey("reset");
+  rateLimit(key, 1, 60_000);
+  assert.equal(rateLimit(key, 1, 60_000, { increment: false }).ok, false);
+  resetRateLimit(key);
+  assert.equal(rateLimit(key, 1, 60_000, { increment: false }).ok, true);
 });
