@@ -82,9 +82,15 @@ export function DataTools({ role, onToast }: { role: "ADMIN" | "MEMBER" | "VIEWE
   // 先比大小:超限的话服务端会以「请求内容不是合法的 JSON」拒绝,那句话会把人带偏。
   if (file.size > MAX_BACKUP_BYTES) { onToast(backupTooLargeMessage(file.size)); return; }
   try { let backup; try { backup = JSON.parse(await file.text()); } catch { onToast("这个文件不是有效的完整备份 JSON,请选择「导出完整备份」生成的文件"); return; } const counts = { items: Array.isArray(backup.items) ? backup.items.length : 0, locations: Array.isArray(backup.locations) ? backup.locations.length : 0, shopping: Array.isArray(backup.shopping) ? backup.shopping.length : 0, priceRecords: Array.isArray(backup.priceRecords) ? backup.priceRecords.length : 0, members: Array.isArray(backup.members) ? backup.members.length : 0 }; if (!counts.items && !counts.locations && !counts.shopping) throw new Error("备份文件中没有可恢复的数据"); const summary = `将检查 ${counts.items} 件物品、${counts.locations} 个空间、${counts.shopping} 条采购${counts.priceRecords ? `、${counts.priceRecords} 条价格记录` : ""}${counts.members ? `、${counts.members} 位成员` : ""}，重复数据会自动跳过;格式不认识的行也会被跳过,恢复完会告诉你跳了哪些。`; if (!(await askConfirm(summary, { title: "恢复完整备份", confirmLabel: "开始恢复" }))) return; const response = await fetch("/api/backup/restore", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(backup) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || "恢复失败"); const skippedTotal = Number(result.skipped?.total ?? 0);
-  const duplicatedTotal = Number(result.duplicated?.total ?? 0); const firstSkip = Array.isArray(result.skipped?.examples) ? result.skipped.examples[0] : null; const base = `已合并恢复 ${result.items} 件物品、${result.locations} 个空间、${result.priceRecords || 0} 条价格记录`; const notes = [
+  const duplicatedTotal = Number(result.duplicated?.total ?? 0); const firstSkip = Array.isArray(result.skipped?.examples) ? result.skipped.examples[0] : null; const base = `已合并恢复 ${result.items} 件物品、${result.locations} 个空间、${result.priceRecords || 0} 条价格记录`;
+  // 超过单次上限而没恢复的部分必须说出来:静默少恢复,用户会以为「备份就是这些」。
+  const truncatedTotal = Number(result.truncatedTotal ?? 0);
+  const TRUNCATED_LABELS: Record<string, string> = { locations: "空间", items: "物品", shopping: "采购", priceRecords: "价格记录", members: "成员", tasks: "任务", audits: "盘点", activities: "活动记录", preferences: "偏好设置" };
+  const truncatedText = Object.entries(result.truncated ?? {}).map(([key, value]) => `${TRUNCATED_LABELS[key] ?? key} ${value}`).join("、");
+  const notes = [
     duplicatedTotal > 0 ? `${duplicatedTotal} 条与库里已有的重复,已跳过` : "",
     skippedTotal > 0 ? `${skippedTotal} 行格式不认识,没进${firstSkip ? `(第 ${firstSkip.row} 行:${firstSkip.reason})` : ""}` : "",
+    truncatedTotal > 0 ? `另有 ${truncatedTotal} 条超过单次恢复上限,没有恢复(${truncatedText});请分两次导入或改用重新部署` : "",
   ].filter(Boolean);
   onToast(notes.length ? `${base};${notes.join(";")}` : base); } catch (error) { onToast(error instanceof Error ? error.message : "恢复失败"); } };
 

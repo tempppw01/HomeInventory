@@ -8,6 +8,23 @@ import { itemSchema, locationSchema, shoppingSchema } from "@/lib/validation";
 
 type BackupPayload = { items?: unknown[]; locations?: unknown[]; shopping?: unknown[]; priceRecords?: unknown[]; members?: unknown[]; activities?: unknown[]; tasks?: unknown[]; audits?: unknown[]; preferences?: unknown[] };
 
+/**
+ * 每类数据单次恢复的上限。超过上限的部分**必须如实回报** —— 此前只有活动记录报了
+ * notImported,其余几类直接 slice 掉、响应里 skipped 还是 0:
+ * 实测提交 2050 条物品,只导入 2000 条,响应却像「全都恢复了」,用户少了 50 件也不知道。
+ */
+const RESTORE_LIMITS = {
+  locations: 200,
+  items: 2000,
+  shopping: 1000,
+  priceRecords: 5000,
+  members: 100,
+  tasks: 500,
+  audits: 500,
+  activities: 2000,
+  preferences: 1,
+} as const;
+
 /** Safely merges a trusted export into the current household without deleting existing records. */
 export async function POST(request: NextRequest) {
   try {
@@ -190,8 +207,30 @@ export async function POST(request: NextRequest) {
         activities += 1;
       }
       const activitiesNotImported = Math.max(0, activityRows.length - recentActivities.length);
-      await tx.activityLog.create({ data: { action: "BACKUP_RESTORE", userId: user.id, detail: `合并恢复：${items} 件物品、${locations} 个空间、${shopping} 条采购、${priceRecords} 条价格记录、${members} 位成员` } });
-      return { locations, items, shopping, priceRecords, members, activities, tasks, audits, preferences, notImported: { activities: activitiesNotImported }, skipped: { total: skippedTotal, examples: skippedExamples }, duplicated: { total: duplicatedTotal, examples: duplicatedExamples } };
+            // 逐类算出「因为超过上限而没恢复」的条数:静默丢数据比恢复失败更糟 ——
+            // 恢复失败用户会重试,静默丢数据用户永远不知道。
+            // 实测(修之前)提交 2050 条物品:只导入 2000 条,响应里 skipped 仍是 0、
+            // notImported 只提活动记录,看起来像「全都恢复了」。
+            const truncated: Record<string, number> = {};
+            for (const [collection, limit] of Object.entries(RESTORE_LIMITS)) {
+              if (collection === "activities") continue; // 活动记录另有 notImported 口径
+              const rows = (body as Record<string, unknown>)[collection];
+              const total = Array.isArray(rows) ? rows.length : 0;
+              if (total > limit) truncated[collection] = total - limit;
+            }
+            const truncatedTotal = Object.values(truncated).reduce((sum, value) => sum + value, 0);
+            const notImported: Record<string, number> = { activities: activitiesNotImported };
+            for (const [collection, count] of Object.entries(truncated)) notImported[collection] = count;
+            await tx.activityLog.create({ data: { action: "BACKUP_RESTORE", userId: user.id, detail: `合并恢复:${items} 件物品、${locations} 个空间、${shopping} 条采购、${priceRecords} 条价格记录、${members} 位成员` } });
+            return {
+              locations, items, shopping, priceRecords, members, activities, tasks, audits, preferences,
+              notImported,
+              // 超过单次上限而没恢复的条数(按类别);truncatedTotal 为 0 才代表备份里每一行都处理过了。
+              truncated,
+              truncatedTotal,
+              skipped: { total: skippedTotal, examples: skippedExamples },
+              duplicated: { total: duplicatedTotal, examples: duplicatedExamples },
+            };
     }, { timeout: 120_000, maxWait: 10_000 });
     return NextResponse.json(result);
   } catch (error) { return apiError(error); }

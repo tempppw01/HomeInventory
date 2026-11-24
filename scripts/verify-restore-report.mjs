@@ -66,6 +66,33 @@ const dash = await api("GET", "/api/dashboard", null);
 const saved = (dash.json?.items ?? []).filter((item) => item.name.startsWith(PREFIX)).map((item) => item.name);
 check("坏行确实没进库(否则报告就成了空话)", saved.length === 1 && saved[0].includes("正常"), saved.join("、") || "(无)");
 
+// ---------- 超过单次上限的部分也必须报出来 ----------
+// 实测(修之前):提交 2050 条物品只导入 2000 条,响应里 skipped 仍是 0、notImported 只提活动记录,
+// 看起来像「全都恢复了」。静默少恢复比恢复失败更糟:用户不会知道自己少了 50 件。
+// 这里用小上限的空间(200)来验证,代价小、结论一样。
+{
+  const SPACE_PREFIX = `恢复上限探针${Date.now().toString(36).slice(-4)}`;
+  const overflow = {
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    locations: Array.from({ length: 202 }, (_, index) => ({ id: `${SPACE_PREFIX}-${index}`, name: `${SPACE_PREFIX}-${String(index).padStart(3, "0")}`, icon: "Package", color: "#7c3aed" })),
+    items: [],
+    shopping: [],
+  };
+  const restored = await api("POST", "/api/backup/restore", overflow);
+  check("超上限的恢复本身不报错(能恢复的部分照常恢复)", restored.status === 200, `status=${restored.status} ${JSON.stringify(restored.json?.error ?? "").slice(0, 80)}`);
+  check("只恢复了上限内的 200 个空间", restored.json?.locations === 200, `实际=${restored.json?.locations}`);
+  check("响应如实给出「因超过上限没恢复」的条数", Number(restored.json?.truncatedTotal) === 2 && Number(restored.json?.truncated?.locations) === 2, JSON.stringify(restored.json?.truncated ?? null));
+  check("notImported 里也按类别列出来", Number(restored.json?.notImported?.locations) === 2, JSON.stringify(restored.json?.notImported ?? null));
+  check("没有把超上限算成「格式不认识的跳过」", Number(restored.json?.skipped?.total ?? -1) === 0, `skipped=${restored.json?.skipped?.total}`);
+
+  // 收尾:删掉这次建出来的空间
+  const locations = await api("GET", "/api/locations", null);
+  const created = (Array.isArray(locations.json) ? locations.json : []).filter((row) => String(row.name).startsWith(SPACE_PREFIX));
+  for (const row of created) await api("DELETE", `/api/locations/${row.id}`, null);
+  check("超上限探针的空间已清理", true, `清理 ${created.length} 个`);
+}
+
 // 收尾
 for (const item of (dash.json?.items ?? []).filter((entry) => entry.name.startsWith(PREFIX))) {
   await api("DELETE", `/api/items/${item.id}`, { permanent: true });
