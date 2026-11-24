@@ -54,6 +54,21 @@ const get = async (path, attempt = 1) => {
 };
 const list = (value, key) => (Array.isArray(value) ? value : value?.[key] ?? []);
 
+/** 活动记录的**真实总数**:/api/activity 一次只回 100 行,用 rows.length 会在超过 100 条时
+ *  永远显示"没有增长"(我自己先写成那样了)。真实总数在响应头 X-Total-Count 里。 */
+const activityTotal = async () => {
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    try {
+      const res = await fetch(BASE + "/api/activity", { headers: { cookie } });
+      const header = res.headers.get("x-total-count");
+      return header && /^\d+$/.test(header) ? Number(header) : NaN;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 200 * attempt));
+    }
+  }
+  return NaN;
+};
+
 const snapshot = async () => {
   const dash = (await get("/api/dashboard")) ?? {};
   return {
@@ -63,6 +78,7 @@ const snapshot = async () => {
     "任务": list(await get("/api/tasks"), "tasks").map((row) => row.title),
     "成员": list(await get("/api/members"), "members").map((row) => row.name),
     "搜索历史": list(await get("/api/search-history"), "history").map((row) => row.query),
+    "活动记录": await activityTotal(),
   };
 };
 
@@ -84,10 +100,13 @@ const baseline = await snapshot();
 // (实测就是这么把 api 作业弄红的)。这里要确认的是「快照真的读到了状态」:
 // 六个类别都拿到了数组、健康检查通,而不是「里面有几行」。
 const health = await fetch(BASE + "/api/health").then((res) => res.status).catch(() => 0);
+const arrayCategories = Object.entries(baseline).filter(([key]) => key !== "活动记录");
+const arraysOk = arrayCategories.every(([, rows]) => Array.isArray(rows));
+const activityOk = Number.isFinite(Number(baseline["活动记录"]));
 check(
-  "快照读得到(六个类别都是数组,服务健康)",
-  health === 200 && Object.values(baseline).every(Array.isArray),
-  `health=${health} ${JSON.stringify(Object.fromEntries(Object.entries(baseline).map(([key, rows]) => [key, Array.isArray(rows) ? rows.length : "读取失败"])))}`,
+  "快照读得到(六类清单都是数组、活动记录是数字、服务健康)",
+  health === 200 && arraysOk && activityOk,
+  `health=${health} ${JSON.stringify(Object.fromEntries(Object.entries(baseline).map(([key, rows]) => [key, Array.isArray(rows) ? rows.length : rows])))}`,
 );
 
 // ---------- BASE_URL 与 DATABASE_URL 必须是同一个库 ----------
@@ -131,6 +150,8 @@ check(
 }
 
 const env = { ...process.env, BASE_URL: BASE, PROBE_USER: USER, PROBE_PASS: PASS };
+// 本次运行被套件写进库里的活动记录条数(只是告知,不算失败)
+let activityAdded = 0;
 for (const suite of SUITES) {
   const file = `scripts/${suite}.mjs`;
   try {
@@ -154,10 +175,24 @@ for (const suite of SUITES) {
   check(`${suite}:自己跑过`, ran, tail.slice(0, 200));
   if (!ran) continue;
   for (const [category, rows] of Object.entries(after)) {
+    // 活动记录**不算失败**:任何套件只要走真实接口就一定会写流水(实测每类操作恰好写 1 条),
+    // 那是被测量系统本身的代价,不是"没清干净"。但必须**说出来** ——
+    // 我自己就在这条上栽过:连续几轮把套件跑在真实库上,攒了 7.3 万条流水(约 29 MB)。
+    if (category === "活动记录") {
+      const added = Number(rows) - Number(before[category] ?? 0);
+      if (added > 0) {
+        activityAdded += added;
+        console.log(`INFO  ${suite}:新增活动记录 ${added} 条(套件走真实接口的必然代价;要跑套件请用临时库)`);
+      }
+      continue;
+    }
     const extra = grew(before[category] ?? [], rows);
     check(`${suite}:没有留下${category}`, extra.length === 0, `多了 ${extra.length} 个:${extra.slice(0, 6).join(" / ")}`);
   }
 }
+
+if (activityAdded > 0) console.log(`
+本次运行新增活动记录 ${activityAdded} 条 —— 套件走真实接口必然写流水;要跑套件请用临时库(见 docs/verification.md)`);
 
 const failed = results.filter((entry) => !entry.ok);
 console.log(`\n${results.length - failed.length}/${results.length} 通过`);

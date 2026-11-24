@@ -55,7 +55,7 @@
 | 套件 | 覆盖什么 | 条数 |
 | --- | --- | --- |
 | `api-contract-test` | 各接口的字段与错误码、注入类输入(含**零宽字符名称被拒 / 可见字符不受影响**) | 60 |
-| `verify-suite-hygiene` | **套件卫生**:跑完一批套件后库里不该多出空间 / 物品 / 采购 / 任务 / 成员 / 搜索历史(测出过 66 个残留任务、403 件残留物品);另含一条「BASE_URL 与 DATABASE_URL 必须是同一个库」的前置断言(不一致就立刻停,免得后面的失败被误读成"缺数据")。独立作业、空库上跑,默认 12 个在空库上自足的套件 | 86 | 卫生 |
+| `verify-suite-hygiene` | **套件卫生**:跑完一批套件后库里不该多出空间 / 物品 / 采购 / 任务 / 成员 / 搜索历史(测出过 66 个残留任务、403 件残留物品);另含一条「BASE_URL 与 DATABASE_URL 必须是同一个库」的前置断言(不一致就立刻停,免得后面的失败被误读成"缺数据")。**活动记录只报告不判失败**:任何套件走真实接口都必然写流水(实测每类操作恰好 1 条),所以它会打印"本次新增 N 条"并提醒要跑套件请用临时库。独立作业、空库上跑,默认 12 个在空库上自足的套件 | 86 | 卫生 |
 | `auth-matrix-test` | 三种角色的权限矩阵、找回流程 | 47 |
 | `backup-roundtrip-test` | 导出 → 恢复 → 比对(日期不挪位) | 25 |
 | `edge-input-test` | 极端值、超长、表情、非法 JSON | 26 |
@@ -185,3 +185,22 @@ PROBE_USER=bgs PROBE_PASS=... PROBE_VIEWER_PASS=... node scripts/verify-contrast
 
 只读角色相关的检查需要 `PROBE_VIEWER_PASS`;探针账号由
 `node scripts/make-probe-accounts.mjs` 创建(CI 里每个界面作业都会先跑)。
+
+### 跑套件请用临时库(实测代价)
+
+**任何套件只要走真实接口就一定会写「活动记录」** —— 实测每类操作(建物品 / 改 / 消耗 / 撤销 /
+加采购 / 建空间)恰好各写 1 条。所以:
+
+```bash
+# 临时库 + 另一个端口,别对着家里的真实库跑
+DATABASE_URL="file:../data/scratch.db" npx prisma db push --schema prisma/schema.prisma --skip-generate
+DATABASE_URL="file:../data/scratch.db" PORT=3002 npm start
+BASE_URL=http://127.0.0.1:3002 PROBE_USER=... PROBE_PASS=... node scripts/verify-xxx.mjs
+```
+
+`verify-suite-hygiene` 会把本次新增的活动记录条数**打印出来**(只报告、不判失败),
+免得再出现「连跑几轮,真实库里攒了 7.3 万条流水(约 29 MB)」那种事。
+
+顺带记两个实测数字(用于判断要不要保留策略):
+**家庭日常按每天 20 次操作,一年约 7,300 条 ≈ 2.9 MB,十年 ≈ 29 MB** ——
+所以**没有**给活动记录加自动清理;而且 SQLite 删除后文件不会自己变小(要 `VACUUM`)。
