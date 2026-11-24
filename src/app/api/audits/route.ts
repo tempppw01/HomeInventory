@@ -26,6 +26,11 @@ export async function GET() {
   }
 }
 
+// 盘点数量的合理上界。实测(修之前):`total: 1000000000` 会被原样写进盘点历史 ——
+// 一条这样的记录会让「最近几次盘了多少」彻底失真,而且它永久留在历史里(只留 20 条,也会顶掉真实记录)。
+// 家庭库存不可能到百万级;超过就明确拒绝,不要把它当成"用户的数据"存下来。
+const MAX_AUDIT_COUNT = 1_000_000;
+
 export async function POST(request: NextRequest) {
   try {
     const user = await requireWritableUser();
@@ -34,6 +39,9 @@ export async function POST(request: NextRequest) {
     const confirmed = Number(body.confirmed);
     if (!Number.isFinite(total) || !Number.isFinite(confirmed) || total < 0 || confirmed < 0) {
       return NextResponse.json({ error: "盘点数据不正确" }, { status: 400 });
+    }
+    if (total > MAX_AUDIT_COUNT || confirmed > MAX_AUDIT_COUNT) {
+      return NextResponse.json({ error: `盘点数量超出合理范围(单次最多 ${MAX_AUDIT_COUNT.toLocaleString("zh-CN")} 件),请核对后重试` }, { status: 400 });
     }
     const row = await prisma.auditRecord.create({
       data: {

@@ -107,6 +107,41 @@ check(
   `记录=${JSON.stringify(latest)} 界面=${JSON.stringify(afterReload)}`,
 );
 
+// ---------- 3.5 服务端对盘点数字的边界处理 ----------
+// 由来(实测):`total: 1000000000` 会被原样写进盘点历史 —— 一条这样的记录会让"最近盘了多少"彻底失真,
+// 而且只留 20 条,它会顶掉一条真实记录。取整 / 确认数不超过总数 / 空间名截断这几条已经实现,一并钉住。
+{
+  const post = async (body) => page.evaluate(async (payload) => {
+    const response = await fetch("/api/audits", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload), cache: "no-store" });
+    return { status: response.status, json: await response.json().catch(() => null) };
+  }, body);
+
+  const absurd = await post({ total: 1000000000, confirmed: 1000000000 });
+  check("荒唐的盘点数量(10 亿)被拒,不会写进历史", absurd.status === 400 && /合理范围/.test(String(absurd.json?.error ?? "")), `status=${absurd.status} ${JSON.stringify(absurd.json?.error ?? "").slice(0, 80)}`);
+
+  const overConfirm = await post({ total: 5, confirmed: 9 });
+  check("确认数超过总数会被夹到总数", overConfirm.status === 201 && Number(overConfirm.json?.confirmed) === 5, JSON.stringify(overConfirm.json).slice(0, 90));
+
+  const rounded = await post({ total: 3.7, confirmed: 2.4 });
+  check("小数会被取整", rounded.status === 201 && Number(rounded.json?.total) === 4 && Number(rounded.json?.confirmed) === 2, JSON.stringify(rounded.json).slice(0, 90));
+
+  const longName = await post({ total: 1, confirmed: 1, locationName: "厨".repeat(200) });
+  check("超长空间名会被截到 60 字", longName.status === 201 && String(longName.json?.locationName ?? "").length === 60, `长度=${String(longName.json?.locationName ?? "").length}`);
+
+  const negative = await post({ total: -3, confirmed: 1 });
+  check("负数被拒", negative.status === 400, `status=${negative.status}`);
+
+  // 复查历史:里面不该留下任何不合理的记录(包括刚才那几条合法测试记录的数字关系)
+  const again = await page.evaluate(async () => {
+    const response = await fetch("/api/audits", { cache: "no-store" });
+    return { status: response.status, json: await response.json().catch(() => null) };
+  });
+  const rows = Array.isArray(again.json?.audits) ? again.json.audits : [];
+  const impossible = rows.filter((row) => Number(row.confirmed) > Number(row.total) || Number(row.total) < 0 || Number(row.total) > 1000000 || !Number.isInteger(Number(row.total)));
+  check("盘点历史里没有不合理记录(确认数≤总数、总数在合理范围)", impossible.length === 0, JSON.stringify(impossible).slice(0, 160));
+  check("盘点历史最多保留 20 条", rows.length <= 20, `实际 ${rows.length} 条`);
+}
+
 // ---------- 4 服务端写入失败时必须说出来 ----------
 {
   await openAudit();
