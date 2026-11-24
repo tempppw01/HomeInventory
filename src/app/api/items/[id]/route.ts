@@ -94,7 +94,7 @@ export async function DELETE(request: NextRequest, { params }: Context) {
     }
     else {
       await prisma.item.update({ where: { id }, data: { deletedAt: new Date() } });
-      await prisma.activityLog.create({ data: { action: "DELETE", itemId: item.id, itemName: item.name, userId: user.id, memberId: typeof body.memberId === "string" ? body.memberId : null, detail: "移入回收站" } });
+      await prisma.activityLog.create({ data: { action: "DELETE", itemId: item.id, itemName: item.name, userId: user.id, memberId: (await prisma.householdMember.findFirst({ where: { userId: user.id }, select: { id: true } }))?.id ?? null, detail: "移入回收站" } });
     }
     return NextResponse.json({ ok: true, deletedAt: new Date().toISOString() });
   } catch (error) {

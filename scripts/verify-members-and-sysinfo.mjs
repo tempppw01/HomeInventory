@@ -155,6 +155,46 @@ for (const row of await memberRows()) {
   if (String(row.name || "").startsWith("成员验收")) await call("DELETE", `/api/members/${row.id}`);
 }
 
+// ---------- 删除物品时的成员归属:不能张冠李戴 ----------
+{
+  // 造两个成员,拿第一个成员的 id 冒充「操作人」
+  const first = await call("POST", "/api/members", { name: `${NAME}甲`, color: "#7c3aed" });
+  const second = await call("POST", "/api/members", { name: `${NAME}乙`, color: "#2563eb" });
+  const firstId = first.body?.id ?? first.body?.member?.id ?? null;
+  check("为这条检查造出两个家庭成员", Boolean(firstId) && Boolean(second.body?.id ?? second.body?.member?.id), `status=${first.status}/${second.status}`);
+
+  const item = await call("POST", "/api/items", { name: `${NAME}待删物品`, category: "其他", type: "DURABLE", quantity: 1, unit: "个", minQuantity: 0, remainingPercent: 100 });
+  const itemId = item.body?.id ?? null;
+  check("造出一件用于删除的物品", Boolean(itemId), `status=${item.status}`);
+
+  if (itemId && firstId) {
+    // 像旧客户端那样,明确带上**第一个成员**的 id
+    const removed = await call("DELETE", `/api/items/${itemId}`, { memberId: firstId });
+    check("删除成功", removed.status === 200, `status=${removed.status}`);
+
+    const activity = await call("GET", `/api/activity?itemId=${itemId}`);
+    const rows = Array.isArray(activity.body) ? activity.body : [];
+    const record = rows.find((row) => row.action === "DELETE");
+    check("删除留下了活动记录", Boolean(record), `记录数=${rows.length}`);
+    check(
+      "客户端传的成员 id 不被采信(记录里的成员不是那个传进来的成员)",
+      Boolean(record) && record.memberId !== firstId,
+      `记录 memberId=${record?.memberId ?? null} 传进去的=${firstId}`,
+    );
+    check(
+      "记录里的成员按「当前账号关联的成员」判定(没有关联就是空)",
+      Boolean(record) && (record.memberId === null || record.memberId !== firstId),
+      JSON.stringify({ memberId: record?.memberId ?? null, member: record?.member?.name ?? null }),
+    );
+
+    await call("DELETE", `/api/items/${itemId}`, { permanent: true });
+  }
+  await call("DELETE", `/api/members/${firstId}`);
+  const secondId = second.body?.id ?? second.body?.member?.id ?? null;
+  if (secondId) await call("DELETE", `/api/members/${secondId}`);
+  check("探针成员已清理", !(await memberNames()).includes(`${NAME}甲`), (await memberNames()).join("、"));
+}
+
 const failed = results.filter((entry) => !entry.ok);
 console.log(`\n${results.length - failed.length}/${results.length} 通过`);
 if (failed.length) for (const entry of failed) console.log(`[${entry.name}] ${entry.detail}`);

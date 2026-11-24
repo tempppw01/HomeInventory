@@ -46,7 +46,6 @@ function useAppState() {
   const [qrItem, setQrItem] = useState<Item | null>(null);
   const [printItems, setPrintItems] = useState<Item[] | null>(null);
   const [aiItem, setAiItem] = useState<Item | null>(null);
-  const [memberId, setMemberId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [toastAction, setToastAction] = useState<ToastAction>(null);
   const [loading, setLoading] = useState(true);
@@ -208,7 +207,6 @@ function useAppState() {
     document.documentElement.dataset.density = density;
     document.documentElement.dataset.motion = motionMode;
   }, [density, motionMode]);
-  useEffect(() => { request<{ id: string }[]>("/api/members").then((members) => setMemberId(members[0]?.id ?? null)).catch(() => undefined); }, []);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => { setToast(null); setToastAction(null); }, toastAction ? 5200 : 2600);
@@ -388,7 +386,7 @@ function useAppState() {
 
   const removeItem = async (item: Item) => {
     if (!(await askConfirm(`确定将“${item.name}”移入回收站吗?`, { title: "移入回收站", confirmLabel: "移入回收站" }))) return;
-    await request(`/api/items/${item.id}`, { method: "DELETE", body: JSON.stringify({ memberId }) });
+    await request(`/api/items/${item.id}`, { method: "DELETE" });
     // 手滑是家用场景最常见的误操作:5 秒内可以从 toast 直接恢复,不必去回收站翻。
     setToast(`「${item.name}」已移入回收站`);
     setToastAction({ label: "撤销", onClick: async () => { try { await request(`/api/items/${item.id}/restore`, { method: "POST" }); setToastAction(null); setToast(`「${item.name}」已恢复`); await refresh(); } catch (error) { setToast(error instanceof Error ? error.message : "撤销失败"); } } });
