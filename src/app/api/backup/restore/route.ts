@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { localDateOf } from "@/lib/local-date";
 import { prisma } from "@/lib/prisma";
 import { apiError, requireAdminUser } from "@/lib/api";
+import { backupDir, isBackupFileName } from "@/lib/backup-files";
+import { MAX_BACKUP_BYTES, backupTooLargeMessage } from "@/lib/backup-limits";
 import { createItemCode } from "@/lib/item-code";
 import { normalizeItemQuantity } from "@/lib/item-metrics";
 import { itemSchema, locationSchema, shoppingSchema } from "@/lib/validation";
@@ -29,7 +33,36 @@ const RESTORE_LIMITS = {
 export async function POST(request: NextRequest) {
   try {
     const user = await requireAdminUser();
-    const body = await request.json() as BackupPayload;
+    // 1 先按声明的长度拦超限请求:实测 70 MB 的备份会**在解析前被截断**,
+    //   request.json() 抛 SyntaxError,而 apiError 把它翻成「请求内容不是合法的 JSON」——
+    //   用户的文件明明是合法的,却被告知文件坏了。这里如实说「太大了」并给出可照做的建议。
+    const declared = Number(request.headers.get("content-length") ?? 0);
+    if (Number.isFinite(declared) && declared > MAX_BACKUP_BYTES) {
+      return NextResponse.json(
+        { error: backupTooLargeMessage(declared), code: "BACKUP_TOO_LARGE", limit: MAX_BACKUP_BYTES },
+        { status: 413 },
+      );
+    }
+    const parsedBody = await request.json() as BackupPayload & { fromFile?: unknown };
+    // 2 也允许「从服务器上的那份自动备份恢复」:备份超过请求上限时这是唯一可行的路
+    //   (服务器本来就每天写一份到磁盘,不必再上传一遍)。
+    let body: BackupPayload = parsedBody;
+    let sourceFile: string | null = null;
+    if (typeof parsedBody.fromFile === "string") {
+      const name = parsedBody.fromFile.trim();
+      if (!isBackupFileName(name)) {
+        return NextResponse.json({ error: "备份文件名不合法(只接受 home-inventory-年-月-日.json)" }, { status: 400 });
+      }
+      const file = path.join(backupDir(), name);
+      const text = await readFile(file, "utf8").catch(() => null);
+      if (text === null) return NextResponse.json({ error: `服务器上找不到这份备份:${name}` }, { status: 404 });
+      try {
+        body = JSON.parse(text) as BackupPayload;
+      } catch {
+        return NextResponse.json({ error: `服务器上这份备份不是合法的 JSON:${name}` }, { status: 400 });
+      }
+      sourceFile = name;
+    }
     if (!Array.isArray(body.items) && !Array.isArray(body.locations) && !Array.isArray(body.shopping)) {
       return NextResponse.json({ error: "备份文件中没有可恢复的数据" }, { status: 400 });
     }
@@ -228,7 +261,8 @@ export async function POST(request: NextRequest) {
               // 超过单次上限而没恢复的条数(按类别);truncatedTotal 为 0 才代表备份里每一行都处理过了。
               truncated,
               truncatedTotal,
-              skipped: { total: skippedTotal, examples: skippedExamples },
+              sourceFile,
+        skipped: { total: skippedTotal, examples: skippedExamples },
               duplicated: { total: duplicatedTotal, examples: duplicatedExamples },
             };
     }, { timeout: 120_000, maxWait: 10_000 });

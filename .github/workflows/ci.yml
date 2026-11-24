@@ -153,6 +153,10 @@ jobs:
       # 老备份里的坏行必须被报出来(实测:4 行只剩 1 行,响应却只说恢复了 1 件)
       - name: 恢复报告检查(跳过的行要给出总数 / 行号 / 中文原因)
         run: node scripts/verify-restore-report.mjs
+      # 备份超过 64 MB 请求上限时:要说「太大了」而不是谎报「JSON 不合法」,并且要有一条真能用的路
+      # (从服务器磁盘上那份自动备份恢复),路径穿越要挡住。
+      - name: 从服务器备份恢复检查(超限 413 + 文案 / 从文件恢复 / 路径穿越 / 只读 403)
+        run: node scripts/verify-restore-from-file.mjs
       - name: 图片上传检查(本地存储)
         run: node scripts/verify-image-upload.mjs
       - name: 家庭成员与系统信息检查

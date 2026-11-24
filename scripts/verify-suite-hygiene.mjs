@@ -28,7 +28,7 @@ const PASS = process.env.PROBE_PASS || "GuiWu-2026-Home";
  * 注意 verify-import 与 verify-task-recurrence 也在其中 —— 上一版我把它们当成「依赖前面套件
  * 留下的数据」写进了说明,那是测量错误:真正的原因是当时 BASE_URL 指向空库、DATABASE_URL 还指向
  * 主库(见上面那条「必须同一个库」的断言)。它们本身是自足的。 */
-const DEFAULT_SUITES = "verify-payload-budget,api-contract-test,verify-members-and-sysinfo,verify-user-isolation,verify-image-upload,verify-restock-pause,verify-shopping-purchase,auth-matrix-test,backup-roundtrip-test,verify-import,verify-task-recurrence";
+const DEFAULT_SUITES = "verify-payload-budget,api-contract-test,verify-members-and-sysinfo,verify-user-isolation,verify-image-upload,verify-restock-pause,verify-shopping-purchase,auth-matrix-test,backup-roundtrip-test,verify-import,verify-task-recurrence,verify-restore-from-file";
 const suitesArg = process.argv.find((arg) => arg.startsWith("--suites="));
 const SUITES = (suitesArg ? suitesArg.slice("--suites=".length) : DEFAULT_SUITES)
   .split(",").map((name) => name.trim()).filter(Boolean);

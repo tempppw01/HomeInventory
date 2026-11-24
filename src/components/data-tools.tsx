@@ -17,8 +17,10 @@ export function DataTools({ role, onToast }: { role: "ADMIN" | "MEMBER" | "VIEWE
   const [activity, setActivity] = useState<{ id: string; action: string; itemName: string | null; createdAt: string }[]>([]);
   // 接口一次最多给 100 条;这个数是**真实总数**(来自 X-Total-Count),用来把「截断」说清楚。
   const [activityTotal, setActivityTotal] = useState<number | null>(null);
+  // 从服务器上那份备份恢复用的选择项(见 restoreFromServerFile)。
+  const [serverFile, setServerFile] = useState("");
   // 自动备份状态:界面上要能看出它有没有在跑(此前完全没有显示)。
-  const [autoBackup, setAutoBackup] = useState<{ lastAutoBackupAt: string | null; keep: number; files: number; stale: boolean } | null>(null);
+  const [autoBackup, setAutoBackup] = useState<{ lastAutoBackupAt: string | null; keep: number; files: number; fileNames?: string[]; stale: boolean } | null>(null);
   const load = () => { fetch("/api/members").then((r) => r.json()).then(setMembers).catch(() => undefined);
     if (role === "ADMIN") fetch("/api/backup/auto").then((r) => (r.ok ? r.json() : null)).then((data) => data && setAutoBackup(data)).catch(() => undefined); fetch("/api/activity").then((r) => {
   const header = r.headers.get("x-total-count");
@@ -39,6 +41,19 @@ export function DataTools({ role, onToast }: { role: "ADMIN" | "MEMBER" | "VIEWE
       })
       .catch(() => undefined);
   }, [role]);
+  // 从服务器上那份自动备份恢复:备份超过请求上限时,上传这条路根本走不通 ——
+  // 服务器本来就每天写一份到磁盘,直接让它自己读。
+  const restoreFromServerFile = async (fileName: string) => {
+    if (!fileName) return;
+    if (!(await askConfirm(`将把服务器上的 ${fileName} 合并恢复到当前家庭(重复数据会自动跳过)。`, { title: "从服务器备份恢复", confirmLabel: "开始恢复" }))) return;
+    try {
+      const response = await fetch("/api/backup/restore", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fromFile: fileName }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "恢复失败");
+      onToast(`已从 ${result.sourceFile ?? fileName} 恢复 ${result.items} 件物品、${result.locations} 个空间`);
+      load();
+    } catch (error) { onToast(error instanceof Error ? error.message : "恢复失败"); }
+  };
   const addMember = async () => { if (!name.trim()) return; const response = await fetch("/api/members", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) }); if (response.ok) { setName(""); load(); onToast("成员已添加"); } };
   const importFile = async (file?: File) => {
     if (!file) return;
@@ -175,6 +190,17 @@ export function DataTools({ role, onToast }: { role: "ADMIN" | "MEMBER" | "VIEWE
             : "还没有成功执行过。请确认服务端 data/backups 目录可写。"}
         {autoBackupStale ? " 已经超过两天没有成功备份,点上面的「导出完整备份」先手动存一份。" : ""}
       </p>
+      {/* 备份超过上传上限(64 MB)时,「合并恢复备份」那条路走不通 ——
+          服务器本来就每天写一份到磁盘,直接让它自己读那份文件即可。 */}
+      {isAdmin && (autoBackup?.fileNames?.length ?? 0) > 0 && (
+        <div className="flex flex-wrap items-center gap-2 px-1 pb-3">
+          <span className="text-xs muted">从服务器上的备份恢复:</span>
+          <select className="input h-9 min-h-9 text-xs" value={serverFile} onChange={(event) => setServerFile(event.target.value)}>
+            {(autoBackup?.fileNames ?? []).map((name) => <option key={name} value={name}>{name}</option>)}
+          </select>
+          <button type="button" className="btn-ghost h-9 min-h-9 px-3 text-xs" onClick={() => restoreFromServerFile(serverFile || autoBackup?.fileNames?.at(-1) || "")}>恢复这一份</button>
+        </div>
+      )}
 
           <SettingsRow
       icon={History}
