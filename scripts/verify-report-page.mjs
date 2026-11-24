@@ -62,6 +62,36 @@ check("月报页返回 200 且没有落进错误边界", status === 200 && !stat
 check("月报页显示标题与四个小节", state.title && state.sections === 4, `title=${state.title} sections=${state.sections}`);
 check("月报页有月份标签", state.monthLabel, `monthLabel=${state.monthLabel}`);
 check("月报页图表正常渲染(柱状 + 占比)", state.chartBars > 0 && Boolean(state.shareAria), `bars=${state.chartBars} share=${state.shareAria}`);
+
+// ---------- 数字要能和别的页面/接口对上 ----------
+// 由来(实测):月报的「物品 N 件」多了一个 `quantity > 0` 的过滤,而概览接口不过滤 ——
+// 同一份数据,概览说 4 件、月报说 3 件(用完但还留着等补货的那件在月报里"消失")。
+// 这里拿两边的数字直接对账,任何一边改了口径都会红。用现场数据即可,不需要造数。
+{
+  const onPage = Number((state.text.match(/物品\s*([0-9]+)\s*件/) ?? [])[1] ?? NaN);
+  const dashboard = await page.evaluate(async () => {
+    const response = await fetch("/api/dashboard", { cache: "no-store" });
+    const json = await response.json().catch(() => null);
+    return { status: response.status, count: Array.isArray(json?.items) ? json.items.length : -1 };
+  });
+  check(
+    "月报的「物品」件数与概览接口一致(同一份数据不许两个数字)",
+    Number.isFinite(onPage) && dashboard.count > 0 && onPage === dashboard.count,
+    `月报=${Number.isFinite(onPage) ? onPage : "(没读到)"} 概览=${dashboard.count}`,
+  );
+  // 估算价值也顺带核一次:两处都该是 Σ(价格×数量)
+  const sumPriceQuantity = await page.evaluate(async () => {
+    const response = await fetch("/api/dashboard", { cache: "no-store" });
+    const json = await response.json().catch(() => null);
+    return (json?.items ?? []).reduce((sum, item) => sum + (item.price ?? 0) * item.quantity, 0);
+  });
+  const valueOnPage = Number((state.text.match(/估算价值\s*[¥￥]\s*([0-9]+)/) ?? [])[1] ?? NaN);
+  check(
+    "月报的「估算价值」等于 Σ(价格×数量)",
+    Number.isFinite(valueOnPage) && Math.abs(valueOnPage - Math.round(sumPriceQuantity)) <= 1,
+    `月报=${Number.isFinite(valueOnPage) ? valueOnPage : "(没读到)"} 手算=${Math.round(sumPriceQuantity)}`,
+  );
+}
 // 月份标签必须落在柱子的正下方。此前标签行用 flex justify-between 铺满整行,
 // 首尾两个会跑到柱子外侧(1440px 宽实测偏 137px),读者会把标签认到隔壁柱子上。
 const axis = await page.evaluate(() => {

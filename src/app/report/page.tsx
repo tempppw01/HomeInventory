@@ -27,7 +27,10 @@ export default async function ReportPage() {
 
   const [items, locations, priceRecords] = await Promise.all([
     prisma.item.findMany({
-      where: { deletedAt: null, quantity: { gt: 0 } },
+      // 与概览页同一个口径:非删除即算(此前这里多了 `quantity: { gt: 0 }`,于是
+      // 用完但还留着等补货的物品在月报里"消失"了 —— 实测同一份数据概览说 4 件、月报说 3 件。
+      // 「同一份数据在两个地方得出不同结论是最伤信任的事」(这个文件自己的注释就写着这句)。
+      where: { deletedAt: null },
       select: {
         id: true, name: true, category: true, type: true, unit: true, quantity: true,
         remainingPercent: true, consumeRate: true, price: true, minQuantity: true, expiryDate: true,
