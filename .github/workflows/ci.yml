@@ -449,6 +449,10 @@ jobs:
         run: node scripts/api-contract-test.mjs
       - name: 迁移脚本(在 MySQL 上:编号回填用本地创建日 / 幂等 / normalize 只动耐用品)
         run: node scripts/verify-migrations.mjs
+      # 并发保证此前只在 SQLite 上验过 —— 而 SQLite 的写事务天然串行,等于白拿。
+      # MySQL 靠行锁,重复入库、并发撤销、扫码幂等这些「点两下就会发生」的事必须在这里也验一遍。
+      - name: 并发行为(在 MySQL 上:重复建议 / 原子消耗 / 并发撤销与入库 / 扫码幂等)
+        run: node scripts/verify-concurrency.mjs
       - name: 失败时打印服务日志
         if: failure()
         run: tail -100 server.log
