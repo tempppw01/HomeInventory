@@ -86,11 +86,15 @@ check("坏行确实没进库(否则报告就成了空话)", saved.length === 1 &
   check("notImported 里也按类别列出来", Number(restored.json?.notImported?.locations) === 2, JSON.stringify(restored.json?.notImported ?? null));
   check("没有把超上限算成「格式不认识的跳过」", Number(restored.json?.skipped?.total ?? -1) === 0, `skipped=${restored.json?.skipped?.total}`);
 
-  // 收尾:删掉这次建出来的空间
-  const locations = await api("GET", "/api/locations", null);
-  const created = (Array.isArray(locations.json) ? locations.json : []).filter((row) => String(row.name).startsWith(SPACE_PREFIX));
+  // 收尾:删掉这次建出来的空间。
+  // 注意:空间列表要走 /api/dashboard —— GET /api/locations 是 405(没有这个 GET 路由)。
+  // 我第一版就是用了 /api/locations,拿到 405 → 列表为空 → 「已清理」的检查永远通过,
+  // 而 200 个探针空间一个都没删掉。检查里不许出现这种「测不到东西却报 PASS」。
+  const spaces = (await api("GET", "/api/dashboard", null)).json?.locations ?? [];
+  const created = spaces.filter((row) => String(row.name).startsWith(SPACE_PREFIX));
   for (const row of created) await api("DELETE", `/api/locations/${row.id}`, null);
-  check("超上限探针的空间已清理", true, `清理 ${created.length} 个`);
+  const leftSpaces = ((await api("GET", "/api/dashboard", null)).json?.locations ?? []).filter((row) => String(row.name).startsWith(SPACE_PREFIX));
+  check("超上限探针的空间已清理", leftSpaces.length === 0, `删了 ${created.length} 个,还剩 ${leftSpaces.length} 个`);
 }
 
 // 收尾
