@@ -1,4 +1,5 @@
 // 备份导出 → 清空 → 导入 回环测试:逐字段比对,确保不丢字段、不翻倍。
+import { sweepPrefix } from "./lib/sweep-prefix.mjs";
 
 const BASE = process.env.BASE_URL || "http://127.0.0.1:3001";
 const results = [];
@@ -90,7 +91,7 @@ record("导出", "保留中文与符号备注", backup.items?.some((row) => Stri
 
 // ---- 3. 清空 ----
 for (const id of signature.itemIds) await call("DELETE", `/api/items/${id}`);
-await call("DELETE", `/api/tasks/${signature.taskId}`);
+await call("PATCH", "/api/tasks", { id: signature.taskId, action: "delete" });
 await call("DELETE", `/api/shopping/${signature.shoppingId}`);
 if (signature.subLocationId) await call("DELETE", `/api/locations/${signature.subLocationId}`);
 if (signature.locationId) await call("DELETE", `/api/locations/${signature.locationId}`);
@@ -136,10 +137,10 @@ const rowsAgain = Array.isArray(itemsAgain.body) ? itemsAgain.body : (itemsAgain
 record("幂等", "二次导入后物品数不翻倍", rowsAgain.filter((row) => String(row.name).startsWith("B-")).length === 3, `实际=${rowsAgain.filter((row) => String(row.name).startsWith("B-")).length}`);
 
 // ---- 清理 ----
-for (const row of rowsAgain.filter((entry) => String(entry.name).startsWith("B-"))) await call("DELETE", `/api/items/${row.id}`);
-for (const row of taskRows.filter((entry) => String(entry.title).startsWith("B-"))) await call("DELETE", `/api/tasks/${row.id}`);
-for (const row of shoppingAfter.filter((entry) => String(entry.name).startsWith("B-"))) await call("DELETE", `/api/shopping/${row.id}`);
-for (const row of locationRows.filter((entry) => String(entry.name).startsWith("B-")).reverse()) await call("DELETE", `/api/locations/${row.id}`);
+// 按前缀读最新状态再删:上面那几行删的是「这一轮开头拍下来的快照」,
+// 而 B-厨房/B-吊柜、B-洗洁精这些是后面才建的,根本不在快照里 —— 实测跑完它们还在。
+const swept = await sweepPrefix({ base: BASE, cookie, prefix: "B-" });
+console.log(`清理:任务 ${swept.tasks} / 物品 ${swept.items} / 空间 ${swept.locations} / 采购 ${swept.shopping};残留 ${swept.leftover} 条`);
 console.log("\n清理完成");
 
 const failed = results.filter((row) => !row.ok);

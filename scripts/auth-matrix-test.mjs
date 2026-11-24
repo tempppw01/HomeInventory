@@ -1,4 +1,5 @@
 // 权限矩阵与账号安全测试。用法:node output/experience/auth-matrix-test.mjs [--keep]
+import { sweepPrefix } from "./lib/sweep-prefix.mjs";
 const BASE = process.env.BASE_URL || "http://127.0.0.1:3001";
 const ADMIN = { username: process.env.PROBE_USER || "bgs", password: process.env.PROBE_PASS };
 if (!ADMIN.password) throw new Error("set PROBE_PASS");
@@ -185,7 +186,7 @@ for (const [label, method, path, body] of [
 // ---- 清理 ----
 if (!process.argv.includes("--keep")) {
   for (const id of createdIds.items) await call("DELETE", `/api/items/${id}`, { cookie: admin.cookie });
-  for (const id of createdIds.tasks) await call("DELETE", `/api/tasks/${id}`, { cookie: admin.cookie });
+  for (const id of createdIds.tasks) await call("PATCH", "/api/tasks", { cookie: admin.cookie, body: { id, action: "delete" } });
   for (const id of createdIds.shopping) await call("DELETE", `/api/shopping/${id}`, { cookie: admin.cookie });
   for (const id of createdIds.locations) await call("DELETE", `/api/locations/${id}`, { cookie: admin.cookie });
   for (const id of createdUsers) await call("DELETE", `/api/auth/users/${id}`, { cookie: admin.cookie });
@@ -207,4 +208,9 @@ const membersBody = (await call("GET", "/api/members")).body;
 for (const row of Array.isArray(membersBody) ? membersBody : []) {
   if (/核对/.test(String(row.name || ""))) await call("DELETE", `/api/members/${row.id}`);
 }
+// 收尾:按自己的前缀清扫一遍(任务/物品/空间/采购)。
+// 之前只删「登记过的 id」,而有些记录(例如权限矩阵里那几个)根本没被登记 ——
+// 实测跑完会留下 12 个 A-矩阵任务、A-矩阵物品 等。
+const swept = await sweepPrefix({ base: BASE, cookie: admin.cookie, prefix: "A-" });
+console.log(`\n清理:任务 ${swept.tasks} / 物品 ${swept.items} / 空间 ${swept.locations} / 采购 ${swept.shopping};残留 ${swept.leftover} 条`);
 process.exit(failed.length ? 1 : 0);

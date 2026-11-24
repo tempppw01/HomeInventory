@@ -110,6 +110,12 @@ jobs:
             if curl -fsS http://127.0.0.1:3001/api/health > /dev/null; then echo "ready"; break; fi
             sleep 2
           done
+      # 套件自己的卫生:跑完一批套件之后,库里不该多出任何东西(空间/物品/采购/任务/成员/搜索历史)。
+      # 放在最前面跑,是因为 CI 是空库 —— 固定名字的夹具(例如「载荷探针空间」)第一次建出来就能被看到。
+      # 由来:多个套件只建不删,任务删除还调了不存在的 DELETE /api/tasks/{id}(404 被吞掉),
+      # 本地实测积了 66 个 T- 任务、12 个 A-矩阵任务、403 件 T- 物品。
+      - name: 套件卫生检查(跑完不留数据:空间 / 物品 / 采购 / 任务 / 成员 / 搜索历史)
+        run: node scripts/verify-suite-hygiene.mjs
       - run: node scripts/api-contract-test.mjs
       - run: node scripts/auth-matrix-test.mjs
       - run: node scripts/backup-roundtrip-test.mjs

@@ -124,6 +124,17 @@ for (const item of probeItems) {
 }
 check(`探针物品已清理(${removed}/${probeItems.length})`, probeItems.length > 0 && removed === probeItems.length, `剩 ${probeItems.length - removed} 条`);
 
+// 这个套件还会建一个「载荷探针空间」(上面 locationName 那里),此前从来不删 ——
+// 实测跑完后库里永远多一个空间。空间没有前缀变量,名字是写死的,这里按名字清理。
+let spaceRemoved = 0;
+const dashAfter = await (await fetch(`${BASE}/api/dashboard`, { headers: { cookie } })).json().catch(() => ({}));
+for (const space of (dashAfter.locations ?? []).filter((row) => String(row.name) === "载荷探针空间")) {
+  const response = await fetch(`${BASE}/api/locations/${space.id}`, { method: "DELETE", headers: { cookie } });
+  if (response.ok) spaceRemoved += 1;
+}
+const spacesLeft = ((await (await fetch(`${BASE}/api/dashboard`, { headers: { cookie } })).json().catch(() => ({}))).locations ?? []).filter((row) => String(row.name) === "载荷探针空间");
+check("探针空间已清理", spacesLeft.length === 0, `删了 ${spaceRemoved} 个,还剩 ${spacesLeft.length} 个`);
+
 const failed = results.filter((entry) => !entry.ok);
 console.log(`\n${results.length - failed.length}/${results.length} 通过`);
 if (failed.length) for (const entry of failed) console.log(`[${entry.name}] ${entry.detail}`);

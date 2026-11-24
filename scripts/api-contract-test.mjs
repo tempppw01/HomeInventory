@@ -361,10 +361,46 @@ const baseItem = { name: "T-基础物品", category: "日用", type: "CONSUMABLE
 // ============ 清理 ============
 if (!process.argv.includes("--keep")) {
   for (const id of created.items) await call("DELETE", `/api/items/${id}`);
-  for (const id of created.tasks) await fetchWithRetry(`${BASE}/api/tasks/${id}`, { method: "DELETE", headers: { cookie: cookies } }).catch(() => {});
+  for (const id of created.tasks) await fetchWithRetry(`${BASE}/api/tasks`, { method: "PATCH", headers: { cookie: cookies, "content-type": "application/json" }, body: JSON.stringify({ id, action: "delete" }) }).catch(() => {});
   for (const id of created.shopping) await fetchWithRetry(`${BASE}/api/shopping/${id}`, { method: "DELETE", headers: { cookie: cookies } }).catch(() => {});
   for (const id of created.locations) await fetchWithRetry(`${BASE}/api/locations/${id}`, { method: "DELETE", headers: { cookie: cookies } }).catch(() => {});
   console.log("\n清理:已请求删除", created.items.length, "物品 /", created.locations.length, "空间 /", created.shopping.length, "采购 /", created.tasks.length, "任务");
+
+  // 上面只删「登记过的 id」,而且物品只做了软删(进回收站)。实测跑完仍会在库里留下
+  // 13 件 T- 物品、2 个 T- 任务、1 条 T- 采购 —— 谁在本地跑一遍,自己的数据里就多一堆垃圾。
+  // 这里按自己的前缀再扫一遍,并把物品永久删除(回收站里也不留)。
+  const PREFIX = "T-";
+  const sweep = async (path, listKey, matchKey) => {
+    const res = await fetchWithRetry(`${BASE}${path}`, { headers: { cookie: cookies } }).catch(() => null);
+    if (!res) return 0;
+    const body = await res.json().catch(() => null);
+    const rows = Array.isArray(body) ? body : body?.[listKey] ?? [];
+    let removed = 0;
+    for (const row of rows.filter((entry) => String(entry?.[matchKey] ?? "").startsWith(PREFIX))) removed += 1;
+    return removed;
+  };
+  const dash = await (await fetchWithRetry(`${BASE}/api/dashboard`, { headers: { cookie: cookies } })).json().catch(() => ({}));
+  for (const row of (dash.shopping ?? []).filter((entry) => String(entry.name ?? "").startsWith(PREFIX))) {
+    await fetchWithRetry(`${BASE}/api/shopping/${row.id}`, { method: "DELETE", headers: { cookie: cookies } }).catch(() => {});
+  }
+  for (const row of (dash.locations ?? []).filter((entry) => String(entry.name ?? "").startsWith(PREFIX))) {
+    await fetchWithRetry(`${BASE}/api/locations/${row.id}`, { method: "DELETE", headers: { cookie: cookies } }).catch(() => {});
+  }
+  const allItems = await (await fetchWithRetry(`${BASE}/api/items?includeDeleted=1`, { headers: { cookie: cookies } })).json().catch(() => []);
+  let purged = 0;
+  for (const row of (Array.isArray(allItems) ? allItems : []).filter((entry) => String(entry.name ?? "").startsWith(PREFIX))) {
+    const res = await call("DELETE", `/api/items/${row.id}`, { permanent: true }).catch(() => null);
+    if (res && res.ok) purged += 1;
+  }
+  const taskBody = await (await fetchWithRetry(`${BASE}/api/tasks`, { headers: { cookie: cookies } })).json().catch(() => null);
+  const taskRows = Array.isArray(taskBody) ? taskBody : taskBody?.tasks ?? [];
+  let tasks = 0;
+  for (const row of taskRows.filter((entry) => String(entry.title ?? "").startsWith(PREFIX))) {
+    await fetchWithRetry(`${BASE}/api/tasks`, { method: "PATCH", headers: { cookie: cookies, "content-type": "application/json" }, body: JSON.stringify({ id: row.id, action: "delete" }) }).catch(() => {});
+    tasks += 1;
+  }
+  const lingering = (await sweep("/api/items?includeDeleted=1", "items", "name")) + (await sweep("/api/tasks", "tasks", "title"));
+  console.log(`清理补扫:永久删除 ${purged} 件 T- 物品 / ${tasks} 个 T- 任务 / ${(dash.shopping ?? []).filter((entry) => String(entry.name ?? "").startsWith(PREFIX)).length} 条 T- 采购;仍残留 ${lingering} 条`);
 }
 
 const failed = results.filter((row) => !row.ok);
