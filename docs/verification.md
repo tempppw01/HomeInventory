@@ -33,6 +33,7 @@
 | `item-forecast` | 消耗速度学习、重复分组(含「一方包含另一方」) |
 | `consume-undo` | 撤销消耗退什么:数量型加回来、余量型退回余量(不动数量)、迁移前的旧记录**拒绝**撤销(宁可不猜也不改库存) |
 | `init-sqlite-drift` | 第三份 schema 也要同步:`scripts/init-sqlite.ts`(全新 SQLite 部署真正用的手写 SQL)不缺表、不缺字段、也没有幽灵列 |
+| `write-retry` | 写事务撞车时只重试「死锁 / 写冲突」这类错误(P2034、deadlock、SQLITE_BUSY),业务错误一次就抛;用尽次数后抛最后一次。SQLite 上复现不出来的 MySQL 500 就出在这里 |
 | `item-merge` / `item-metrics` / `item-sort` / `item-insight` | 合并计划、单位换算、排序、结论文字 |
 | `household-report` / `space-summary` / `chart` / `spend-forecast` | 月报数字、空间摘要、图表聚合 |
 | `csv-import` / `item-type-guess` / `fridge` / `task-recurrence` | 导入解析、类型猜测、冷藏规则、重复任务的下一次到期 |
@@ -46,7 +47,7 @@
 | CI 工作流自检 | 每个步骤有 run/uses、引用的脚本存在、关键作业与检查仍在(工作流无效时 CI 根本不会跑,所以这条放在本地 test:unit 最前) |
 | 两份 schema 同步 | MySQL 用的 `schema.mysql.prisma` 必须与 `schema.prisma` 的表/字段完全一致(容器启动时会用它覆盖正式 schema) |
 
-**332 条**(最近一次全绿)。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
+**337 条**(最近一次全绿)。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
 以便直接测引用了其他模块的文件。
 
 ## 二、API 层(需要服务在跑,CI 里在 `api` 作业)

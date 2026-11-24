@@ -41,6 +41,9 @@ export function apiError(error: unknown) {
     const code = prismaCode(error);
     if (code === "P2025") return 404;
     if (code === "P2002" || code === "P2003" || code === "P2014") return 409;
+    // P2034 = 死锁 / 写冲突。写事务里已经带重试(src/lib/write-retry),走到这里说明重试也没躲开,
+    // 那不是「服务器坏了」,而是「刚才撞得太狠」—— 明确回 409 让用户再点一次,别丢一个 500。
+    if (code === "P2034") return 409;
     return null;
   })();
   // 库结构比应用旧(升级时忘了同步):不是临时故障,必须说清怎么解决,别让用户反复刷新。
@@ -74,6 +77,10 @@ export function apiError(error: unknown) {
   }
   if (code === "P2003" || code === "P2014") {
     return NextResponse.json({ error: "这条记录还在被其它数据引用,请先解除关联" }, { status: 409 });
+  }
+  if (code === "P2034" || /deadlock|lock wait timeout|database is locked/i.test(error instanceof Error ? error.message : "")) {
+    // 并发写同一行撞车:重试已经试过了,还是撞上就如实说「刚才撞得太狠,请再试一次」。
+    return NextResponse.json({ error: "这一下刚好有别的操作在改同一件东西,请再点一次", code: "WRITE_CONFLICT" }, { status: 409 });
   }
   return NextResponse.json({ error: "服务器暂时开小差了,请稍后重试" }, { status: 500 });
 }

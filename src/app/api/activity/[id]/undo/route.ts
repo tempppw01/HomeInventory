@@ -5,6 +5,7 @@ import { canAdmin, currentUser } from "@/lib/account-auth";
 import { refreshConsumeRate } from "@/lib/consume-rate";
 import { planConsumeUndo } from "@/lib/consume-undo";
 import { needsRestock } from "@/lib/item-metrics";
+import { withWriteRetry } from "@/lib/write-retry";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -18,7 +19,7 @@ export async function POST(_: Request, { params }: Context) {
       if (!own || own.userId !== actor.id || own.action !== "CONSUME" || own.createdAt.getTime() < Date.now() - 5 * 60_000) return NextResponse.json({ error: "只能在 5 分钟内撤销自己发起的消耗" }, { status: 403 });
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await withWriteRetry(() => prisma.$transaction(async (tx) => {
       const activity = await tx.activityLog.findUnique({ where: { id } });
       if (!activity || activity.action !== "CONSUME" || !activity.itemId) return { error: "找不到可撤销的消耗记录", status: 404 as const };
       if (activity.undoneAt) return { error: "这条消耗记录已经撤销", status: 409 as const };
@@ -32,17 +33,37 @@ export async function POST(_: Request, { params }: Context) {
         return { error: "这条消耗是按余量刻度记的(旧记录没存下当时的余量),撤销会让库存对不上,请直接把余量调回原来的位置", status: 409 as const };
       }
 
+      // 余量只能退回「最近一次」:这之后还有消耗的话,回退会把它们一起抹掉。
+      // 这一步放在「认领」之前:认领之后任何提前返回都会让事务提交(Prisma 的交互式事务
+      // 只有抛错才回滚),那样认领就留下了。
+      if (plan.kind === "percent") {
+        const newer = await tx.activityLog.count({
+          where: {
+            itemId: item.id,
+            action: "CONSUME",
+            undoneAt: null,
+            OR: [
+              { createdAt: { gt: activity.createdAt } },
+              { createdAt: activity.createdAt, id: { gt: activity.id } },
+            ],
+          },
+        });
+        if (newer > 0) return { error: "只能撤销最近一次「余量」消耗:这之后还有新的消耗记录", status: 409 as const };
+      }
+
+      // **认领**必须原子:此前是「先读 undoneAt 再改」,在 MySQL 上两个请求会同时读到 null,
+      // 于是同一条消耗被撤销多次 —— 实测 6 个并发里有 5 个都成功,库存被退了 5 次(9 → 14)。
+      // 改成带条件的 updateMany:谁把 undoneAt 从 null 改成有值,谁才继续往下走。
+      const claimed = await tx.activityLog.updateMany({
+        where: { id: activity.id, action: "CONSUME", undoneAt: null },
+        data: { undoneAt: new Date() },
+      });
+      if (claimed.count !== 1) return { error: "这条消耗记录已经撤销", status: 409 as const };
+
       let nextQuantity = item.quantity;
       let nextPercent = item.remainingPercent;
 
       if (plan.kind === "percent") {
-        // 余量只能退回「最近一次」:这之后还有消耗的话,回退会把它们一起抹掉。
-        const newest = await tx.activityLog.findFirst({
-          where: { itemId: item.id, action: "CONSUME", undoneAt: null },
-          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-          select: { id: true },
-        });
-        if (newest?.id !== activity.id) return { error: "只能撤销最近一次「余量」消耗:这之后还有新的消耗记录", status: 409 as const };
         nextPercent = plan.percentBefore;
         await tx.item.update({ where: { id: item.id }, data: { remainingPercent: nextPercent } });
       } else {
@@ -50,9 +71,7 @@ export async function POST(_: Request, { params }: Context) {
         await tx.item.update({ where: { id: item.id }, data: { quantity: { increment: 1 } } });
       }
 
-      // 顺序要紧:先把 undoneAt 写进去,再按流水重算消耗速度。
-      // 反过来的话,刚撤销的这一次还在分子里 —— 实测数量退回了、consumeRate 却停在原值。
-      await tx.activityLog.update({ where: { id: activity.id }, data: { undoneAt: new Date() } });
+      // 认领后再按流水重算消耗速度(见 lib/consume-rate):此时这次的 undoneAt 已经写进去了。
       const consumeRate = await refreshConsumeRate(tx, item.id);
 
       // 退回去之后不再需要补货了,才撤掉自动生成的待采购建议;
@@ -78,7 +97,7 @@ export async function POST(_: Request, { params }: Context) {
       // 数量比库里少 1(界面靠刷新盖过去了,但接口本身是错的)。
       const updated = await tx.item.findUniqueOrThrow({ where: { id: item.id }, include: { location: true } });
       return { item: updated, undo, consumeRate, removedSuggestions, restoredPercent: plan.kind === "percent" ? plan.percentBefore : null };
-    });
+    }));
 
     if ("error" in result) return NextResponse.json({ error: result.error }, { status: result.status });
     return NextResponse.json({ ok: true, item: result.item, undo: result.undo, consumeRate: result.consumeRate, restoredPercent: result.restoredPercent, removedSuggestions: result.removedSuggestions });

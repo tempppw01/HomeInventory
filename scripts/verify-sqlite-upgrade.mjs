@@ -116,7 +116,8 @@ removeDb(DB_ORPHAN);
 let oldScript = null;
 try {
   oldScript = execFileSync("git", ["show", `${OLD_TAG}:scripts/init-sqlite.ts`], { encoding: "utf8" });
-} catch (error) {
+} catch {
+  // 浅克隆里没有这个标签:下面会明确 SKIP 并说明怎么取,不伪装成通过。
   oldScript = null;
 }
 if (!oldScript || !oldScript.includes("CREATE TABLE")) {

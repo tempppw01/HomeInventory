@@ -8,6 +8,7 @@ import { ensureRestockSuggestion } from "@/lib/restock-suggestion";
 import { itemInsight } from "@/lib/item-insight";
 import { learnConsumeRate } from "@/lib/item-forecast";
 import { deleteStoredImage } from "@/lib/oss";
+import { withWriteRetry } from "@/lib/write-retry";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -31,7 +32,7 @@ export async function PATCH(request: NextRequest, { params }: Context) {
     const user = await requireWritableUser();
     const { id } = await params;
     const { recordPurchase, purchaseStore, ...parsed } = itemPatchSchema.parse(await request.json());
-    const item = await prisma.$transaction(async (tx) => {
+    const item = await withWriteRetry(() => prisma.$transaction(async (tx) => {
       const existing = await tx.item.findUniqueOrThrow({ where: { id } });
       const nextType = parsed.type ?? existing.type;
       const nextUnit = parsed.unit ?? existing.unit;
@@ -69,7 +70,7 @@ export async function PATCH(request: NextRequest, { params }: Context) {
         await tx.priceRecord.create({ data: { itemId: updated.id, itemName: updated.name, category: updated.category, unitPrice: updated.price, quantity, totalPrice: updated.price * quantity, purchasedAt: data.purchaseDate || new Date(), store: purchaseStore } });
       }
       return updated;
-    });
+    }));
 
     // 放进事务里:此前是「先查后建」,并发请求会各建一条重复的采购建议(实测 6 并发 → 6 条),
     // 而且历史遗留的重复项会在下次触发时被顺手清掉(见 ensureRestockSuggestion)。

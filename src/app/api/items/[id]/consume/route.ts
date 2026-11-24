@@ -4,6 +4,7 @@ import { apiError, requireWritableUser } from "@/lib/api";
 import { isLiquidConsumable } from "@/lib/item-metrics";
 import { ensureRestockSuggestion } from "@/lib/restock-suggestion";
 import { refreshConsumeRate } from "@/lib/consume-rate";
+import { withWriteRetry } from "@/lib/write-retry";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -11,7 +12,7 @@ export async function POST(_: Request, { params }: Context) {
   try {
     const user = await requireWritableUser();
     const { id } = await params;
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await withWriteRetry(() => prisma.$transaction(async (tx) => {
       const current = await tx.item.findFirst({ where: { id, deletedAt: null } });
       if (!current) return { error: "物品不存在", status: 404 as const };
       if (current.type !== "CONSUMABLE") return { error: "耐用品不能直接消耗", status: 409 as const };
@@ -27,7 +28,7 @@ export async function POST(_: Request, { params }: Context) {
       const withRate = await tx.item.findUniqueOrThrow({ where: { id: item.id }, include: { location: true } });
 
       return { item: withRate, activityId: activity.id };
-    });
+    }));
     if ("error" in result) return NextResponse.json({ error: result.error }, { status: result.status });
     return NextResponse.json(result);
   } catch (error) {
