@@ -1,5 +1,6 @@
 "use client";
 import { useConfirm } from "@/components/confirm-dialog";
+import { activityActorLabel } from "@/lib/activity-actor";
 
 import { History, LoaderCircle, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -70,7 +71,7 @@ export function ScanActivityPanel({ onToast }: { onToast: (message: string) => v
           key={record.id}
           icon={record.action === "CONSUME" ? History : Undo2}
           title={<span className="block whitespace-normal break-words">{record.action === "CONSUME" ? "扫码消耗" : "撤销消耗"} · {record.itemName || "物品"}</span>}
-          meta={<span className="block whitespace-normal break-words">{`${new Date(record.createdAt).toLocaleString("zh-CN")} · ${record.user?.displayName || "公开扫码"}${record.action === "CONSUME" && record.undoneAt ? " · 已撤销" : ""}`}</span>}
+          meta={<span className="block whitespace-normal break-words">{`${new Date(record.createdAt).toLocaleString("zh-CN")} · ${activityActorLabel(record)}${record.action === "CONSUME" && record.undoneAt ? " · 已撤销" : ""}`}</span>}
           trailing={isAdmin && record.action === "CONSUME" && !record.undoneAt
             ? <button disabled={undoing === record.id} onClick={() => void undo(record)} className="btn-ghost flex shrink-0 items-center gap-1 px-2 py-1.5 text-xs text-red-500 disabled:opacity-50 min-h-10 max-md:min-h-11"><Undo2 size={13} />{undoing === record.id ? "处理中" : "撤销"}</button>
             : undefined}

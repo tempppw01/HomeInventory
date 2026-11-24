@@ -44,7 +44,7 @@
 | CI 工作流自检 | 每个步骤有 run/uses、引用的脚本存在、关键作业与检查仍在(工作流无效时 CI 根本不会跑,所以这条放在本地 test:unit 最前) |
 | 两份 schema 同步 | MySQL 用的 `schema.mysql.prisma` 必须与 `schema.prisma` 的表/字段完全一致(容器启动时会用它覆盖正式 schema) |
 
-**312 条**(最近一次全绿)。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
+**318 条**(最近一次全绿)。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
 以便直接测引用了其他模块的文件。
 
 ## 二、API 层(需要服务在跑,CI 里在 `api` 作业)
@@ -55,7 +55,7 @@
 | `auth-matrix-test` | 三种角色的权限矩阵、找回流程 | 47 |
 | `backup-roundtrip-test` | 导出 → 恢复 → 比对(日期不挪位) | 25 |
 | `edge-input-test` | 极端值、超长、表情、非法 JSON | 26 |
-| `verify-account-ops` | 建号 / 停用 / 重置密码 / 踢出登录 | 16 |
+| `verify-account-ops` | 建号 / 停用 / 重置密码 / 踢出登录;删号后历史里的操作人显示为「账号已删除」 | 23 |
 | `verify-write-guards` | **写接口权限矩阵**:proxy 在正确位置(根目录那只会被静默忽略)、未登录一律 401、只读被挡在 30 条写路径之外、只读的放行清单(自己的密码/搜索历史/AI 提问)仍可用且没把管理员接口放开、成员改不了设置但照旧能写家庭数据、公开接口没被闸门拦下 | 12 |
 | `verify-account-self-service` | 自助改密码与自助恢复码:401/400 矩阵、旧密码失效、其它设备会话被吊销、只读也能改自己的凭据但改家庭数据仍 403、恢复码端到端重置 | 26 |
 | `verify-search-history-and-backup` | 搜索历史去重与上限、自动备份真的写文件(含「这个文件是刚写的」) | 14 |

@@ -124,6 +124,42 @@ if (userId) {
   check("删除后旧会话失效", stillLive.status === 401, `status=${stillLive.status}(期望 401)`);
 }
 
+// ---------- 删号之后:历史里的操作人不能被说成「公开扫码」 ----------
+{
+  // 自带账号:建 → 登录 → 消耗 → 删号。(不能借用套件自己那个账号:跑到这里时它已经被停用/删除了)
+  const actorName = `${NAME}actor`.slice(0, 30);
+  const actorPass = "Actor#2026x";
+  const actor = await call(admin.cookie, "POST", "/api/auth/users", { username: actorName, password: actorPass, displayName: `${NAME} 审计`, role: "MEMBER" });
+  const actorId = actor.body?.id ?? actor.body?.user?.id ?? null;
+  check("为这条检查建出一个临时账号", (actor.status === 200 || actor.status === 201) && Boolean(actorId), `status=${actor.status}`);
+
+  const dash = await call(admin.cookie, "GET", "/api/dashboard");
+  const items = Array.isArray(dash.body?.items) ? dash.body.items : [];
+  const target = items.find((entry) => entry.quantity > 0 && entry.type === "CONSUMABLE") ?? items.find((entry) => entry.quantity > 0);
+  check("有可用物品来做这条检查(防止空跑)", Boolean(target), `物品数=${items.length}`);
+
+  if (actorId && target) {
+    const actorSession = await loginRaw(actorName, actorPass);
+    const consumedAt = Date.now();
+    const consumed = await call(actorSession.cookie, "POST", `/api/items/${target.id}/consume`, { amount: 1 });
+    check("临时账号能消耗一件", consumed.status === 200, `status=${consumed.status}`);
+
+    const removed = await call(admin.cookie, "DELETE", `/api/auth/users/${actorId}`);
+    check("删掉这个临时账号", removed.status === 200, `status=${removed.status}`);
+
+    const activity = await call(admin.cookie, "GET", `/api/activity?itemId=${target.id}`);
+    const rows = Array.isArray(activity.body) ? activity.body : [];
+    // 只认「刚刚那次」:否则可能匹配到别人的历史记录,检查就变成空跑通过
+    const record = rows.find((row) => row.action === "CONSUME" && new Date(row.createdAt).getTime() >= consumedAt - 5000);
+    check("那次消耗的记录还在(审计不跟着账号一起消失)", Boolean(record), `记录数=${rows.length}`);
+    check("它不是公开扫码(没有 scanRequestId)", Boolean(record) && !record.scanRequestId, JSON.stringify({ scanRequestId: record?.scanRequestId ?? null }));
+    const label = record ? (record.user?.displayName || (record.scanRequestId ? "公开扫码" : "账号已删除")) : "";
+    check("历史里显示成「账号已删除」而不是「公开扫码」", label === "账号已删除", `实际=${label}`);
+
+    if (record?.id) await call(admin.cookie, "POST", `/api/activity/${record.id}/undo`);
+  }
+}
+
 const failed = results.filter((entry) => !entry.ok);
 console.log(`\n${results.length - failed.length}/${results.length} 通过`);
 if (failed.length) for (const entry of failed) console.log(`[${entry.name}] ${entry.detail}`);
