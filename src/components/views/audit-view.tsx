@@ -151,7 +151,11 @@ export function AuditView({ items, locations, onRefresh, onToast }: { items: Ite
     setHistory(nextHistory);
     localStorage.setItem(historyKey, JSON.stringify(nextHistory));
     // 同时写服务端:换设备也能看到「最近盘点」。失败不阻塞流程(本地仍然有记录)。
-    void fetch("/api/audits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(entry) }).catch(() => {});
+    // 失败不阻塞流程(本地仍留记录),但**必须说出来**:否则这条记录只在这台设备上,
+    // 换设备或清缓存后就没了,而用户毫不知情(实测拦掉这个请求时界面一声不响)。
+    void fetch("/api/audits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(entry) })
+      .then((response) => { if (!response.ok) throw new Error(`服务器返回 ${response.status}`); })
+      .catch((error) => onToast(`本次盘点只在本机留了记录:同步到服务端失败(${error instanceof Error ? error.message : "网络问题"})。换设备或清缓存后就看不到它了。`));
     setFinished(true);
     if (!unconfirmed.length) localStorage.removeItem(storageKey);
   };
