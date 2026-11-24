@@ -12,7 +12,8 @@
 // 多出什么就点出名字。要加进 CI 的套件保持在「快且有代表性」的几个。
 //
 // 用法:BASE_URL=... PROBE_USER=... PROBE_PASS=... node scripts/verify-suite-hygiene.mjs
-//      想换一组:SUITES=verify-payload-budget,verify-import node scripts/verify-suite-hygiene.mjs
+//      想换一组套件:node scripts/verify-suite-hygiene.mjs --suites=verify-payload-budget,verify-import
+//      (刻意不做成环境变量:每多一个环境变量都要进文档与配置检查,而这个开关只有测试用。)
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -23,8 +24,10 @@ const BASE = process.env.BASE_URL || "http://127.0.0.1:3001";
 const USER = process.env.PROBE_USER || "bgs";
 const PASS = process.env.PROBE_PASS || "GuiWu-2026-Home";
 
-/** 默认挑「快 + 历史上会留东西」的几个;完整清单可以在 CI 里逐步加。 */
-const SUITES = (process.env.SUITES || "verify-payload-budget,api-contract-test,verify-import,verify-task-recurrence").split(",").map((name) => name.trim()).filter(Boolean);
+/** 默认挑「快 + 历史上会留东西」的几个;完整清单可以用 --suites=... 指定。 */
+const suitesArg = process.argv.find((arg) => arg.startsWith("--suites="));
+const SUITES = (suitesArg ? suitesArg.slice("--suites=".length) : "verify-payload-budget,api-contract-test,verify-import,verify-task-recurrence")
+  .split(",").map((name) => name.trim()).filter(Boolean);
 
 const results = [];
 const check = (name, ok, detail = "") => {
