@@ -76,6 +76,7 @@
 | `verify-image-upload` | 图片上传(本地存储):落盘、读回、大小与类型限制、删除物品时清理文件 | 10 |
 | `verify-migrations` | 迁移脚本:编号回填用**本地创建日**、幂等、字母表与在线一致、normalize 只动耐用品(SQLite 与 MySQL 都跑) | 11 | 升级 |
 | `verify-upgrade-path` | 旧版本库 → `prisma db push` → 数据不丢、新表新字段可用 | 10 |
+| `verify-restore-report` | 恢复老备份时跳过的行必须报出来:总数 / 行号 / **中文原因并点名字段** | 8 | 升级 |
 
 ## 三、界面层(需要浏览器,CI 里分「布局 / 无障碍 / 流程」三个作业)
 
