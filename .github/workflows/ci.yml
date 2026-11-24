@@ -33,6 +33,9 @@ jobs:
         run: node scripts/verify-config-docs.mjs
       - name: 两份 schema 同步检查
         run: node scripts/verify-schema-sync.mjs
+      # 镜像里的启动脚本不许引用镜像里没有的东西(v0.1.41 那次事故:@/ 别名让容器起不来)
+      - name: 镜像资源边界检查(启动脚本的依赖必须都在镜像里)
+        run: node scripts/verify-image-assets.mjs
       - name: MySQL schema 合法性校验
         env:
           DATABASE_URL: mysql://user:pass@localhost:3306/db

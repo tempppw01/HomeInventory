@@ -5,6 +5,51 @@
 
 ---
 
+## [v0.1.43] - 2026-11-24
+
+这一轮把上一版那次事故(v0.1.41 的 `@/` 别名让**镜像起不来**)变成一条**能在合并前跑、秒级出结果**的静态规则。
+无产品代码改动、无数据库结构变更。
+
+### 为什么需要它
+
+那次事故的代价是:镜像两跑全红、版本没发出来,而**本地与 CI 的测试全都是绿的** ——
+因为问题只在「最小镜像里跑启动脚本」这个条件下才暴露,而那个条件要等 `docker-publish` 才跑到。
+
+`docker/entrypoint.sh` 在容器里会跑四个脚本(`init-sqlite` / `seed` / `backfill-item-codes` / `normalize-items`),
+而运行镜像**只复制** `scripts/`、`prisma/`、`public/` 与 `.next`。这条边界此前没有任何东西守着。
+
+### 新增:`scripts/verify-image-assets.mjs`(9 项)
+
+静态检查,不需要库也不需要浏览器:
+
+1. 从 `docker/entrypoint.sh` 里解析出容器会跑哪些脚本,并顺着**相对导入**把传递依赖走一遍;
+2. 这些文件**必须**全部落在 `scripts/` 或 `prisma/` 内(本次共检查 5 个文件);
+3. 这些文件里**不许出现 `@/` 别名**(镜像里没有 tsconfig);
+4. 裸包名只能是 `node:` 内置模块或 `package.json` 里声明过的依赖(镜像才装得上);
+5. Dockerfile 的 runner 阶段必须仍然复制 `scripts/` 与 `prisma/`、MySQL 变体 schema 仍在;
+6. 反向自检:确实扫到了足够多的脚本(防止空跑)。
+
+已放进 CI 的**静态作业**(第 38 行那一步),并加进 `verify-ci-workflow` 的「关键检查」清单,不许被顺手删掉。
+
+### 验证它真的能抓住那次事故
+
+把 `@/lib/local-date` 临时塞回 `scripts/normalize-items.ts`(也就是 v0.1.41 的写法),立刻:
+
+```
+FAIL  启动脚本里没有 @/ 别名(镜像里没有 tsconfig,解析不了)
+      → scripts\normalize-items.ts → @/lib/local-date
+8/9 通过
+```
+
+还原后 9/9。也就是说:**同类事故下次会在静态作业里被拦住,而不是等到镜像构建完才发现。**
+
+### 顺带记下的一个小坑
+
+我的补丁脚本用 `writeFileSync` 写回文件时会把 CRLF 变成 LF,于是「只是还原」也会显示成已修改。
+用 `git checkout -- <file>` 归零即可;以后改这类 CRLF 文件要留意。
+
+---
+
 ## [v0.1.42] - 2026-11-24
 
 这一版修的是**上一版自己引入的回归**:v0.1.41 让镜像起不来,`docker-publish` 的冒烟测试红了两跑,

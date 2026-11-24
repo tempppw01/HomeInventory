@@ -60,6 +60,7 @@
 | `verify-account-self-service` | 自助改密码与自助恢复码:401/400 矩阵、旧密码失效、其它设备会话被吊销、只读也能改自己的凭据但改家庭数据仍 403、恢复码端到端重置 | 26 |
 | `verify-search-history-and-backup` | 搜索历史去重与上限、自动备份真的写文件(含「这个文件是刚写的」) | 14 |
 | `verify-backup-dates` | 备份里的日期格式 | 12 |
+| `verify-image-assets` | 镜像资源边界:启动脚本的相对导入必须都在镜像会复制的目录里、不许 @/ 别名、Dockerfile 仍在复制它们 | 9 |
 | `verify-task-recurrence` | 完成 → 下次到期 → 撤销复原 | 7 |
 | `verify-restock-pause` | 暂停补货期内不生成采购建议 | 6 |
 | `verify-concurrency` | 并发写入不产生重复采购建议(含自愈)、并发消耗是原子的 | 9 |
