@@ -8,7 +8,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { providerErrorDetail, providerFailure } from "../../src/lib/ai-error.ts";
+import { providerErrorDetail, providerFailure, isConnectionFailure, connectionFailureMessage, AiConnectionError } from "../../src/lib/ai-error.ts";
 
 // 实测抓到的原文(deepseek 渠道拒绝远程图片链接时的 400 响应)
 const imageUrlRejected = JSON.stringify({
@@ -84,5 +84,37 @@ test("没有路由再自己拼失败文案(否则又会把上游详情丢掉)", 
   for (const route of routes) {
     const text = readFileSync(route, "utf8");
     assert.doesNotMatch(text, /`AI 接口请求失败/, `${route} 又自己拼了失败文案 —— 应改用 providerFailure`);
+  }
+});
+test("网络层连不上的识别与文案:要能照做,不能只说「失败了」", () => {
+  const refused = Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNREFUSED" } });
+  const dns = Object.assign(new TypeError("fetch failed"), { cause: { code: "ENOTFOUND" } });
+  const businessError = new Error("AI 没有返回回答");
+
+  assert.equal(isConnectionFailure(refused), true);
+  assert.equal(isConnectionFailure(dns), true);
+  assert.equal(isConnectionFailure(businessError), false);
+
+  const message = connectionFailureMessage(refused, "http://127.0.0.1:9/v1/chat/completions");
+  assert.match(message, /连不上 AI 接口/);
+  assert.match(message, /接口地址/);
+  assert.match(message, /127\.0\.0\.1:9/);
+});
+
+test("AiConnectionError 的 name 能被 apiError 认出来(它是 502 分支的判据)", () => {
+  const error = new AiConnectionError("连不上 AI 接口(x)");
+  assert.equal(error.name, "AiConnectionError");
+  assert.equal(error.detail, "连不上 AI 接口(x)");
+});
+
+test("四个会调用上游的 AI 路由都必须有限流(实测 insights 曾漏掉)", () => {
+  for (const route of [
+    "src/app/api/ai/batch-identify/route.ts",
+    "src/app/api/ai/chat/route.ts",
+    "src/app/api/ai/analyze-item/route.ts",
+    "src/app/api/ai/insights/route.ts",
+  ]) {
+    const text = readFileSync(route, "utf8");
+    assert.match(text, /rateLimit\(/, `${route} 没有限流 —— 用户自填的 Key 会被循环调用烧掉`);
   }
 });

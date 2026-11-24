@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { AiConnectionError, connectionFailureMessage, isConnectionFailure } from "@/lib/ai-error";
 import { providerForBaseUrl, type AiProtocol, type AiProviderId } from "@/lib/ai-providers";
 
 export type AiConfig = { baseUrl: string; apiKey: string; model: string; provider: AiProviderId; protocol: AiProtocol };
@@ -54,6 +55,10 @@ export async function aiFetch(input: string, init: RequestInit, options: { attem
       await new Promise((resolve) => setTimeout(resolve, 800 * (attempt + 1)));
     }
   }
+  // 连不上(地址写错 / DNS / 代理 / 超时)时抛一个可识别的类型:apiError 会把它翻成 502 +
+  // 一句能照做的中文。此前这里直接把原始错误抛出去,四个 AI 接口都变成
+  // 「服务器暂时开小差了,请稍后重试」—— 用户看不出问题在接口地址或网络上(实测)。
+  if (isConnectionFailure(lastError)) throw new AiConnectionError(connectionFailureMessage(lastError, input));
   throw lastError;
 }
 export function chatCompletionsUrl(baseUrl: string) {

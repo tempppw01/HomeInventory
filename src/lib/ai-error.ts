@@ -48,3 +48,33 @@ export function providerFailure(status: number, raw: string, context?: { remoteI
   if (status === 404) return `上游没有这个模型,请到设置里检查模型名。上游返回:${detail}`;
   return `AI 接口请求失败(${status}):${detail}`;
 }
+/** 网络层连不上上游(地址写错、DNS 解析不了、被防火墙/代理挡住、超时)。 */
+export function isConnectionFailure(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const code = (error as { code?: unknown })?.code;
+  const cause = (error as { cause?: { code?: unknown; message?: unknown } })?.cause;
+  const haystack = [message, String(code ?? ""), String(cause?.code ?? ""), String(cause?.message ?? "")].join(" ");
+  return /ECONNREFUSED|ECONNRESET|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|EPIPE|UND_ERR_SOCKET|socket hang up|fetch failed|TimeoutError|AbortError/i.test(haystack);
+}
+
+/** 连不上时给一句能照做的中文 —— 别让用户以为是自己家这台服务坏了。 */
+export function connectionFailureMessage(error: unknown, baseUrl?: string) {
+  const where = baseUrl ? `(${baseUrl})` : "";
+  const raw = error instanceof Error ? error.message : String(error ?? "");
+  return `连不上 AI 接口${where}:请检查设置里的接口地址能否访问、网络或代理是否正常。原始错误:${raw.slice(0, 160)}`;
+}
+
+/**
+ * 标记「这次失败是网络层连不上上游」。
+ * 单独一个类型,是为了让 apiError 能把它翻成 502 与上面那句可操作的话 ——
+ * 实测(把接口地址指到一个不存在的端口):四个 AI 接口都会回
+ * 「服务器暂时开小差了,请稍后重试」,用户完全看不出问题在接口地址/网络上。
+ */
+export class AiConnectionError extends Error {
+  detail: string;
+  constructor(detail: string) {
+    super(detail);
+    this.name = "AiConnectionError";
+    this.detail = detail;
+  }
+}

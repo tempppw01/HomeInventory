@@ -4,6 +4,7 @@ import { apiError } from "@/lib/api";
 import { requireUser } from "@/lib/account-auth";
 import { compressAiImageDataUrl } from "@/lib/ai-image";
 import { rateLimit } from "@/lib/rate-limit";
+import { aiFetch } from "@/lib/ai";
 import { providerFailure } from "@/lib/ai-analyze";
 
 export const runtime = "nodejs";
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
     const payload = config.protocol === "anthropic"
       ? { model: config.model, max_tokens: 1800, messages: [{ role: "user", content: [{ type: "text", text: instruction }, ...preparedImages.map((image) => ({ type: "image", source: { type: "base64", media_type: image.dataUrl.match(/^data:(image\/[^;]+);/)?.[1] || "image/jpeg", data: image.dataUrl.split(",")[1] || "" } }))] }] }
       : { model: config.model, messages: [{ role: "user", content }], temperature: 0.1, response_format: { type: "json_object" } };
-    const response = await fetch(config.protocol === "anthropic" ? anthropicMessagesUrl(config.baseUrl) : chatCompletionsUrl(config.baseUrl), { method: "POST", headers: config.protocol === "anthropic" ? { "Content-Type": "application/json", "x-api-key": config.apiKey, "anthropic-version": "2023-06-01" } : { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` }, body: JSON.stringify(payload), signal: AbortSignal.timeout(90000) });
+    const response = await aiFetch(config.protocol === "anthropic" ? anthropicMessagesUrl(config.baseUrl) : chatCompletionsUrl(config.baseUrl), { method: "POST", headers: config.protocol === "anthropic" ? { "Content-Type": "application/json", "x-api-key": config.apiKey, "anthropic-version": "2023-06-01" } : { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` }, body: JSON.stringify(payload), signal: AbortSignal.timeout(90000) });
     const raw = await response.text();
     if (!response.ok) return NextResponse.json({ error: providerFailure(response.status, raw, { remoteImages: preparedImages.some((image) => /^https?:\/\//i.test(image.dataUrl)) }) }, { status: 502 });
     const root = JSON.parse(raw) as Record<string, unknown>; const choices = Array.isArray(root.choices) ? root.choices : []; const message = choices[0] && typeof choices[0] === "object" ? (choices[0] as Record<string, unknown>).message : undefined; const answer = config.protocol === "anthropic" ? textOf(root.content) : textOf(message && typeof message === "object" ? (message as Record<string, unknown>).content : root.output_text); const records = parseJson(answer);

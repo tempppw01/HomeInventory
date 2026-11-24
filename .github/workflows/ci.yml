@@ -179,6 +179,10 @@ jobs:
       - name: 登录限流检查(同一来源 12 次/分钟、同一账号 10 次/分钟、不泄露账号是否存在)
         run: node scripts/verify-login-rate-limit.mjs
 
+      # AI 接口:没配置时四个入口都要明确拒绝(不是 500),更不该悄悄调用上游。
+      # 上游连不上的文案在 CI 里测不到(CI 没有 AI Key),套件会 SKIP 并说明原因。
+      - name: AI 接口检查(未配置时明确拒绝 / 上游连不上时 502 + 可操作文案)
+        run: node scripts/verify-ai-guards.mjs
       - name: 失败时打印服务日志
         if: failure()
         run: tail -100 server.log

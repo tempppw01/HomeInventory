@@ -30,8 +30,12 @@ export function apiError(error: unknown) {
   // 图片处理失败属于「客户端给的图有问题」,不是服务器故障:
   // 这类错误带着明确的中文原因(格式不支持 / 太大 / 无法处理),要原样返回 400,
   // 否则用户只会看到「服务器暂时开小差了」,不知道换一张图就好。
-  if (error instanceof Error && error.name === "AiImageError") {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  // 连不上 AI 上游(地址写错 / DNS / 代理 / 超时):502 + 一句能照做的中文。
+  // 此前这种情况落到最后的 500「服务器暂时开小差了」,用户看不出问题在接口地址或网络上。
+  if (error instanceof Error && error.name === "AiConnectionError") {
+    return NextResponse.json({ error: error.message, code: "AI_UNREACHABLE" }, { status: 502 });
+  }
+  if (error instanceof Error && error.name === "AiImageError") {    return NextResponse.json({ error: error.message }, { status: 400 });
   }
   // 先判定再决定是否记录:预期内的客户端错误不该刷日志(否则真实故障会被淹没)。
   const knownStatus = (() => {

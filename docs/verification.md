@@ -47,7 +47,7 @@
 | CI 工作流自检 | 每个步骤有 run/uses、引用的脚本存在、关键作业与检查仍在(工作流无效时 CI 根本不会跑,所以这条放在本地 test:unit 最前) |
 | 两份 schema 同步 | MySQL 用的 `schema.mysql.prisma` 必须与 `schema.prisma` 的表/字段完全一致(容器启动时会用它覆盖正式 schema) |
 
-**342 条**(最近一次全绿)。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
+**345 条**(最近一次全绿)。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
 以便直接测引用了其他模块的文件。
 
 ## 二、API 层(需要服务在跑,CI 里在 `api` 作业)
@@ -71,6 +71,7 @@
 | `verify-api-guards` | 写接口守卫与 proxy 位置的那几条关键断言 | 5 |
 | `verify-image-assets` | 镜像资源边界:启动脚本的相对导入必须都在镜像会复制的目录里、不许 @/ 别名、Dockerfile 仍在复制它们 | 9 |
 | `verify-task-recurrence` | 完成 → 下次到期 → 撤销复原 | 7 |
+| `verify-ai-guards` | **AI 接口不说谎**:没配置时四个入口都明确拒绝(4xx,不是 500);上游连不上时 502 + 「连不上 AI 接口(地址):请检查接口地址能否访问」,而不是「服务器开小差了」;并含一条源码级断言 —— **每个会调上游的 AI 路由都必须有 rateLimit**(实测 insights 曾漏掉,25 次 force 全部打到模型) | 7 |
 | `verify-login-rate-limit` | **登录限流挡得住什么**:同一来源 12 次/分钟、**同一账号 10 次/分钟(与来源无关 —— 修之前换个 X-Forwarded-For 就能无限猜)**、换账号不被连累、错误文案不泄露账号是否存在、**全局层拦住「来源与用户名一起换」的轮换** | 5 |
 | `verify-restock-pause` | 暂停补货期内不生成采购建议 | 6 |
 | `verify-concurrency` | 并发写入不产生重复采购建议(含自愈)、并发消耗是原子的;**并发撤销同一条消耗只生效一次**、并发「已购买 + 入库」只加一次库存、扫码幂等(同一 requestId 重复提交只扣 1 件)、最后一件并发抢只有 1 个成功、余量流水的撤销次序规则。SQLite 与 **MySQL 两个作业都跑** | 32 |
