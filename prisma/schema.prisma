@@ -180,6 +180,10 @@ model ActivityLog {
   detail        String?
   undoOfId      String?
   undoneAt      DateTime?
+  // 余量型消耗(液体按刻度记)才有的两个字段:撤销时据此把余量放回去,
+  // 而不是像数量型那样给 quantity 加 1(那样会凭空多出一瓶,实测 quantity 1 → 2)。
+  percentBefore Float?
+  percentAfter  Float?
   scanRequestId String?          @unique
   item          Item?            @relation(fields: [itemId], references: [id], onDelete: SetNull)
   member        HouseholdMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)

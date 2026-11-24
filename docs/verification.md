@@ -31,6 +31,7 @@
 | `validation` / 日期 | 两种合法写法、非法值与不存在的日期、时间点字段保留时刻 |
 | `low-stock` / `expiry-status` | 该补货的两种触发、暂停期、今天到期算临期而非过期 |
 | `item-forecast` | 消耗速度学习、重复分组(含「一方包含另一方」) |
+| `consume-undo` | 撤销消耗退什么:数量型加回来、余量型退回余量(不动数量)、迁移前的旧记录**拒绝**撤销(宁可不猜也不改库存) |
 | `item-merge` / `item-metrics` / `item-sort` / `item-insight` | 合并计划、单位换算、排序、结论文字 |
 | `household-report` / `space-summary` / `chart` / `spend-forecast` | 月报数字、空间摘要、图表聚合 |
 | `csv-import` / `item-type-guess` / `fridge` / `task-recurrence` | 导入解析、类型猜测、冷藏规则、重复任务的下一次到期 |
@@ -44,7 +45,7 @@
 | CI 工作流自检 | 每个步骤有 run/uses、引用的脚本存在、关键作业与检查仍在(工作流无效时 CI 根本不会跑,所以这条放在本地 test:unit 最前) |
 | 两份 schema 同步 | MySQL 用的 `schema.mysql.prisma` 必须与 `schema.prisma` 的表/字段完全一致(容器启动时会用它覆盖正式 schema) |
 
-**322 条**(最近一次全绿)。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
+**328 条**(最近一次全绿)。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
 以便直接测引用了其他模块的文件。
 
 ## 二、API 层(需要服务在跑,CI 里在 `api` 作业)
@@ -78,6 +79,7 @@
 | `verify-backup-scope` | 完整备份的覆盖面(任务/盘点/偏好/活动记录都在)与体积(超过默认 10 MB 也能恢复) | 20 | 升级 |
 | `verify-auto-backup` | 每日自动备份:负载与手动导出**同构**、保留最近 N 份并如实报告清理数、状态接口 | 20 | 升级 |
 | `verify-shopping-purchase` | 采购闭环:标记「已购买」只入库一次、撤销退回、采购项上留入库记账 | 12 | 流程 |
+| `verify-consume-chain` | 消耗链:撤销消耗后**消耗速度回落**、余量型撤销不再凭空多一瓶、扫码消耗也计入消耗速度、撤销后补货建议的去留 | 36 | 流程 |
 | `verify-backup-migration` | **换机迁移**:备份恢复进空库实例,物品一件不少、位置重新映射、重复恢复幂等(需两个实例) | 19 | 升级 |
 | `verify-upgrade-path` | 旧版本库 → `prisma db push` → 数据不丢、新表新字段可用 | 10 |
 | `verify-restore-report` | 恢复老备份时跳过的行必须报出来:总数 / 行号 / **中文原因并点名字段** | 8 | 升级 |

@@ -134,6 +134,10 @@ jobs:
       # 采购闭环:标记「已购买」只该入库一次,撤销要退回(修之前 10 → 13 → 16 → 19)
       - name: 采购闭环检查(只入一次库 / 撤销退回 / 记账在采购项上)
         run: node scripts/verify-shopping-purchase.mjs
+      # 消耗链:撤销消耗要退对东西 —— 数量退数量、余量退余量,消耗速度必须回落
+      # (修之前:撤销后 consumeRate 停在原值;余量型撤销把瓶数 +1;扫码消耗根本不算速度)
+      - name: 消耗链检查(撤销后速度回落 / 余量型不加瓶数 / 扫码计入消耗速度)
+        run: node scripts/verify-consume-chain.mjs
       # 老备份里的坏行必须被报出来(实测:4 行只剩 1 行,响应却只说恢复了 1 件)
       - name: 恢复报告检查(跳过的行要给出总数 / 行号 / 中文原因)
         run: node scripts/verify-restore-report.mjs

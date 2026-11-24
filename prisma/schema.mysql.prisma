@@ -157,6 +157,8 @@ model ActivityLog {
   detail     String?
   undoOfId   String?
   undoneAt   DateTime?
+  percentBefore Float?
+  percentAfter  Float?
   scanRequestId String?         @unique
   item       Item?             @relation(fields: [itemId], references: [id], onDelete: SetNull)
   member     HouseholdMember?  @relation(fields: [memberId], references: [id], onDelete: SetNull)

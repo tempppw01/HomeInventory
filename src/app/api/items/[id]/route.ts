@@ -44,7 +44,7 @@ export async function PATCH(request: NextRequest, { params }: Context) {
       if (typeof nextPercent === "number" && nextPercent < prevPercent) {
         const equivalent = ((prevPercent - nextPercent) / 100) * Math.max(existing.quantity, 0);
         if (equivalent >= 0.1) {
-          await tx.activityLog.create({ data: { action: "CONSUME", itemId: id, itemName: existing.name, userId: user.id, detail: `余量 ${Math.round(prevPercent)}% → ${Math.round(nextPercent)}%` } });
+          await tx.activityLog.create({ data: { action: "CONSUME", itemId: id, itemName: existing.name, userId: user.id, detail: `余量 ${Math.round(prevPercent)}% → ${Math.round(nextPercent)}%`, percentBefore: prevPercent, percentAfter: nextPercent } });
           const recentEvents = await tx.activityLog.findMany({
             where: { itemId: id, action: "CONSUME", undoneAt: null, createdAt: { gte: new Date(Date.now() - 30 * 86400000) } },
             select: { createdAt: true },

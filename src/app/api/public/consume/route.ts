@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { isLiquidConsumable, needsRestock, restockQuantity } from "@/lib/item-metrics";
+import { isLiquidConsumable } from "@/lib/item-metrics";
+import { ensureRestockSuggestion } from "@/lib/restock-suggestion";
+import { refreshConsumeRate } from "@/lib/consume-rate";
 import { apiError } from "@/lib/api";
 import { clientAddress, rateLimit } from "@/lib/rate-limit";
 
@@ -39,15 +41,13 @@ export async function POST(request: NextRequest) {
         data: { action: "CONSUME", itemId: item.id, itemName: item.name, detail: `扫码消耗 1 ${item.unit}`, scanRequestId: requestId },
       });
 
-      if (needsRestock(item)) {
-        const pending = await tx.shoppingItem.findFirst({ where: { name: item.name, status: "PENDING" } });
-        if (!pending) {
-          await tx.shoppingItem.create({
-            data: { name: item.name, quantity: restockQuantity(item), unit: item.unit, category: item.category, priority: 2, source: "low-stock" },
-          });
-        }
-      }
-      return { item, duplicate: false as const };
+      // 扫码也是真消耗,同样要进消耗速度:此前这条路完全不算 consumeRate,
+      // 只用扫码的人「还能用几天 / 每月花费」永远学不到节奏(实测 3 次扫码后 rate 仍是 0)。
+      await refreshConsumeRate(tx, item.id);
+      // 与其他三个调用点共用一份「该不该建、要不要顺手清重复项」的逻辑。
+      await ensureRestockSuggestion(tx, item);
+      const updated = await tx.item.findUniqueOrThrow({ where: { id: itemId }, include: { location: true } });
+      return { item: updated, duplicate: false as const };
     });
 
     if ("error" in result) return NextResponse.json({ error: result.error }, { status: result.status });

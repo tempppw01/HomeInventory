@@ -182,6 +182,10 @@ export async function POST(request: NextRequest) {
           itemId: typeof source.itemId === "string" ? itemIdMap.get(source.itemId) ?? null : null,
           itemName: typeof source.itemName === "string" ? source.itemName : null,
           detail: typeof source.detail === "string" ? source.detail : null,
+          // 余量型消耗的两个标记也要一起搬过去:丢了它们,迁移后的「撤销消耗」就只能拒绝
+          // (见 lib/consume-undo 的 legacy 分支),用户会以为换机把功能弄坏了。
+          percentBefore: typeof source.percentBefore === "number" ? source.percentBefore : null,
+          percentAfter: typeof source.percentAfter === "number" ? source.percentAfter : null,
         } });
         activities += 1;
       }

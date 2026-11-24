@@ -8,6 +8,8 @@
 /data/backups/
 .devserver*.log
 .prodserver*.log
+# 本地起服务时 next start 的输出(CI 里也生成,但从不入库)
+/server.log
 .env
 .env.local
 !.env.example
