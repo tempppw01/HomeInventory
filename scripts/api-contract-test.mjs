@@ -110,6 +110,31 @@ const baseItem = { name: "T-基础物品", category: "日用", type: "CONSUMABLE
   record("items", "非 JSON body 应返回 4xx 而非 500", r12.status >= 400 && r12.status < 500, `status=${r12.status}`);
 }
 
+// ============ 2.5 回收站里的物品:编辑与消耗必须都明确拒绝 ============
+// 由来(实测,两台设备场景):A 把物品删进回收站后,B 的旧页面继续保存会 **200 成功**
+// (改动进了用户已经扔掉的东西里),而同一件物品的消耗返回的是 404「物品不存在」——
+// 同一个状态两种行为,而且措辞让用户以为数据丢了。
+{
+  const trashed = await call("POST", "/api/items", { ...baseItem, name: `T-回收站物品-${Date.now().toString(36).slice(-4)}` });
+  const trashedId = trashed.body?.id ?? null;
+  record("items", "造出一件用于回收站检查的物品", Boolean(trashedId), `status=${trashed.status}`);
+
+  if (trashedId) {
+    const removed = await call("DELETE", `/api/items/${trashedId}`, {});
+    record("items", "移入回收站成功", removed.status === 200 || removed.status === 204, `status=${removed.status}`);
+
+    const edit = await call("PATCH", `/api/items/${trashedId}`, { quantity: 99 });
+    record("items", "回收站里的物品不能继续编辑(409,并说明在回收站)", edit.status === 409 && /回收站/.test(String(edit.body?.error ?? "")), `status=${edit.status} ${JSON.stringify(edit.body?.error ?? "").slice(0, 60)}`);
+
+    const consume = await call("POST", `/api/items/${trashedId}/consume`, {});
+    record("items", "回收站里的物品消耗给出 409 且说明在回收站(不再是「不存在」)", consume.status === 409 && /回收站/.test(String(consume.body?.error ?? "")), `status=${consume.status} ${JSON.stringify(consume.body?.error ?? "").slice(0, 60)}`);
+
+    const restore = await call("POST", `/api/items/${trashedId}/restore`, {});
+    record("items", "从回收站恢复后可以正常编辑", restore.status === 200 && (await call("PATCH", `/api/items/${trashedId}`, { quantity: 7 })).status === 200, `restore=${restore.status}`);
+    created.items.push(trashedId);
+  }
+}
+
 // ============ 3. items 更新 / 删除 ============
 {
   const id = created.items[0];

@@ -34,6 +34,12 @@ export async function PATCH(request: NextRequest, { params }: Context) {
     const { recordPurchase, purchaseStore, ...parsed } = itemPatchSchema.parse(await request.json());
     const item = await withWriteRetry(() => prisma.$transaction(async (tx) => {
       const existing = await tx.item.findUniqueOrThrow({ where: { id } });
+      // 已在回收站里的物品不允许继续改:此前这里没有判断,于是「A 把物品删进回收站、B 的老页面
+      // 还能保存」会**静默成功**(200),改动存进一件用户已经扔掉的东西里;而同一个物品的消耗
+      // 与详情页都会因为 deletedAt 被拒 —— 同一个状态两种行为。现在统一说清楚。
+      if (existing.deletedAt) {
+        return { error: "这件物品已在回收站,请先从回收站恢复再修改", status: 409 as const };
+      }
       const nextType = parsed.type ?? existing.type;
       const nextUnit = parsed.unit ?? existing.unit;
       const normalized = parsed.quantity === undefined ? parsed : { ...parsed, quantity: normalizeItemQuantity(parsed.quantity, nextUnit) };
@@ -71,6 +77,10 @@ export async function PATCH(request: NextRequest, { params }: Context) {
       }
       return updated;
     }));
+
+    // 事务里可能提前返回「已在回收站」这类错误,必须在继续之前处理掉 ——
+    // 否则后面会拿着一个错误对象当物品用。
+    if ("error" in item) return NextResponse.json({ error: item.error }, { status: item.status });
 
     // 放进事务里:此前是「先查后建」,并发请求会各建一条重复的采购建议(实测 6 并发 → 6 条),
     // 而且历史遗留的重复项会在下次触发时被顺手清掉(见 ensureRestockSuggestion)。
