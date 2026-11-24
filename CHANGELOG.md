@@ -5,6 +5,40 @@
 
 ---
 
+## [v0.1.59] - 2026-11-24
+
+短版本:v0.1.58 的镜像与应用本身没问题(**Docker 冒烟测试通过、Release 已发布**),
+红的是上一版新加的那条「全新 SQLite 库检查」——**它自己的毛病**,与产品代码无关。
+
+### 发生了什么
+
+v0.1.58 的 api 作业里,新检查第一步就报:
+
+```
+FAIL  用 init-sqlite.ts 建出一个临时库
+Error querying the database: Error code 14: Unable to open the database file
+```
+
+原因:这条检查把临时库放在 `data/sqlite-init-check.db`,而 Prisma 把 `file:../data/…` 里的相对路径
+按 **schema 所在目录**(`prisma/`)解析 —— 于是它落在仓库根的 `data/` 下。**CI 里 `data/` 要到后面
+「初始化数据库」那一步才 `mkdir`**,检查跑在它前面,目录根本不存在,SQLite 建不了文件。
+本地一直有 `data/`(放着正式库),所以本地 7/7 通过。
+
+### 修复与验证
+
+- 检查自己 `mkdirSync("data", { recursive: true })` —— 别指望别人先建好目录;
+- 用一个最小脚本把因果钉住(两种情形都实跑过):
+  - `data-tmp/` 不存在 → `init-sqlite.ts` 失败,错误正是 CI 里那句 `Error code 14: Unable to open the database file`;
+  - 先建目录 → 成功,库文件真的生成。
+  这就是上面那处修改的依据,不是猜的。
+
+### 说明
+
+- 产品代码在本版**没有任何改动**;单测 332 条、各套件条数不变;
+- v0.1.58 的内容(补齐全新 SQLite 库缺的 2 张表 + 5 个字段、两个防漂移守卫)全部照旧有效。
+
+---
+
 ## [v0.1.58] - 2026-11-24
 
 这一轮原本要收消耗链,但 **v0.1.57 的 Docker 冒烟测试红了** —— 顺着它查下去,挖到的问题比消耗链本身严重得多。

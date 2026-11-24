@@ -21,10 +21,16 @@
 // 用法:node scripts/verify-sqlite-init.mjs
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
 
 const DB_FILE = "data/sqlite-init-check.db";
+// Prisma 把 `file:...` 里的相对路径按 **schema 所在目录**(prisma/)解析,
+// 所以 `file:../data/x.db` 落在仓库根下的 data/ —— 这个目录在 CI 里不一定存在
+// (api 作业要到「初始化数据库」那一步才 mkdir)。第一次跑这条检查就撞上了:
+// CI 报 `Error code 14: Unable to open the database file`,本地却通过(本地 data/ 一直在)。
+// 自己建目录,别指望别人先建好。
+mkdirSync("data", { recursive: true });
 const RESULTS = [];
 const check = (name, ok, detail = "") => {
   RESULTS.push({ name, ok, detail });
