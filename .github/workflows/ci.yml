@@ -76,6 +76,12 @@ jobs:
       - run: npm ci
       - run: npx prisma generate --schema prisma/schema.prisma
       - run: npm run build
+      # 全新 SQLite 部署真正用的表结构是 scripts/init-sqlite.ts 里那份手写 SQL
+      # (docker/entrypoint.sh 在 SQLite 模式下跑的就是它)——这里真的建一个临时库,
+      # 逐表逐列对照 schema.prisma,并真的写一遍「建管理员 / 余量消耗 / 采购入库 / 盘点 / 搜索历史」。
+      # 由来:它悄悄漏过 2 张表 + 5 个字段,导致容器第一次启动就 500、盘点与搜索历史一直 503。
+      - name: 全新 SQLite 库检查(init-sqlite.ts 与 schema.prisma 是否一致、能否真的写入)
+        run: node scripts/verify-sqlite-init.mjs
       - name: 初始化数据库与管理员账号
         run: |
           mkdir -p data

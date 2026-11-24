@@ -56,6 +56,9 @@ if (itemId && shoppingId) {
   const first = await patch({ status: "PURCHASED", replenishItemId: itemId });
   check("第一次标记已购买会入库(+3)", (await stock()) === BASE_QTY + BUY_QTY, `实际=${await stock()}`);
   check("响应明确说「这次入库了」", first.json?.stocked === true, JSON.stringify(first.json).slice(0, 100));
+  // 响应体必须反映**入库之后**的那一行:此前返回的是入库前的快照,第一次「已购买」的
+  // 响应里 stockedAt/stockedQuantity 还是 null(界面靠刷新盖过去,接口自己在说谎)。
+  check("响应里带的入库记账是入库之后的(不是入库前快照)", Boolean(first.json?.stockedAt) && Number(first.json?.stockedQuantity) === BUY_QTY && first.json?.stockedItemId === itemId, JSON.stringify({ stockedAt: first.json?.stockedAt ?? null, stockedQuantity: first.json?.stockedQuantity ?? null, stockedItemId: first.json?.stockedItemId ?? null }));
 
   // 2 再点一次「已购买」——不该再加
   const second = await patch({ status: "PURCHASED", replenishItemId: itemId });
@@ -66,6 +69,7 @@ if (itemId && shoppingId) {
   const undone = await patch({ status: "PENDING" });
   check("撤销后库存退回原值", (await stock()) === BASE_QTY, `实际=${await stock()}(修之前会停在 16)`);
   check("响应说明这次是撤销入库", undone.json?.reverted === true, JSON.stringify(undone.json).slice(0, 100));
+  check("撤销响应里的记账已经清空(不是撤销前快照)", undone.json?.stockedAt === null && undone.json?.stockedQuantity === null && undone.json?.stockedItemId === null, JSON.stringify({ stockedAt: undone.json?.stockedAt ?? null, stockedQuantity: undone.json?.stockedQuantity ?? null, stockedItemId: undone.json?.stockedItemId ?? null }));
 
   // 4 再买一次:只加一次
   const again = await patch({ status: "PURCHASED", replenishItemId: itemId });

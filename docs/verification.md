@@ -32,6 +32,7 @@
 | `low-stock` / `expiry-status` | 该补货的两种触发、暂停期、今天到期算临期而非过期 |
 | `item-forecast` | 消耗速度学习、重复分组(含「一方包含另一方」) |
 | `consume-undo` | 撤销消耗退什么:数量型加回来、余量型退回余量(不动数量)、迁移前的旧记录**拒绝**撤销(宁可不猜也不改库存) |
+| `init-sqlite-drift` | 第三份 schema 也要同步:`scripts/init-sqlite.ts`(全新 SQLite 部署真正用的手写 SQL)不缺表、不缺字段、也没有幽灵列 |
 | `item-merge` / `item-metrics` / `item-sort` / `item-insight` | 合并计划、单位换算、排序、结论文字 |
 | `household-report` / `space-summary` / `chart` / `spend-forecast` | 月报数字、空间摘要、图表聚合 |
 | `csv-import` / `item-type-guess` / `fridge` / `task-recurrence` | 导入解析、类型猜测、冷藏规则、重复任务的下一次到期 |
@@ -45,7 +46,7 @@
 | CI 工作流自检 | 每个步骤有 run/uses、引用的脚本存在、关键作业与检查仍在(工作流无效时 CI 根本不会跑,所以这条放在本地 test:unit 最前) |
 | 两份 schema 同步 | MySQL 用的 `schema.mysql.prisma` 必须与 `schema.prisma` 的表/字段完全一致(容器启动时会用它覆盖正式 schema) |
 
-**328 条**(最近一次全绿)。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
+**332 条**(最近一次全绿)。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
 以便直接测引用了其他模块的文件。
 
 ## 二、API 层(需要服务在跑,CI 里在 `api` 作业)
@@ -78,7 +79,8 @@
 | `verify-migrations` | 迁移脚本:编号回填用**本地创建日**、幂等、字母表与在线一致、normalize 只动耐用品(SQLite 与 MySQL 都跑) | 11 | 升级 |
 | `verify-backup-scope` | 完整备份的覆盖面(任务/盘点/偏好/活动记录都在)与体积(超过默认 10 MB 也能恢复) | 20 | 升级 |
 | `verify-auto-backup` | 每日自动备份:负载与手动导出**同构**、保留最近 N 份并如实报告清理数、状态接口 | 20 | 升级 |
-| `verify-shopping-purchase` | 采购闭环:标记「已购买」只入库一次、撤销退回、采购项上留入库记账 | 12 | 流程 |
+| `verify-shopping-purchase` | 采购闭环:标记「已购买」只入库一次、撤销退回、采购项上留入库记账、**响应体给的是记账之后的真实行** | 14 | 流程 |
+| `verify-sqlite-init` | **全新 SQLite 部署**:`scripts/init-sqlite.ts`(容器实际用的那份手写 SQL)建出的库逐表逐列对上 `schema.prisma`,并真的写一遍建管理员 / 余量消耗 / 采购入库 / 盘点 / 搜索历史 | 7 | 部署 |
 | `verify-consume-chain` | 消耗链:撤销消耗后**消耗速度回落**、余量型撤销不再凭空多一瓶、扫码消耗也计入消耗速度、撤销后补货建议的去留 | 36 | 流程 |
 | `verify-backup-migration` | **换机迁移**:备份恢复进空库实例,物品一件不少、位置重新映射、重复恢复幂等(需两个实例) | 19 | 升级 |
 | `verify-upgrade-path` | 旧版本库 → `prisma db push` → 数据不丢、新表新字段可用 | 10 |

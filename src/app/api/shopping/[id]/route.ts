@@ -28,12 +28,15 @@ export async function PATCH(request: NextRequest, { params }: Context) {
             where: { id: inventoryItem.id },
             data: { quantity: inventoryItem.quantity + updated.quantity, lastRestockedAt: new Date() },
           });
-          await tx.shoppingItem.update({
+          // 返回**入库之后**的那一行:此前返回的是入库前读到的快照,
+          // 于是第一次「已购买」的响应里 stockedAt/stockedQuantity 还是 null ——
+          // 界面靠刷新盖过去了,接口本身在说谎(同一个毛病在 /api/activity/{id}/undo 上也有)。
+          const stocked = await tx.shoppingItem.update({
             where: { id: updated.id },
             data: { stockedAt: new Date(), stockedQuantity: updated.quantity, stockedItemId: inventoryItem.id },
           });
           await tx.activityLog.create({ data: { action: "SHOPPING_UPDATE", itemId: inventoryItem.id, itemName: updated.name, userId: user.id, detail: "采购完成并补货入库" } });
-          return { ...updated, stocked: true };
+          return { ...stocked, stocked: true };
         }
       }
       // 撤销(从已购买改回待购)且当初入过库:把加进去的量退回去,别让库存虚高。
@@ -46,8 +49,8 @@ export async function PATCH(request: NextRequest, { params }: Context) {
           });
           await tx.activityLog.create({ data: { action: "SHOPPING_UPDATE", itemId: inventoryItem.id, itemName: updated.name, userId: user.id, detail: "撤销采购入库,库存已退回" } });
         }
-        await tx.shoppingItem.update({ where: { id: updated.id }, data: { stockedAt: null, stockedQuantity: null, stockedItemId: null } });
-        return { ...updated, stocked: false, reverted: true };
+        const cleared = await tx.shoppingItem.update({ where: { id: updated.id }, data: { stockedAt: null, stockedQuantity: null, stockedItemId: null } });
+        return { ...cleared, stocked: false, reverted: true };
       }
       await tx.activityLog.create({ data: { action: "SHOPPING_UPDATE", itemName: updated.name, userId: user.id, detail: status === "PURCHASED" ? "采购项已完成" : "采购项恢复待购" } });
       return { ...updated, stocked: false };

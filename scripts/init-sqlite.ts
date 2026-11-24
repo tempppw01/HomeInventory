@@ -75,6 +75,8 @@ const statements = [
     "detail" TEXT,
     "undoOfId" TEXT,
     "undoneAt" DATETIME,
+    "percentBefore" REAL,
+    "percentAfter" REAL,
     "scanRequestId" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ActivityLog_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
@@ -120,6 +122,9 @@ const statements = [
     "status" TEXT NOT NULL DEFAULT 'PENDING',
     "source" TEXT NOT NULL DEFAULT 'manual',
     "isFavorite" BOOLEAN NOT NULL DEFAULT false,
+    "stockedAt" DATETIME,
+    "stockedQuantity" REAL,
+    "stockedItemId" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
   )`,
@@ -143,6 +148,26 @@ const statements = [
     "nextDueAt" DATETIME,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
+  )`,
+  // 这两张表此前**完全不在这份手写 SQL 里**(schema.prisma 里早就有):
+  // 于是全新 SQLite 部署(Docker 走的就是这条)上「盘点历史」与「搜索历史」
+  // 从第一次使用起就一直 503 —— 接口只会说「库结构比当前版本旧,请跑 db push」,
+  // 而容器在 SQLite 模式下从不自动跑 db push,用户照着做也不知道该在哪跑。
+  // 由 scripts/unit/init-sqlite-drift.test.mjs 守着,漏字段会直接红。
+  `CREATE TABLE IF NOT EXISTS "AuditRecord" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "userId" TEXT,
+    "total" INTEGER NOT NULL,
+    "confirmed" INTEGER NOT NULL,
+    "locationName" TEXT NOT NULL DEFAULT '全部空间',
+    "finishedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE TABLE IF NOT EXISTS "SearchHistory" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "query" TEXT NOT NULL,
+    "userId" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`,
   `CREATE TABLE IF NOT EXISTS "OssSetting" (
     "id" TEXT NOT NULL PRIMARY KEY DEFAULT 'default',
@@ -201,6 +226,9 @@ const statements = [
   `CREATE INDEX IF NOT EXISTS "PriceRecord_itemId_idx" ON "PriceRecord"("itemId")`,
   `CREATE INDEX IF NOT EXISTS "PriceRecord_purchasedAt_idx" ON "PriceRecord"("purchasedAt")`,
   `CREATE INDEX IF NOT EXISTS "PriceRecord_category_idx" ON "PriceRecord"("category")`,
+  `CREATE INDEX IF NOT EXISTS "AuditRecord_finishedAt_idx" ON "AuditRecord"("finishedAt")`,
+  `CREATE INDEX IF NOT EXISTS "SearchHistory_userId_idx" ON "SearchHistory"("userId")`,
+  `CREATE INDEX IF NOT EXISTS "SearchHistory_createdAt_idx" ON "SearchHistory"("createdAt")`,
 ];
 
 async function main() {
@@ -267,6 +295,15 @@ async function main() {
   if (!activityColumns.some((column) => column.name === "undoOfId")) await prisma.$executeRawUnsafe(`ALTER TABLE "ActivityLog" ADD COLUMN "undoOfId" TEXT`);
   if (!activityColumns.some((column) => column.name === "undoneAt")) await prisma.$executeRawUnsafe(`ALTER TABLE "ActivityLog" ADD COLUMN "undoneAt" DATETIME`);
   if (!activityColumns.some((column) => column.name === "scanRequestId")) await prisma.$executeRawUnsafe(`ALTER TABLE "ActivityLog" ADD COLUMN "scanRequestId" TEXT`);
+  // 老库升级:这两列由「撤销余量型消耗」使用(v0.1.57),少了它容器里第一次
+  // 建管理员就会 500(那条 ACCOUNT_SETUP 流水写不进去)。
+  if (!activityColumns.some((column) => column.name === "percentBefore")) await prisma.$executeRawUnsafe(`ALTER TABLE "ActivityLog" ADD COLUMN "percentBefore" REAL`);
+  if (!activityColumns.some((column) => column.name === "percentAfter")) await prisma.$executeRawUnsafe(`ALTER TABLE "ActivityLog" ADD COLUMN "percentAfter" REAL`);
+  // 采购项上的入库记账(v0.1.56):少了它「标记已购买 → 入库 / 撤销退回」直接 503。
+  // 复用上面已经读过的 shoppingColumns,不再重复 PRAGMA。
+  if (!shoppingColumns.some((column) => column.name === "stockedAt")) await prisma.$executeRawUnsafe(`ALTER TABLE "ShoppingItem" ADD COLUMN "stockedAt" DATETIME`);
+  if (!shoppingColumns.some((column) => column.name === "stockedQuantity")) await prisma.$executeRawUnsafe(`ALTER TABLE "ShoppingItem" ADD COLUMN "stockedQuantity" REAL`);
+  if (!shoppingColumns.some((column) => column.name === "stockedItemId")) await prisma.$executeRawUnsafe(`ALTER TABLE "ShoppingItem" ADD COLUMN "stockedItemId" TEXT`);
   if (!ossColumns.some((column) => column.name === "storageMode")) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "OssSetting" ADD COLUMN "storageMode" TEXT NOT NULL DEFAULT 'oss'`);
   }
