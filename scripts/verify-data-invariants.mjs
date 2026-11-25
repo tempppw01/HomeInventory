@@ -273,8 +273,9 @@ try {
     priceRecords: [
       { itemName: `${restoreTag}-负价格`, category: "食品", unitPrice: -100, totalPrice: -100, quantity: -2, purchasedAt: nowIso, store: "x" },
     ],
-    members: [],
-    tasks: [],
+    members: [{ name: `${restoreTag}-正常成员`, color: "#7c3aed" }, { name: "名".repeat(40) }],
+    // 周期只认白名单:这里塞一个不认识的
+    tasks: [{ title: `${restoreTag}-怪周期`, dueAt: new Date(Date.now() + 86400000).toISOString(), recurrence: "每周", status: "OPEN" }],
     audits: [
       { total: 1_000_000_000, confirmed: 999_999_999, finishedAt: nowIso, locationName: `${restoreTag}-巨额盘点` },
       { total: 5, confirmed: 99, finishedAt: new Date(Date.now() - 3600_000).toISOString(), locationName: `${restoreTag}-超确认盘点` },
@@ -331,6 +332,34 @@ try {
     restoredPrefs?.expiryReminderDays === 1 && restoredPrefs?.weeklyReviewDay === 6 && restoredPrefs?.lowStockReminder === false,
     `提前=${restoredPrefs?.expiryReminderDays} 星期=${restoredPrefs?.weeklyReviewDay} 低库存提醒=${restoredPrefs?.lowStockReminder}`,
   );
+  const restoredTask = await prisma.householdTask.findFirst({ where: { title: { contains: restoreTag } }, select: { id: true, recurrence: true, status: true, dueAt: true } });
+  const restoredMembers = await prisma.householdMember.findMany({ where: { name: { contains: restoreTag } }, select: { name: true } });
+  check(
+    "恢复备份:不认识的周期不会原样落库(任务保留,周期降级为一次性)",
+    Boolean(restoredTask) && restoredTask.recurrence === "NONE",
+    `recurrence=${JSON.stringify(restoredTask?.recurrence ?? null)}`,
+  );
+  // 降级之后「完成」必须真的完成(修之前:接口 200、状态仍是待办、到期日顺延 0 天)
+  let completedNow = null;
+  if (restoredTask) {
+    await api("/api/tasks", { method: "PATCH", body: JSON.stringify({ id: restoredTask.id, action: "toggle" }) });
+    completedNow = await prisma.householdTask.findUnique({ where: { id: restoredTask.id }, select: { status: true, completedAt: true } });
+  }
+  check(
+    "恢复备份:降级成一次性的任务「完成」后真的完成",
+    completedNow?.status === "DONE" && Boolean(completedNow?.completedAt),
+    `status=${completedNow?.status} completedAt=${Boolean(completedNow?.completedAt)}`,
+  );
+  const longNameCount = await prisma.householdMember.count({ where: { name: "名".repeat(40) } });
+  check(
+    "恢复备份:超过 30 字的成员名被拒绝(和成员接口同一条规则)",
+    restoredMembers.length === 1 && longNameCount === 0,
+    `落库成员=${JSON.stringify(restoredMembers.map((row) => row.name.slice(0, 12)))} 超长名=${longNameCount}`,
+  );
+  await prisma.householdTask.deleteMany({ where: { title: { contains: restoreTag } } });
+  await prisma.householdMember.deleteMany({ where: { name: { contains: restoreTag } } });
+  await prisma.householdMember.deleteMany({ where: { name: "名".repeat(40) } });
+
   // 恢复成默认值,免得影响后面的检查
   await prisma.householdPreference.deleteMany({});
 
@@ -369,6 +398,7 @@ try {
     ["创建时间在未来(超过 10 分钟)", "SELECT COUNT(*) FROM Item WHERE createdAt > datetime('now', '+10 minutes')"],
     ["已删除物品出现负库存", "SELECT COUNT(*) FROM Item WHERE deletedAt IS NOT NULL AND quantity < 0"],
     ["偏好设置越界", "SELECT COUNT(*) FROM HouseholdPreference WHERE expiryReminderDays < 1 OR expiryReminderDays > 90 OR weeklyReviewDay < 0 OR weeklyReviewDay > 6"],
+    ["任务周期不在白名单", "SELECT COUNT(*) FROM HouseholdTask WHERE recurrence NOT IN ('NONE','DAILY','WEEKLY','MONTHLY','QUARTERLY','HALF_YEARLY','YEARLY')"],
   ];
   const violations = [];
   for (const [label, sql] of invariants) {

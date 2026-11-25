@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { nextDueDate, isTaskRecurrence, TASK_RECURRENCES, RECURRENCE_LABELS } from "../../src/lib/task-recurrence.ts";
+import { nextDueDate, isTaskRecurrence, recurrenceLabel, TASK_RECURRENCES, RECURRENCE_LABELS } from "../../src/lib/task-recurrence.ts";
 
 const iso = (date) => date.toISOString().slice(0, 10);
 
@@ -52,4 +52,13 @@ test("周期白名单与中文标签完整", () => {
   assert.equal(isTaskRecurrence("QUARTERLY"), true);
   assert.equal(isTaskRecurrence("WAT"), false);
   assert.equal(isTaskRecurrence(null), false);
+});
+test("周期标签:不认识的值按「一次性」显示(与完成时的行为一致)", () => {
+  // 修之前:这类值恢复进库后标签是个空徽章,点「完成」也不推进
+  assert.equal(recurrenceLabel("WEEKLY"), "每周");
+  assert.equal(recurrenceLabel("QUARTERLY"), "每 3 个月");
+  assert.equal(recurrenceLabel("NONE"), "一次性");
+  assert.equal(recurrenceLabel("每周"), "一次性");
+  assert.equal(recurrenceLabel("WAT"), "一次性");
+  assert.equal(recurrenceLabel(""), "一次性");
 });

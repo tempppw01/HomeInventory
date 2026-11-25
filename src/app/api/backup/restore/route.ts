@@ -11,7 +11,8 @@ import { usableAmount, usablePercent } from "@/lib/restore-guards";
 import { PREFERENCE_LIMITS, clampPreferenceInt } from "@/lib/preference-limits";
 import { createItemCode } from "@/lib/item-code";
 import { normalizeItemQuantity } from "@/lib/item-metrics";
-import { itemSchema, locationSchema, shoppingSchema } from "@/lib/validation";
+import { itemSchema, locationSchema, memberSchema, shoppingSchema } from "@/lib/validation";
+import { isTaskRecurrence } from "@/lib/task-recurrence";
 
 type BackupPayload = { items?: unknown[]; locations?: unknown[]; shopping?: unknown[]; priceRecords?: unknown[]; members?: unknown[]; activities?: unknown[]; tasks?: unknown[]; audits?: unknown[]; preferences?: unknown[] };
 
@@ -171,10 +172,14 @@ export async function POST(request: NextRequest) {
       }
       for (const row of (body.members || []).slice(0, 100)) {
         const source = row as Record<string, unknown>;
-        if (typeof source.name !== "string" || !source.name.trim()) continue;
-        const existing = await tx.householdMember.findFirst({ where: { name: source.name.trim() } });
+        // 走和「添加成员」接口同一份 schema:此前只 trim 一下就写,于是 60 个字的名字
+        // (接口最多 30)也能从备份里进库。
+        const parsedMember = memberSchema.safeParse({ name: source.name, color: typeof source.color === "string" ? source.color : undefined });
+        if (!parsedMember.success) { noteSkipped("members", (body.members || []).indexOf(row), typeof source.name === "string" ? source.name : null, describeIssue(parsedMember.error.issues[0] ?? {})); continue; }
+        const memberName = parsedMember.data.name;
+        const existing = await tx.householdMember.findFirst({ where: { name: memberName } });
         if (existing) continue;
-        await tx.householdMember.create({ data: { name: source.name.trim(), color: typeof source.color === "string" ? source.color : "#7c3aed" } });
+        await tx.householdMember.create({ data: { name: memberName, color: parsedMember.data.color || "#7c3aed" } });
         members += 1;
       }
       // ---------- 任务 / 盘点记录 / 偏好设置 / 活动记录 ----------
@@ -195,7 +200,10 @@ export async function POST(request: NextRequest) {
           title,
           description: typeof source.description === "string" ? source.description : null,
           dueAt,
-          recurrence: typeof source.recurrence === "string" ? source.recurrence : "NONE",
+          // 周期只认白名单。实测修之前:备份里的「每周」/「WAT」被原样写进库,
+          // 之后点「完成」接口 200、completedAt 也写了,但状态仍是待办、到期日顺延 0 天 ——
+          // 用户看到的是「点了没反应」。不认识就按一次性处理(至少能正常完成)。
+          recurrence: isTaskRecurrence(source.recurrence) ? source.recurrence : "NONE",
           status: source.status === "DONE" ? "DONE" : "OPEN",
           completedAt: parseDate(source.completedAt),
           nextDueAt: parseDate(source.nextDueAt),

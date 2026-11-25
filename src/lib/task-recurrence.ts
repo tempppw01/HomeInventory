@@ -17,6 +17,16 @@ export const RECURRENCE_LABELS: Record<TaskRecurrence, string> = {
   YEARLY: "每年",
 };
 
+/**
+ * 周期值的中文标签。
+ * 不认识的值(老备份、手改过的文件)一律按「一次性」显示 —— 与完成时的实际行为一致:
+ * 实测修之前,这类值会被原样写进库,点「完成」接口返回 200、completedAt 也写了,
+ * 但状态仍是待办、到期日顺延 0 天(用户看到的是「点了没反应」),标签还是个空徽章。
+ */
+export function recurrenceLabel(value: string): string {
+  return isTaskRecurrence(value) ? RECURRENCE_LABELS[value] : RECURRENCE_LABELS.NONE;
+}
+
 export function isTaskRecurrence(value: unknown): value is TaskRecurrence {
   return typeof value === "string" && (TASK_RECURRENCES as readonly string[]).includes(value);
 }

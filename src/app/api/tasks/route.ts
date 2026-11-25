@@ -38,7 +38,9 @@ export async function PATCH(request: NextRequest) {
     if (body.action === "delete") { await prisma.householdTask.delete({ where: { id } }); return NextResponse.json({ ok: true }); }
     if (body.action === "toggle") {
       if (existing.status === "OPEN") {
-        if (existing.recurrence !== "NONE") {
+        // 只认白名单里的周期。库里若有别的值(老备份恢复进来的「每周」「WAT」之类),
+        // 走「周期」分支会算不出下一期:到期日不变、状态仍是待办 —— 用户点完成像是没反应。
+        if (isTaskRecurrence(existing.recurrence) && existing.recurrence !== "NONE") {
           const nextDueAt = nextDueDate(existing.dueAt, existing.recurrence);
           const task = await prisma.householdTask.update({ where: { id }, data: { dueAt: nextDueAt, nextDueAt, completedAt: new Date() } });
           return NextResponse.json(task);

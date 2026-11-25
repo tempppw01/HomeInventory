@@ -9,7 +9,7 @@ import { Badge, Button, Empty, Field, ListRow, Panel, Screen } from "@/component
 import { useConfirm } from "@/components/confirm-dialog";
 import { ContextMenu, useContextMenu, type ContextMenuItem } from "@/components/context-menu";
 import { copyToClipboard } from "@/lib/clipboard";
-import { RECURRENCE_LABELS } from "@/lib/task-recurrence";
+import { RECURRENCE_LABELS, recurrenceLabel } from "@/lib/task-recurrence";
 import { DatePicker } from "@/components/date-picker";
 import { ReadOnlyContext, dateInputValue, taskDatePresets, request } from "../shared";
 import { Modal } from "./modals";
@@ -76,7 +76,7 @@ function TaskRow({ task, onToggle, onDelete }: { task: HouseholdTask; onToggle: 
             <span className="flex min-w-0 items-center gap-2">
               <span className="shrink-0">{overdue ? "已到期" : `到期 ${due.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })}`}</span>
               <span className="shrink-0" aria-hidden="true">·</span>
-              <Badge tone={overdue ? "danger" : "neutral"}>{recurrenceLabels[task.recurrence]}</Badge>
+              <Badge tone={overdue ? "danger" : "neutral"}>{recurrenceLabel(task.recurrence)}</Badge>
               {task.description && <><span className="shrink-0" aria-hidden="true">·</span><span className="min-w-0 truncate">{task.description}</span></>}
             </span>
           }
