@@ -212,7 +212,50 @@ try {
     `status=${auditRejected.status} 落库=${auditLeaked}`,
   );
 
-  // ---------- 7 恢复备份:外部文件里能塞进什么,库里就会出现什么 ----------
+  // ---------- 7 任务的状态机(顺带证明不变量不会误报) ----------
+  // 由来:上一版这里有一条「状态与完成时间矛盾」的不变量,把**正常**的周期任务也算了进去 ——
+  // 周期任务完成后 status 仍是 OPEN、completedAt 记录上次完成,这是设计,不是矛盾。
+  // 这一节既钉住真实状态机,也证明那条 SQL 现在只抓真矛盾。
+  const weekly = await api("/api/tasks", { method: "POST", body: JSON.stringify({ title: NAME("每周任务"), dueAt: "2026-12-01", recurrence: "WEEKLY" }) });
+  const weeklyId = weekly.body?.id ?? weekly.body?.task?.id ?? null;
+  const oneOff = await api("/api/tasks", { method: "POST", body: JSON.stringify({ title: NAME("一次性任务"), dueAt: "2026-12-01", recurrence: "NONE" }) });
+  const oneOffId = oneOff.body?.id ?? oneOff.body?.task?.id ?? null;
+  await api("/api/tasks", { method: "PATCH", body: JSON.stringify({ id: weeklyId, action: "toggle" }) });
+  await api("/api/tasks", { method: "PATCH", body: JSON.stringify({ id: oneOffId, action: "toggle" }) });
+  const weeklyRow = weeklyId ? await prisma.householdTask.findUnique({ where: { id: weeklyId } }) : null;
+  const oneOffRow = oneOffId ? await prisma.householdTask.findUnique({ where: { id: oneOffId } }) : null;
+  const advancedDays = weeklyRow ? Math.round((weeklyRow.dueAt.getTime() - new Date("2026-12-01").getTime()) / 86400000) : null;
+  check(
+    "周期任务完成一次:状态保持待办、到期日顺延 7 天、记下完成时间",
+    weeklyRow?.status === "OPEN" && advancedDays === 7 && Boolean(weeklyRow?.completedAt),
+    `status=${weeklyRow?.status} 顺延=${advancedDays} 天 completedAt=${Boolean(weeklyRow?.completedAt)}`,
+  );
+  check(
+    "一次性任务完成:状态变已完成并记下完成时间",
+    oneOffRow?.status === "DONE" && Boolean(oneOffRow?.completedAt),
+    `status=${oneOffRow?.status} completedAt=${Boolean(oneOffRow?.completedAt)}`,
+  );
+
+  // 上面这两个任务正是旧版不变量误报的形状。这里既确认它在**合法数据**上为 0,
+  // 也确认它真的能抓到矛盾(临时插一行矛盾的,查完立刻删掉)—— 否则「为 0」也可能只是查错了。
+  const taskContradictionSql = "SELECT COUNT(*) FROM HouseholdTask WHERE (status = 'DONE' AND completedAt IS NULL) OR (status <> 'DONE' AND completedAt IS NOT NULL AND nextDueAt IS NULL)";
+  const countTasks = async () => Number(Object.values((await prisma.$queryRawUnsafe(taskContradictionSql))[0] ?? {})[0] ?? 0);
+  const legitimate = await countTasks();
+  const planted = await prisma.householdTask.create({ data: { title: NAME("故意矛盾"), dueAt: new Date("2026-12-01"), recurrence: "NONE", status: "OPEN", completedAt: new Date(), nextDueAt: null } });
+  const afterPlant = await countTasks();
+  await prisma.householdTask.delete({ where: { id: planted.id } });
+  const afterCleanup = await countTasks();
+  check(
+    "任务不变量:正常数据为 0,且真能抓到矛盾(插一行矛盾的会变 1)",
+    legitimate === 0 && afterPlant === legitimate + 1 && afterCleanup === 0,
+    `合法数据=${legitimate} 插入矛盾后=${afterPlant} 删掉后=${afterCleanup}`,
+  );
+
+  for (const id of [weeklyId, oneOffId]) {
+    if (id) await api("/api/tasks", { method: "PATCH", body: JSON.stringify({ id, action: "delete" }) });
+  }
+
+  // ---------- 8 恢复备份:外部文件里能塞进什么,库里就会出现什么 ----------
   // 备份是唯一一条「用户能塞进任意数字、我们又无法校验来源」的入口
   // (老版本导出的、手改的、下载截断的)。这里塞一组应用自己绝不会产生的值进去。
   const restoreTag = NAME("恢复");
@@ -285,7 +328,7 @@ try {
   await prisma.priceRecord.deleteMany({ where: { itemName: { contains: restoreTag } } });
   await prisma.auditRecord.deleteMany({ where: { locationName: { contains: restoreTag } } });
 
-  // ---------- 8 全库不变量扫描 ----------
+  // ---------- 9 全库不变量扫描 ----------
   const count = async (sql) => Number(Object.values((await prisma.$queryRawUnsafe(sql))[0] ?? {})[0] ?? 0);
   const scale = {
     items: await count("SELECT COUNT(*) FROM Item"),
@@ -307,7 +350,12 @@ try {
     ["采购数量为负或为 0", "SELECT COUNT(*) FROM ShoppingItem WHERE quantity <= 0"],
     ["盘点记录确认数超过总数", "SELECT COUNT(*) FROM AuditRecord WHERE confirmed > total"],
     ["盘点记录为负", "SELECT COUNT(*) FROM AuditRecord WHERE total < 0 OR confirmed < 0"],
-    ["任务状态与完成时间矛盾", "SELECT COUNT(*) FROM HouseholdTask WHERE (status = 'DONE' AND completedAt IS NULL) OR (status <> 'DONE' AND completedAt IS NOT NULL)"],
+    // 这条原来写错了(我自己 v0.1.85 埋的):把「周期任务完成一次」当成矛盾。
+    // 而应用的设计是——周期任务完成后 **status 保持 OPEN**(等下一轮),completedAt 记录「上次做完」,
+    // dueAt/nextDueAt 顺延到下一期。实测:完成一个「每周」任务后,旧版这条 SQL 命中 1,
+    // 也就是说任何用过周期任务的家庭,这个套件都会红一次。
+    // 真矛盾只有两种:说了 DONE 却没有完成时间;既不是 DONE、也没有下一期,却有完成时间。
+    ["任务状态与完成时间矛盾", "SELECT COUNT(*) FROM HouseholdTask WHERE (status = 'DONE' AND completedAt IS NULL) OR (status <> 'DONE' AND completedAt IS NOT NULL AND nextDueAt IS NULL)"],
     ["创建时间在未来(超过 10 分钟)", "SELECT COUNT(*) FROM Item WHERE createdAt > datetime('now', '+10 minutes')"],
     ["已删除物品出现负库存", "SELECT COUNT(*) FROM Item WHERE deletedAt IS NOT NULL AND quantity < 0"],
   ];
@@ -326,7 +374,7 @@ try {
 } catch (error) {
   check("套件自身跑完(出现异常说明场景没走通)", false, String(error).slice(0, 180));
 } finally {
-  // ---------- 9 清理:自己的场景数据全部删掉 ----------
+  // ---------- 10 清理:自己的场景数据全部删掉 ----------
   for (const id of cleanup.items) {
     await api(`/api/items/${id}`, { method: "DELETE", body: JSON.stringify({ permanent: true }) }).catch(() => undefined);
   }
