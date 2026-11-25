@@ -127,6 +127,29 @@ if (url) {
 
     const afterDelete = await fetch(BASE + url, { headers: { cookie } });
     check("删除物品后图片文件被清理(不留孤儿)", afterDelete.status === 404, `status=${afterDelete.status}`);
+
+    // 换图片也要清理旧的:此前只在**永久删除物品**时清理,于是「换一张图」会一直留孤儿 ——
+    // 实测同一个物品连换三次图,三张全留在磁盘上(自托管 NAS 上磁盘只涨不降)。
+    const secondBytes = await sharp({ create: { width: 200, height: 200, channels: 3, background: "#00ff00" } }).png().toBuffer();
+    const second = await upload(secondBytes, "second.png", "image/png");
+    check("第二张图上传成功", second.status === 200 && Boolean(second.body?.url), `status=${second.status}`);
+
+    const replaceItem = await call("POST", "/api/items", { name: "图片替换验收物品", category: "日用", type: "CONSUMABLE", unit: "件", quantity: 1, minQuantity: 0, remainingPercent: 100 });
+    const replaceId = replaceItem.body?.id ?? null;
+    if (replaceId && second.body?.url && url) {
+      await call("PATCH", `/api/items/${replaceId}`, { imageUrl: url });
+      await call("PATCH", `/api/items/${replaceId}`, { imageUrl: second.body.url });
+      const oldFile = await fetch(BASE + url, { headers: { cookie } });
+      const newFile = await fetch(BASE + second.body.url, { headers: { cookie } });
+      check("换图片时旧文件被清理(旧地址 404)", oldFile.status === 404, `旧地址 status=${oldFile.status}`);
+      check("新图片仍可读(200)", newFile.status === 200, `新地址 status=${newFile.status}`);
+      await call("DELETE", `/api/items/${replaceId}`, { permanent: true });
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const afterDelete2 = await fetch(BASE + second.body.url, { headers: { cookie } });
+      check("删除物品后新图片也被清理(404)", afterDelete2.status === 404, `status=${afterDelete2.status}`);
+    } else {
+      check("换图片时旧文件被清理(旧地址 404)", false, `准备失败:itemId=${replaceId} secondUrl=${second.body?.url ?? null} firstUrl=${url}`);
+    }
   }
 }
 

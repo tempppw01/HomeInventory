@@ -32,11 +32,15 @@ export async function PATCH(request: NextRequest, { params }: Context) {
     const user = await requireWritableUser();
     const { id } = await params;
     const { recordPurchase, purchaseStore, ...parsed } = itemPatchSchema.parse(await request.json());
+    // 改之前的图片地址:事务提交后据此删旧文件(事务失败时不能删还在用的文件)。
+    let previousImageUrl: string | null = null;
     const item = await withWriteRetry(() => prisma.$transaction(async (tx) => {
+      // 记下改之前的图片地址(事务外声明,提交后再删旧文件)。
       const existing = await tx.item.findUniqueOrThrow({ where: { id } });
       // 已在回收站里的物品不允许继续改:此前这里没有判断,于是「A 把物品删进回收站、B 的老页面
       // 还能保存」会**静默成功**(200),改动存进一件用户已经扔掉的东西里;而同一个物品的消耗
       // 与详情页都会因为 deletedAt 被拒 —— 同一个状态两种行为。现在统一说清楚。
+      previousImageUrl = existing.imageUrl;
       if (existing.deletedAt) {
         return { error: "这件物品已在回收站,请先从回收站恢复再修改", status: 409 as const };
       }
@@ -82,6 +86,12 @@ export async function PATCH(request: NextRequest, { params }: Context) {
     // 否则后面会拿着一个错误对象当物品用。
     if ("error" in item) return NextResponse.json({ error: item.error }, { status: item.status });
 
+    // 换了图片就把旧文件删掉:此前只在**永久删除物品**时清理,于是「换一张图」会一直留孤儿 ——
+    // 实测:同一个物品连换三次图,三张全留在磁盘上(磁盘只涨不降;自托管 NAS 会一直积)。
+    // 放在事务提交之后:事务失败时不能把还在用的文件删了。
+    if (previousImageUrl && previousImageUrl !== item.imageUrl) {
+      await deleteStoredImage(previousImageUrl);
+    }
     // 放进事务里:此前是「先查后建」,并发请求会各建一条重复的采购建议(实测 6 并发 → 6 条),
     // 而且历史遗留的重复项会在下次触发时被顺手清掉(见 ensureRestockSuggestion)。
     await prisma.$transaction((tx) => ensureRestockSuggestion(tx, item));
