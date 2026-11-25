@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PREFERENCE_LIMITS } from "@/lib/preference-limits";
 
 // 日期字段接受两种写法:
 //   · 2026-11-20            —— 界面日期控件提交的格式
@@ -203,10 +204,11 @@ export const locationSchema = z.object({
 });
 
 export const householdPreferenceSchema = z.object({
-  expiryReminderDays: z.coerce.number().int().min(1).max(90).default(7),
+  // 范围来自 lib/preference-limits:恢复备份那条路也从同一份取,避免两处各说各话
+  expiryReminderDays: z.coerce.number().int().min(PREFERENCE_LIMITS.expiryReminderDays.min).max(PREFERENCE_LIMITS.expiryReminderDays.max).default(PREFERENCE_LIMITS.expiryReminderDays.fallback),
   lowStockReminder: z.boolean().default(true),
   weeklyReviewEnabled: z.boolean().default(true),
-  weeklyReviewDay: z.coerce.number().int().min(0).max(6).default(0),
+  weeklyReviewDay: z.coerce.number().int().min(PREFERENCE_LIMITS.weeklyReviewDay.min).max(PREFERENCE_LIMITS.weeklyReviewDay.max).default(PREFERENCE_LIMITS.weeklyReviewDay.fallback),
 });
 
 export const ossSettingSchema = z.object({

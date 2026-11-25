@@ -279,7 +279,8 @@ try {
       { total: 1_000_000_000, confirmed: 999_999_999, finishedAt: nowIso, locationName: `${restoreTag}-巨额盘点` },
       { total: 5, confirmed: 99, finishedAt: new Date(Date.now() - 3600_000).toISOString(), locationName: `${restoreTag}-超确认盘点` },
     ],
-    preferences: [],
+    // 偏好:界面上「提前 1~90 天」与「每周盘点 0~6」,这里塞越界值
+    preferences: [{ expiryReminderDays: -3, weeklyReviewDay: 99, lowStockReminder: false, weeklyReviewEnabled: true }],
     activities: [
       { action: "CONSUME", itemId: "src-ok", itemName: `${restoreTag}-正常物品`, detail: "余量 150% → 300%", percentBefore: 150, percentAfter: 300, createdAt: nowIso },
     ],
@@ -324,6 +325,15 @@ try {
     Boolean(restoredActivity) && restoredActivity.percentBefore === null && undoOutcome.status === 409 && undoOutcome.percent === 80,
     `流水=${JSON.stringify(restoredActivity)} 撤销status=${undoOutcome.status} 余量=${undoOutcome.percent}`,
   );
+  const restoredPrefs = await prisma.householdPreference.findUnique({ where: { id: "default" } });
+  check(
+    "恢复备份:越界的偏好被夹回合法范围(合法的字段保留)",
+    restoredPrefs?.expiryReminderDays === 1 && restoredPrefs?.weeklyReviewDay === 6 && restoredPrefs?.lowStockReminder === false,
+    `提前=${restoredPrefs?.expiryReminderDays} 星期=${restoredPrefs?.weeklyReviewDay} 低库存提醒=${restoredPrefs?.lowStockReminder}`,
+  );
+  // 恢复成默认值,免得影响后面的检查
+  await prisma.householdPreference.deleteMany({});
+
   await prisma.activityLog.deleteMany({ where: { itemName: { contains: restoreTag } } });
   await prisma.priceRecord.deleteMany({ where: { itemName: { contains: restoreTag } } });
   await prisma.auditRecord.deleteMany({ where: { locationName: { contains: restoreTag } } });
@@ -358,6 +368,7 @@ try {
     ["任务状态与完成时间矛盾", "SELECT COUNT(*) FROM HouseholdTask WHERE (status = 'DONE' AND completedAt IS NULL) OR (status <> 'DONE' AND completedAt IS NOT NULL AND nextDueAt IS NULL)"],
     ["创建时间在未来(超过 10 分钟)", "SELECT COUNT(*) FROM Item WHERE createdAt > datetime('now', '+10 minutes')"],
     ["已删除物品出现负库存", "SELECT COUNT(*) FROM Item WHERE deletedAt IS NOT NULL AND quantity < 0"],
+    ["偏好设置越界", "SELECT COUNT(*) FROM HouseholdPreference WHERE expiryReminderDays < 1 OR expiryReminderDays > 90 OR weeklyReviewDay < 0 OR weeklyReviewDay > 6"],
   ];
   const violations = [];
   for (const [label, sql] of invariants) {

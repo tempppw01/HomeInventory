@@ -8,6 +8,7 @@ import { backupDir, isBackupFileName } from "@/lib/backup-files";
 import { MAX_BACKUP_BYTES, backupTooLargeMessage } from "@/lib/backup-limits";
 import { auditCountRangeMessage, clampAuditConfirmed, isAuditCount } from "@/lib/audit-limits";
 import { usableAmount, usablePercent } from "@/lib/restore-guards";
+import { PREFERENCE_LIMITS, clampPreferenceInt } from "@/lib/preference-limits";
 import { createItemCode } from "@/lib/item-code";
 import { normalizeItemQuantity } from "@/lib/item-metrics";
 import { itemSchema, locationSchema, shoppingSchema } from "@/lib/validation";
@@ -217,11 +218,13 @@ export async function POST(request: NextRequest) {
       }
       for (const row of (body.preferences || []).slice(0, 1)) {
         const source = row as Record<string, unknown>;
+        // 值域与设置接口共用一份(实测修之前:负数提醒窗口、99 这样的星期都被原样写进库,
+        // 而同样的值走设置接口会被 400 拒掉)。越界夹到边界,非法值用默认值;合法的字段原样保留。
         const data = {
-          expiryReminderDays: Number.isFinite(Number(source.expiryReminderDays)) ? Number(source.expiryReminderDays) : 7,
+          expiryReminderDays: clampPreferenceInt(source.expiryReminderDays, PREFERENCE_LIMITS.expiryReminderDays),
           lowStockReminder: source.lowStockReminder !== false,
           weeklyReviewEnabled: source.weeklyReviewEnabled !== false,
-          weeklyReviewDay: Number.isFinite(Number(source.weeklyReviewDay)) ? Number(source.weeklyReviewDay) : 0,
+          weeklyReviewDay: clampPreferenceInt(source.weeklyReviewDay, PREFERENCE_LIMITS.weeklyReviewDay),
         };
         await tx.householdPreference.upsert({ where: { id: "default" }, create: { id: "default", ...data }, update: data });
         preferences += 1;
