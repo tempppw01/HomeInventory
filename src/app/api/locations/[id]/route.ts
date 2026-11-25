@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { locationSchema } from "@/lib/validation";
 import { apiError, requireWritableUser } from "@/lib/api";
+import { wouldFormLocationCycle } from "@/lib/location-tree";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -12,8 +13,12 @@ export async function PATCH(request: NextRequest, { params }: Context) {
     const data = locationSchema.partial().parse(await request.json());
     if (data.parentId === id) return NextResponse.json({ error: "空间不能设为自己的上级" }, { status: 400 });
     if (data.parentId) {
-      const parent = await prisma.location.findUnique({ where: { id: data.parentId }, select: { parentId: true } });
-      if (!parent || parent.parentId === id) return NextResponse.json({ error: "不能形成循环的空间层级" }, { status: 400 });
+      // 只查「父的父是不是自己」这一层不够:厨房 → 橱柜 → 抽屉 之后,把厨房的上级设成抽屉
+      // 同样会成环,而界面的下拉框把除自己以外的所有空间都列出来 —— 一次编辑就能造成。
+      // 实测(修之前)三段 PATCH 就把环造出来了,空间卡片上的路径开始重复。
+      const nodes = await prisma.location.findMany({ select: { id: true, parentId: true } });
+      if (!nodes.some((node) => node.id === data.parentId)) return NextResponse.json({ error: "上级空间不存在" }, { status: 400 });
+      if (wouldFormLocationCycle(nodes, id, data.parentId)) return NextResponse.json({ error: "不能形成循环的空间层级" }, { status: 400 });
     }
     const location = await prisma.$transaction(async (tx) => {
       const updated = await tx.location.update({ where: { id }, data });

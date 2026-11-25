@@ -185,6 +185,41 @@ const baseItem = { name: "T-基础物品", category: "日用", type: "CONSUMABLE
     record("locations", "循环引用(A→B→A)应被拒绝", rCycle.status >= 400, `status=${rCycle.status}`);
   }
 
+  // 三层环:A→B→C 之后,把 A 的上级设成 C。
+  // 修之前这条被放行 —— 服务端只查了「父的父是不是自己」这一层,
+  // 而界面的下拉框把除自己以外的空间都列出来,所以一次编辑就能造出绕不完的环。
+  const r3 = await call("POST", "/api/locations", { name: "T-空间C", icon: "Package", parentId: null });
+  const c3 = r3.body?.id;
+  if (c3) created.locations.push(c3);
+  if (a && b && c3) {
+    await call("PATCH", `/api/locations/${b}`, { parentId: a });
+    await call("PATCH", `/api/locations/${c3}`, { parentId: b });
+    const deep = await call("PATCH", `/api/locations/${a}`, { parentId: c3 });
+    record("locations", "把孙子设成上级(三层环)应被拒绝", deep.status === 400, `status=${deep.status} error=${deep.body?.error ?? "-"}`);
+    // 反证:正常的一层层往上放是允许的(别把检查做成一刀切)
+    const okMove = await call("PATCH", `/api/locations/${c3}`, { parentId: null });
+    record("locations", "正常调整层级不被误伤", okMove.status === 200, `status=${okMove.status}`);
+  }
+
+  // 删除「自己没物品、但有子空间」的父空间:子空间被提升为顶层,而不是被连坐删掉。
+  // 这条是**钉住实测行为**(修之前测到就是这个行为,是合理的设计),防止以后悄悄变成级联删除。
+  if (a && b) {
+    const parentOnly = await call("POST", "/api/locations", { name: "T-只有子空间", icon: "Package", parentId: null });
+    const childKeep = await call("POST", "/api/locations", { name: "T-子空间保留", icon: "Package", parentId: parentOnly.body?.id ?? null });
+    if (parentOnly.body?.id) created.locations.push(parentOnly.body.id);
+    if (childKeep.body?.id) created.locations.push(childKeep.body.id);
+    const del = await call("DELETE", `/api/locations/${parentOnly.body?.id}`);
+    // 注意:GET /api/locations 是 405(那个路径只支持 POST),改为从概览拿空间清单
+    const stillThere = await call("GET", "/api/dashboard");
+    const body = JSON.stringify(stillThere.body ?? "");
+    record(
+      "locations",
+      "删除父空间:子空间被提升为顶层(不被连坐删掉)",
+      del.status === 200 && body.includes("T-子空间保留"),
+      `status=${del.status} 子空间还在=${body.includes("T-子空间保留")}`,
+    );
+  }
+
   // 有物品的空间删除
   const itemWithLoc = await call("POST", "/api/items", { ...baseItem, name: "T-占用空间的物品", locationId: a });
   if (itemWithLoc.body?.id) created.items.push(itemWithLoc.body.id);
