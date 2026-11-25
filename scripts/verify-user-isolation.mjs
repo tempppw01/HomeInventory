@@ -123,6 +123,20 @@ await b("DELETE", "/api/search-history");
 if (tempUserId) {
   const removed = await a("DELETE", `/api/auth/users/${tempUserId}`, {});
   console.log(`      清理:临时账号已删除(status=${removed.status})`);
+
+  // ---------- 账号与设备类信息:各看各的(物品/空间共享是设计,这里不是) ----------
+  // 注意:套件末尾已经删掉了那个临时成员账号,这里用 b 会 401 —— 重新登录原始成员账号再验。
+  const freshMember = makeClient(await loginCookie(BASE, USER_B, PASS_B));
+  const adminRecords = await a("GET", "/api/auth/login-records");
+  const memberRecords = await freshMember("GET", "/api/auth/login-records");
+  check("管理员能读登录记录", adminRecords.status === 200, `status=${adminRecords.status}`);
+  check("登录记录只有管理员能读(成员 403,含别人登录的 IP 与设备)", memberRecords.status === 403, `status=${memberRecords.status}`);
+  check("登录记录里确实有登录过的痕迹(否则上面那条是空转)", JSON.stringify(adminRecords.body ?? "").includes("leadcheck") || JSON.stringify(adminRecords.body ?? "").includes("rcvlead"), JSON.stringify(adminRecords.body).slice(0, 100));
+
+  // 系统信息:只该暴露「用的是什么数据库」,不该夹带路径、连接串、密钥。
+  const systemInfo = await freshMember("GET", "/api/system/info");
+  const systemText = JSON.stringify(systemInfo.body ?? {});
+  check("系统信息不含路径 / 连接串 / 密钥", systemInfo.status === 200 && !/file:|mysql:|password|secret|apiKey|\/app\/|\\|C:/i.test(systemText), `status=${systemInfo.status} body=${systemText.slice(0, 120)}`);
 }
 
 const failed = results.filter((entry) => !entry.ok);
