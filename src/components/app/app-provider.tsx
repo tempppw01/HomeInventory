@@ -135,6 +135,17 @@ function useAppState() {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
+  // 会话中途失效:任何写操作拿到 401 都会触发这个事件(见 components/shared.tsx 的 request)。
+  // 以前用户只看到一句「请先登录」,弹窗停着、页面上却没有任何回到登录的入口 —— 只能自己猜要刷新。
+  // 这里给一个明确的按钮:重新登录(整页跳转,未登录时首页就是登录表单)。
+  useEffect(() => {
+    const onExpired = () => {
+      setToast("登录已过期,请重新登录");
+      setToastAction({ label: "重新登录", onClick: () => window.location.assign("/") });
+    };
+    window.addEventListener("home-inventory:session-expired", onExpired);
+    return () => window.removeEventListener("home-inventory:session-expired", onExpired);
+  }, []);
   useEffect(() => {
     const key = "home-inventory-auto-backup-check";
     if (role !== "ADMIN") return;

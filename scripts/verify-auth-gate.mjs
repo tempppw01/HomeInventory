@@ -9,8 +9,9 @@
 //
 // 用法:PROBE_USER=bgs PROBE_PASS=... node scripts/verify-auth-gate.mjs
 
+import { PrismaClient } from "@prisma/client";
 import { launchChromium } from "./lib/browser.mjs";
-import { dismissBlockingDialogs } from "./lib/probe-auth.mjs";
+import { dismissBlockingDialogs, loginAndConfirm } from "./lib/probe-auth.mjs";
 
 const BASE = process.env.BASE_URL || "http://127.0.0.1:3001";
 const USER = process.env.PROBE_USER || "bgs";
@@ -211,6 +212,56 @@ await page.waitForTimeout(600);
   check("脚本取不到时会给出可操作的提示(而不是永远转圈)", late.visible && /页面没能加载完/.test(late.text || ""), late.visible ? (late.text || "").slice(0, 90) : "10 秒后什么都没出现");
   check("提示里的「重新加载」是不依赖 React 的链接", late.visible && Boolean(late.linkText) && late.linkHref === "/", `href=${late.linkHref} text=${late.linkText}`);
   await broken.close();
+}
+
+// ---------- 会话中途失效:写操作失败时,界面说的是实话吗? ----------
+// 实测(修之前):删掉会话后点「快速保存」,弹窗里只有一句「请先登录」——
+// 弹窗停着、内容还在,而页面上**没有任何回到登录的入口**,用户只能自己猜要刷新。
+{
+  const prisma = new PrismaClient();
+  const relogin = await loginAndConfirm(page, BASE, USER, PASS);
+  check("会话过期这一段能重新登录(否则下面量的是登录页)", relogin.ok, relogin.detail);
+  if (relogin.ok) {
+    await dismissBlockingDialogs(page);
+    const probeName = `门禁-会话过期-${Date.now().toString(36).slice(-5)}`;
+    const statuses = [];
+    const onResponse = (response) => { if (response.url().includes("/api/items") && response.request().method() === "POST") statuses.push(response.status()); };
+    page.on("response", onResponse);
+    await page.getByRole("button", { name: "录入物品" }).first().click();
+    await page.waitForTimeout(900);
+    await page.locator("#item-name").fill(probeName);
+    const qty = page.locator('[aria-label="数量"]').first();
+    if (await qty.count()) await qty.fill("2");
+    // 等价于「在别的设备上改了密码」或「管理员把会话踢掉了」
+    await prisma.authSession.deleteMany({});
+    await page.getByRole("button", { name: /快速保存/ }).first().click({ noWaitAfter: true });
+    await page.waitForTimeout(2600);
+    page.off("response", onResponse);
+
+    const ui = await page.evaluate(() => {
+      const dialog = document.querySelector('[role="dialog"]');
+      const toast = document.querySelector('[role="status"]');
+      return {
+        dialogOpen: Boolean(dialog),
+        // 整段文本都要查:错误提示在弹窗最底部,按前 200 字截断会把它切掉(第一次就是这么误判的)
+        dialogHasExpiredHint: /登录/.test(dialog?.innerText || "") && /刷新|重新登录/.test(dialog?.innerText || ""),
+        dialogText: ((dialog?.innerText || "").match(/[^\n]*登录[^\n]*/) || [""])[0].slice(0, 120),
+        toastText: (toast?.innerText || "").replace(/\s+/g, " ").slice(0, 80),
+        reloginButton: [...document.querySelectorAll("button")].some((node) => /重新登录/.test(node.textContent || "")),
+      };
+    });
+    const created = await prisma.item.count({ where: { name: probeName } });
+    check("会话失效后的写操作确实被拒(401),界面没有假装成功", statuses.includes(401) && created === 0, `状态=${statuses.join(",") || "(没拿到)"} 落库=${created}`);
+    check("弹窗里的话能照做:说明登录已过期、要重新登录", ui.dialogHasExpiredHint, `命中行=${ui.dialogText || "(弹窗里没有提到登录)"}`);
+    check("界面上给出了「重新登录」入口(不是让用户自己猜)", ui.reloginButton, `toast=${ui.toastText || "(没有)"} 弹窗=${ui.dialogOpen}`);
+
+    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    const backToLogin = await page.evaluate(() => Boolean(document.querySelector("#auth-username")));
+    check("刷新后回到登录表单", backToLogin, "刷新后仍停在应用页面");
+    await prisma.item.deleteMany({ where: { name: probeName } });
+  }
+  await prisma.$disconnect();
 }
 
 const failed = results.filter((entry) => !entry.ok);

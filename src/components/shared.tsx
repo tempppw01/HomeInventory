@@ -241,6 +241,19 @@ export async function request<T>(url: string, options?: RequestInit): Promise<T>
           status: response.status,
           code: typeof result.code === "string" ? result.code : undefined,
         });
+        // 会话中途失效(别的设备改了密码、管理员踢下线、30 天到期)时,服务端只说「请先登录」。
+        // 实测:录入弹窗里就显示这四个字,弹窗停着、内容还在,而**页面上没有任何回到登录的入口** ——
+        // 用户只能自己猜「刷新一下」。这里把话说全,并通知外壳挂一个「重新登录」的入口。
+        if (response.status === 401) {
+          try {
+            window.dispatchEvent(new CustomEvent("home-inventory:session-expired"));
+          } catch { /* 老浏览器/非浏览器环境:下面这句话仍然够用 */ }
+          throw Object.assign(new Error("登录已过期,请刷新页面后重新登录"), {
+            fromServer: true,
+            status: 401,
+            code: "SESSION_EXPIRED",
+          });
+        }
         throw failure;
       }
       return result as T;
