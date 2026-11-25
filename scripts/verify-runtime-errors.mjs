@@ -219,6 +219,42 @@ if (!itemId) {
     settingsView.path === "/settings" && settingsView.heading === "设置" && settingsView.mentionsAi && badResponses.length === n0 && consoleErrors.length === e1,
     `path=${settingsView.path} h1=${settingsView.heading} ai=${settingsView.mentionsAi} 4xx=${badResponses.length - n0} err=${consoleErrors.length - e1}`,
   );
+
+  // ---------- AI 助手:没配 AI 时不能等用户打完一段才告诉他 ----------
+  // 实测(修之前):完全没配 AI 时,助手界面先是正常欢迎 + 四条示例问题、输入框可打,
+  // 用户发出去之后才看到「请先在设置中配置 AI 接口」,而弹窗里没有任何去设置的入口。
+  at = "AI 助手入口";
+  await page.goto(BASE + "/", { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2000);
+  await dismissBlockingDialogs(page);
+  const chatBefore = badResponses.length;
+  await page.getByRole("button", { name: "AI 助手" }).first().click();
+  await page.waitForTimeout(1400);
+  const chatUi = await page.evaluate(() => {
+    const dialog = document.querySelector('[role="dialog"]');
+    const text = (dialog?.innerText ?? "").replace(/\s+/g, " ");
+    const input = dialog?.querySelector("textarea, input[type=text]");
+    return {
+      open: Boolean(dialog),
+      mentionsConfigure: /配置\s*AI|还没配置|需要管理员/.test(text),
+      buttons: [...(dialog?.querySelectorAll("button") ?? [])].map((node) => (node.textContent || "").trim()).filter(Boolean),
+      inputDisabled: input ? Boolean(input.disabled) : null,
+      chatErrors: 0,
+    };
+  });
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(400);
+  const hasConfigureAction = chatUi.buttons.some((label) => /去设置/.test(label));
+  if (aiAvailable === false) {
+    check("未配置 AI 时,助手在发问前就说清楚并给出入口", chatUi.open && chatUi.mentionsConfigure && hasConfigureAction, `提示=${chatUi.mentionsConfigure} 按钮=${JSON.stringify(chatUi.buttons.slice(0, 4))}`);
+    check("未配置 AI 时,助手输入框不可用(不让人白打一段再报错)", chatUi.inputDisabled === true, `inputDisabled=${chatUi.inputDisabled}`);
+  } else {
+    // 已配置时反过来:输入框要能用,也不该出现「去设置配置」
+    check("已配置 AI 时,助手输入框可用", chatUi.open && chatUi.inputDisabled === false, `open=${chatUi.open} inputDisabled=${chatUi.inputDisabled}`);
+    check("已配置 AI 时,助手不显示「去设置配置」", !hasConfigureAction, `按钮=${JSON.stringify(chatUi.buttons.slice(0, 4))}`);
+  }
+  // 打开/关闭助手本身不该带出 4xx
+  check("打开与关闭助手不产生 4xx", badResponses.length === chatBefore, `新增 4xx=${badResponses.length - chatBefore}`);
 }
 
 // ---------- 负控:证明监听器真的会报 ----------
