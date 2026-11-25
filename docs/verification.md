@@ -67,7 +67,7 @@
 | `verify-schema-sync` | SQLite 与 MySQL 两份 schema 没有漂开 | 4 |
 | `verify-config-docs` | 环境变量与文档一致:代码里用到的都在文档或白名单里 | 4 |
 | `verify-coverage-map` | 覆盖地图不许说假话:套件都在表里、没有幽灵行、单测条数与实际一致 | 8 |
-| `verify-ci-workflow` | CI 工作流自检:作业/步骤/引用的脚本都还在、关键检查没被删 | 11 |
+| `verify-ci-workflow` | CI 工作流自检:作业/步骤/引用的脚本都还在、关键检查没被删;**登录限流检查必须是 api 作业的最后一个套件步骤**(它会打满额度,放错位置会把后面的步骤拖成几分钟 —— 实测 518 秒) | 13 |
 | `verify-api-guards` | 写接口守卫与 proxy 位置的那几条关键断言 | 5 |
 | `verify-image-assets` | 镜像资源边界:启动脚本的相对导入必须都在镜像会复制的目录里、不许 @/ 别名、Dockerfile 仍在复制它们 | 9 |
 | `verify-task-recurrence` | 完成 → 下次到期 → 撤销复原 | 7 |

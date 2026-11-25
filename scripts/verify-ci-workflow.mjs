@@ -82,6 +82,14 @@ check("关键检查仍在 CI 里", dropped.length === 0, dropped.join(", "));
 
 console.log(`      ${jobNames.length} 个作业 / ${Object.values(jobs).reduce((sum, job) => sum + (job.steps?.length ?? 0), 0)} 个步骤 / 引用 ${referencedScripts.size} 个脚本`);
 
+// 步骤顺序也要守:登录限流检查会打满额度,后面不许再有要登录的步骤。
+// 实测把 AI 检查放它后面 → 那个套件等 518 秒,api 作业从 2 分钟涨到 11 分钟。
+{
+  const apiJob = readFileSync(".github/workflows/ci.yml", "utf8").split(/\n  [a-z-]+:\n/).find((chunk) => chunk.includes("name: API 契约")) ?? "";
+  const scriptSteps = [...apiJob.matchAll(/run: node scripts\/([\w-]+)\.mjs/g)].map((match) => match[1]);
+  const lastIndex = scriptSteps.length - 1;
+  check("登录限流检查必须是 api 作业的最后一个套件步骤", scriptSteps[lastIndex] === "verify-login-rate-limit", `最后一个是 ${scriptSteps[lastIndex] ?? "(没找到)"} —— 它会打满登录额度,后面的步骤会被拖成几分钟`);
+}
 const failed = results.filter((entry) => !entry.ok);
 console.log(`\n${results.length - failed.length}/${results.length} 通过`);
 if (failed.length) for (const entry of failed) console.log(`[${entry.name}] ${entry.detail}`);

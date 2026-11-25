@@ -174,15 +174,17 @@ jobs:
       - name: 任务周期核对(读库确认)
         run: node scripts/verify-task-recurrence.mjs
 
-      # 登录限流:挡得住什么、挡不住什么(实测过「换个 X-Forwarded-For 就无限猜」)。
-      # **必须排最后**:它会故意打满 60 秒的限流窗口,后面的套件登录会撞 429。
-      - name: 登录限流检查(同一来源 12 次/分钟、同一账号 10 次/分钟、不泄露账号是否存在)
-        run: node scripts/verify-login-rate-limit.mjs
 
       # AI 接口:没配置时四个入口都要明确拒绝(不是 500),更不该悄悄调用上游。
       # 上游连不上的文案在 CI 里测不到(CI 没有 AI Key),套件会 SKIP 并说明原因。
       - name: AI 接口检查(未配置时明确拒绝 / 上游连不上时 502 + 可操作文案)
         run: node scripts/verify-ai-guards.mjs
+      # ⚠️ 这一条**必须是最后一个**要登录的步骤:它会打满登录限流额度(全局 120 次/10 分钟)。
+      # 实测把它后面的 AI 检查拖成了 518 秒等待(api 作业 2 分钟 → 11 分钟)。
+      # 登录限流:挡得住什么、挡不住什么(实测过「换个 X-Forwarded-For 就无限猜」)。
+      # **必须排最后**:它会故意打满 60 秒的限流窗口,后面的套件登录会撞 429。
+      - name: 登录限流检查(同一来源 12 次/分钟、同一账号 10 次/分钟、不泄露账号是否存在)
+        run: node scripts/verify-login-rate-limit.mjs
       - name: 失败时打印服务日志
         if: failure()
         run: tail -100 server.log
