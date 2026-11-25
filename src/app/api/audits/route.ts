@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { apiError, requireWritableUser } from "@/lib/api";
 import { requireUser } from "@/lib/account-auth";
 import { prisma } from "@/lib/prisma";
+import { auditCountRangeMessage, clampAuditConfirmed, isAuditCount } from "@/lib/audit-limits";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export async function GET() {
 // 盘点数量的合理上界。实测(修之前):`total: 1000000000` 会被原样写进盘点历史 ——
 // 一条这样的记录会让「最近几次盘了多少」彻底失真,而且它永久留在历史里(只留 20 条,也会顶掉真实记录)。
 // 家庭库存不可能到百万级;超过就明确拒绝,不要把它当成"用户的数据"存下来。
-const MAX_AUDIT_COUNT = 1_000_000;
+// 上界与夹取收到 lib/audit-limits 里,因为**恢复备份**也是写入路径(实测那条路当时没守,见该文件注释)。
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,14 +41,14 @@ export async function POST(request: NextRequest) {
     if (!Number.isFinite(total) || !Number.isFinite(confirmed) || total < 0 || confirmed < 0) {
       return NextResponse.json({ error: "盘点数据不正确" }, { status: 400 });
     }
-    if (total > MAX_AUDIT_COUNT || confirmed > MAX_AUDIT_COUNT) {
-      return NextResponse.json({ error: `盘点数量超出合理范围(单次最多 ${MAX_AUDIT_COUNT.toLocaleString("zh-CN")} 件),请核对后重试` }, { status: 400 });
+    if (!isAuditCount(total) || !isAuditCount(confirmed)) {
+      return NextResponse.json({ error: auditCountRangeMessage() }, { status: 400 });
     }
     const row = await prisma.auditRecord.create({
       data: {
         userId: user.id,
         total: Math.round(total),
-        confirmed: Math.min(Math.round(confirmed), Math.round(total)),
+        confirmed: clampAuditConfirmed(total, confirmed),
         locationName: typeof body.locationName === "string" && body.locationName.trim() ? body.locationName.trim().slice(0, 60) : "全部空间",
       },
     });

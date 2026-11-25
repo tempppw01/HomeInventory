@@ -41,3 +41,13 @@ test("消耗速度的换算口径:30 天窗口,次/天", () => {
   assert.equal(consumeRateFrom(0), 0);
   assert.equal(consumeRateFrom(2), 2 / 30);
 });
+
+test("越界的 percentBefore(备份里塞进来的)→ 按旧记录拒绝,不拿它去改库存", () => {
+  // 实测:恢复一份 `percentBefore: 150` 的备份后,点「撤销消耗」会把余量写成 150%。
+  assert.deepEqual(planConsumeUndo({ percentBefore: 150, detail: "余量 150% → 300%" }), { kind: "legacy-percent" });
+  assert.deepEqual(planConsumeUndo({ percentBefore: -5, detail: null }), { kind: "legacy-percent" });
+  assert.deepEqual(planConsumeUndo({ percentBefore: 0.5, detail: null }), { kind: "percent", percentBefore: 0.5 });
+  // 边界值本身是合法的,不能被误伤
+  assert.deepEqual(planConsumeUndo({ percentBefore: 0, detail: null }), { kind: "percent", percentBefore: 0 });
+  assert.deepEqual(planConsumeUndo({ percentBefore: 100, detail: null }), { kind: "percent", percentBefore: 100 });
+});

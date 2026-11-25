@@ -6,6 +6,8 @@ import { prisma } from "@/lib/prisma";
 import { apiError, requireAdminUser } from "@/lib/api";
 import { backupDir, isBackupFileName } from "@/lib/backup-files";
 import { MAX_BACKUP_BYTES, backupTooLargeMessage } from "@/lib/backup-limits";
+import { auditCountRangeMessage, clampAuditConfirmed, isAuditCount } from "@/lib/audit-limits";
+import { usableAmount, usablePercent } from "@/lib/restore-guards";
 import { createItemCode } from "@/lib/item-code";
 import { normalizeItemQuantity } from "@/lib/item-metrics";
 import { itemSchema, locationSchema, shoppingSchema } from "@/lib/validation";
@@ -151,6 +153,13 @@ export async function POST(request: NextRequest) {
         const purchasedAt = typeof source.purchasedAt === "string" ? new Date(source.purchasedAt) : new Date();
         if (Number.isNaN(purchasedAt.getTime())) continue;
         const quantity = typeof source.quantity === "number" ? source.quantity : 1;
+        // 金额与数量都不可能是负数(界面里最小就是 0)。恢复是外部文件进库的唯一通道,
+        // 实测修之前:`unitPrice: -100, totalPrice: -100, quantity: -2` 一路写进库,
+        // 月报支出与估算价值会被这些负数拉低 —— 而界面上根本没有能录负价的入口。
+        if (![source.unitPrice, source.totalPrice, quantity].every((value) => usableAmount(value))) {
+          noteSkipped("priceRecords", (body.priceRecords || []).indexOf(row), source.itemName, "单价 / 总价 / 数量不能为负");
+          continue;
+        }
         const store = typeof source.store === "string" ? source.store : null;
         const notes = typeof source.notes === "string" ? source.notes : null;
         const itemId = typeof source.itemId === "string" ? itemIdMap.get(source.itemId) || null : null;
@@ -197,10 +206,13 @@ export async function POST(request: NextRequest) {
         const finishedAt = parseDate(source.finishedAt);
         const total = Number(source.total);
         if (!finishedAt || !Number.isFinite(total)) { noteSkipped("audits", (body.audits || []).indexOf(row), null, "缺少结束时间或总数"); continue; }
+        // 接口会拒绝的数值,从备份里也不该写得进去(实测修之前:10 亿原样落库,永久留在盘点历史)。
+        const confirmedSource = Number.isFinite(Number(source.confirmed)) ? Number(source.confirmed) : 0;
+        if (!isAuditCount(total) || !isAuditCount(confirmedSource)) { noteSkipped("audits", (body.audits || []).indexOf(row), null, auditCountRangeMessage()); continue; }
         const locationName = typeof source.locationName === "string" ? source.locationName : "全部空间";
         const duplicate = await tx.auditRecord.findFirst({ where: { finishedAt, locationName, total } });
         if (duplicate) continue;
-        await tx.auditRecord.create({ data: { total, confirmed: Number.isFinite(Number(source.confirmed)) ? Number(source.confirmed) : 0, locationName, finishedAt } });
+        await tx.auditRecord.create({ data: { total: Math.round(total), confirmed: clampAuditConfirmed(total, confirmedSource), locationName, finishedAt } });
         audits += 1;
       }
       for (const row of (body.preferences || []).slice(0, 1)) {
@@ -234,8 +246,11 @@ export async function POST(request: NextRequest) {
           detail: typeof source.detail === "string" ? source.detail : null,
           // 余量型消耗的两个标记也要一起搬过去:丢了它们,迁移后的「撤销消耗」就只能拒绝
           // (见 lib/consume-undo 的 legacy 分支),用户会以为换机把功能弄坏了。
-          percentBefore: typeof source.percentBefore === "number" ? source.percentBefore : null,
-          percentAfter: typeof source.percentAfter === "number" ? source.percentAfter : null,
+          // 但只搬**合理范围**内的值:实测修之前,备份里一条 `percentBefore: 150` 恢复进库后,
+          // 点「撤销消耗」会把物品余量写成 150%(任何正常写入路径都产生不了的状态)。
+          // 越界就当没有这两个标记 —— 宁可让撤销按「旧记录」拒绝,也不要拿越界值去改库存。
+          percentBefore: usablePercent(source.percentBefore),
+          percentAfter: usablePercent(source.percentAfter),
         } });
         activities += 1;
       }
