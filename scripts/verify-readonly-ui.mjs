@@ -374,6 +374,23 @@ if (viewerPass.ok) {
   const mergeButton = await affordance("合并");
   check("只读的概览页没有「合并重复物品」入口", !mergeButton.present, JSON.stringify(mergeButton));
 
+  // 详情页两个 AI 入口的区别:「问 AI」只读,「重新分析」会把结论 PATCH 回物品。
+  // 以前「重新分析」无条件出现:配了 AI 的机器上,只读账号点一下先花一次模型调用,
+  // 再在保存那一步 403;没配 AI 时则是「请先在设置中配置」这种它办不到的提示。
+  if (detailRoutes[0]) {
+    await gotoRoute(detailRoutes[0]);
+    const detailAi = await page.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll("button"));
+      return {
+        reanalyze: buttons.filter((node) => (node.textContent || "").trim().includes("重新分析")).length,
+        askAi: buttons.filter((node) => /问 AI 关于这件/.test(node.textContent || "")).length,
+        texts: buttons.map((node) => (node.textContent || "").trim()).filter(Boolean).slice(0, 10),
+      };
+    });
+    check("只读的详情页没有「重新分析」(它会写回物品)", detailAi.reanalyze === 0, JSON.stringify(detailAi.texts).slice(0, 160));
+    check("只读的详情页仍能「问 AI」(读是允许的)", detailAi.askAi >= 1, JSON.stringify(detailAi.texts).slice(0, 160));
+  }
+
   await gotoRoute("/");
   const openedBin = await openOverlay("回收站");
   const binState = openedBin

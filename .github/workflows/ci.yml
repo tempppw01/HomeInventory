@@ -662,6 +662,13 @@ jobs:
           PROBE_PASS: Lead#2026
           PROBE_VIEWER_PASS: View#2026
         run: node scripts/verify-readonly-ui.mjs
+      # 运行时健康:页面在真实浏览器里加载/点开入口时不该抛脚本错误或打 4xx。
+      # 放在「只读界面检查」之后,与它共用同一个已播种的库(详情页与消耗页要有物品才测得到)。
+      - name: 运行时健康检查(控制台错误 / 失败请求 / 4xx,以及 AI 入口与配置状态一致)
+        env:
+          PROBE_USER: leadcheck
+          PROBE_PASS: Lead#2026
+        run: node scripts/verify-runtime-errors.mjs
       - name: 登录门禁检查(未登录不该看到数据)
         env:
           PROBE_USER: leadcheck

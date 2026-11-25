@@ -4,6 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { PackagePlus, Archive, CalendarDays, Droplets, Lightbulb, MapPin, Package, Sparkles, Timer, WalletCards, Warehouse } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { currentUser } from "@/lib/account-auth";
+import { getAiConfig } from "@/lib/ai";
 import { dailyUsageCost, estimatedUseDays, isLiquidConsumable } from "@/lib/item-metrics";
 import { itemAiHighlights, aiHighlightsAddNewInfo } from "@/lib/item-ai";
 import { STORAGE_LABEL } from "@/lib/item-insight";
@@ -27,6 +28,11 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
   if (!user) redirect("/");
   // 只读角色不显示操作入口:接口本身也会拦,但界面上不该出现点了会被拒的按钮。
   const canEdit = user.role !== "VIEWER" && user.active !== false;
+  // AI 入口两个前提,与物品弹窗同一套口径:
+  //   · 没配 AI 就不该渲染一个点了必然 400 的按钮;
+  //   · 「重新分析」会把结论写回物品,所以只读账号根本不该看到它(与上面的 canEdit 一致)。
+  const aiAvailable = Boolean(await getAiConfig());
+  const canConfigureAi = canEdit && user.role === "ADMIN";
   const item = await prisma.item.findFirst({
     where: { deletedAt: null, OR: [{ id }, { itemCode: id }] },
     include: { location: true },
@@ -114,18 +120,22 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
               )}
               <div className="sm:col-span-2">
                 <AskAiAboutItem itemName={item.name} />
-                <ReanalyzeAiButton
-                  item={{
-                    id: item.id,
-                    name: item.name,
-                    category: item.category,
-                    type: item.type,
-                    unit: item.unit,
-                    quantity: item.quantity,
-                    notes: item.notes,
-                    expiryDate: item.expiryDate ? new Date(item.expiryDate).toISOString() : null,
-                  }}
-                />
+                {canEdit && (
+                  <ReanalyzeAiButton
+                    aiAvailable={aiAvailable}
+                    canConfigureAi={canConfigureAi}
+                    item={{
+                      id: item.id,
+                      name: item.name,
+                      category: item.category,
+                      type: item.type,
+                      unit: item.unit,
+                      quantity: item.quantity,
+                      notes: item.notes,
+                      expiryDate: item.expiryDate ? new Date(item.expiryDate).toISOString() : null,
+                    }}
+                  />
+                )}
               </div>
               {showRemaining && <Stat icon={<Droplets size={14} />} label="当前剩余量" value={`${Math.round(item.remainingPercent)}%`} tone={item.remainingPercent <= 20 ? "var(--danger)" : undefined} />}
             </div>
