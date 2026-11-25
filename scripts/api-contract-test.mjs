@@ -110,6 +110,42 @@ const baseItem = { name: "T-基础物品", category: "日用", type: "CONSUMABLE
   record("items", "非 JSON body 应返回 4xx 而非 500", r12.status >= 400 && r12.status < 500, `status=${r12.status}`);
 }
 
+// ============ 2.4 三条创建路径:后台洞察必须都写上 ============
+// 实测(修之前):AI 批量录入那条完全没写「存放建议 / 建议理由 / 自动标签」——
+// 同一个「清洁」类物品,手工录的带「常温即可 + 消耗品」,AI 批量录的是空的,
+// 详情页没有存放建议、按标签也搜不到。三条路径现在共用 itemInsightFields。
+{
+  const probe = { ...baseItem, category: "清洁", unit: "瓶", name: "" };
+  const viaManual = await call("POST", "/api/items", { ...probe, name: "T-洞察-手工" });
+  if (viaManual.body?.id) created.items.push(viaManual.body.id);
+  const viaBatch = await call("POST", "/api/items/batch", { items: [{ ...probe, name: "T-洞察-批量" }] });
+  const batchRow = Array.isArray(viaBatch.body) ? viaBatch.body[0] : viaBatch.body?.items?.[0] ?? viaBatch.body?.created?.[0];
+  if (batchRow?.id) created.items.push(batchRow.id);
+  const viaImport = await call("POST", "/api/items/import", [{ ...probe, name: "T-洞察-导入" }]);
+  const importRow = Array.isArray(viaImport.body) ? viaImport.body[0] : null;
+
+  // 从列表接口把三条都读回来(字段都在)
+  const list = await call("GET", "/api/items");
+  const rows = (Array.isArray(list.body) ? list.body : list.body?.items ?? []).filter((row) => String(row.name).startsWith("T-洞察-"));
+  const byName = new Map(rows.map((row) => [row.name, row]));
+  const picked = ["T-洞察-手工", "T-洞察-批量", "T-洞察-导入"].map((name) => byName.get(name)).filter(Boolean);
+  if (importRow?.id && !created.items.includes(importRow.id)) created.items.push(importRow.id);
+
+  record(
+    "items",
+    "三条创建路径都写了存放建议与自动标签(手工 / AI 批量 / 导入)",
+    picked.length === 3 && picked.every((row) => Boolean(row.storage) && Boolean(row.storageReason) && Boolean(row.autoTags)),
+    JSON.stringify(picked.map((row) => ({ name: row.name, storage: row.storage ?? null, tags: row.autoTags ?? null }))).slice(0, 220),
+  );
+  const signatures = new Set(picked.map((row) => `${row.storage}|${row.autoTags}`));
+  record(
+    "items",
+    "三条创建路径的洞察彼此一致(同一个输入不该有两种结果)",
+    picked.length === 3 && signatures.size === 1,
+    `不同的组合:${[...signatures].join(" / ").slice(0, 160)}`,
+  );
+}
+
 // ============ 2.5 回收站里的物品:编辑与消耗必须都明确拒绝 ============
 // 由来(实测,两台设备场景):A 把物品删进回收站后,B 的旧页面继续保存会 **200 成功**
 // (改动进了用户已经扔掉的东西里),而同一件物品的消耗返回的是 404「物品不存在」——

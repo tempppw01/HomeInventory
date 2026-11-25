@@ -5,7 +5,7 @@ import { apiError, requireWritableUser } from "@/lib/api";
 import { requireUser } from "@/lib/account-auth";
 import { createItemCode } from "@/lib/item-code";
 import { normalizeItemQuantity } from "@/lib/item-metrics";
-import { itemInsight } from "@/lib/item-insight";
+import { itemInsightFields } from "@/lib/item-insight";
 import { enqueueItemAnalysis } from "@/lib/ai-queue";
 import { ensureRestockSuggestion } from "@/lib/restock-suggestion";
 import { compressedJson } from "@/lib/next-json";
@@ -43,8 +43,7 @@ export async function POST(request: NextRequest) {
     const data = normalized.type === "DURABLE" ? { ...normalized, expiryDate: null } : normalized;
     const item = await prisma.$transaction(async (tx) => {
       // 后台自动洞察:不依赖任何用户操作,保存时就把存放建议与标签算好。
-      const insight = itemInsight({ name: data.name, category: data.category, unit: data.unit, type: data.type as unknown as "DURABLE" | "CONSUMABLE" });
-      const created = await tx.item.create({ data: { ...data, itemCode: createItemCode(), storage: insight.storage, storageReason: insight.storageReason, autoTags: insight.tags.join(",") }, include: { location: true } });
+      const created = await tx.item.create({ data: { ...data, itemCode: createItemCode(), ...itemInsightFields({ name: data.name, category: data.category, unit: data.unit, type: data.type as unknown as "DURABLE" | "CONSUMABLE" }) }, include: { location: true } });
       if (recordPurchase && data.price != null) {
         await tx.priceRecord.create({ data: { itemId: created.id, itemName: created.name, category: created.category, unitPrice: data.price, quantity: Math.max(data.quantity, 1), totalPrice: data.price * Math.max(data.quantity, 1), purchasedAt: data.purchaseDate || new Date(), store: purchaseStore } });
       }

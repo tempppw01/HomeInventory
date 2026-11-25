@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiError, requireWritableUser } from "@/lib/api";
 import { createItemCodeBatch } from "@/lib/item-code";
+import { itemInsightFields } from "@/lib/item-insight";
 import { batchItemSchema } from "@/lib/validation";
 import { needsRestock, restockQuantity } from "@/lib/item-metrics";
 
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
       const codes = createItemCodeBatch(parsed.length);
       for (const [index, data] of parsed.entries()) {
         const normalized = data.type === "DURABLE" ? { ...data, expiryDate: null } : data;
-        const item = await tx.item.create({ data: { ...normalized, itemCode: codes[index] }, include: { location: true } });
+        const item = await tx.item.create({ data: { ...normalized, itemCode: codes[index], ...itemInsightFields({ name: normalized.name, category: normalized.category, unit: normalized.unit, type: normalized.type }) }, include: { location: true } });
         await tx.activityLog.create({ data: { action: "CREATE", itemId: item.id, itemName: item.name, userId: user.id, detail: "AI 批量录入物品" } });
         records.push(item);
       }

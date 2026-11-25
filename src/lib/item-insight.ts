@@ -188,6 +188,19 @@ export function itemInsight(input: InsightInput): ItemInsight {
   };
 }
 
+/**
+ * 写库时用的三列(存放建议 / 建议理由 / 自动标签)。
+ *
+ * 为什么单独抽一个:这是**四条创建路径**都要写的东西(手工录入、CSV·JSON 导入、AI 批量录入),
+ * 外加编辑与合并。实测(修之前)AI 批量录入那条**完全没写这三列** ——
+ * 于是同一个「清洁」类物品,手工录的带「常温即可 + 消耗品」标签,AI 批量录的是空的,
+ * 详情页没有存放建议、按标签也搜不到。把「洞察 → 三列」的映射收在这里,四条路径就不会再各写一遍。
+ */
+export function itemInsightFields(input: InsightInput): { storage: StorageAdvice; storageReason: string; autoTags: string } {
+  const insight = itemInsight(input);
+  return { storage: insight.storage, storageReason: insight.storageReason, autoTags: insight.tags.join(",") };
+}
+
 export const STORAGE_LABEL: Record<StorageAdvice, string> = {
   COLD: "需冷藏",
   COLD_AFTER_OPEN: "开封后冷藏",

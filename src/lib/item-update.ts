@@ -15,7 +15,7 @@
 
 import type { Prisma } from "@prisma/client";
 import { normalizeItemQuantity } from "@/lib/item-metrics";
-import { itemInsight } from "@/lib/item-insight";
+import { itemInsightFields } from "@/lib/item-insight";
 import { learnConsumeRate } from "@/lib/item-forecast";
 
 export type ItemFieldPatch = {
@@ -59,15 +59,12 @@ export function planItemUpdate(existing: ItemFieldState, patch: ItemFieldPatch):
   if (nextType === "DURABLE") data.expiryDate = null;
 
   // 名称/分类/单位/类型任一变化都可能改变「该不该冷藏」与自动标签
-  const insight = itemInsight({
+  Object.assign(data, itemInsightFields({
     name: (patch.name ?? existing.name) as string,
     category: (patch.category ?? existing.category) as string,
     unit: nextUnit,
     type: nextType,
-  });
-  data.storage = insight.storage;
-  data.storageReason = insight.storageReason;
-  data.autoTags = insight.tags.join(",");
+  }));
 
   const percentAfter = typeof patch.remainingPercent === "number" ? patch.remainingPercent : null;
   const consume = percentAfter !== null && percentAfter < existing.remainingPercent

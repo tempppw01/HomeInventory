@@ -5,7 +5,7 @@ import { apiError, requireWritableUser } from "@/lib/api";
 import { createItemCodeBatch } from "@/lib/item-code";
 import { itemSchema } from "@/lib/validation";
 import { normalizeItemQuantity } from "@/lib/item-metrics";
-import { itemInsight } from "@/lib/item-insight";
+import { itemInsightFields } from "@/lib/item-insight";
 import { resolveLocationPaths } from "@/lib/location-path";
 
 export async function POST(request: NextRequest) {
@@ -83,8 +83,7 @@ export async function POST(request: NextRequest) {
           const resolvedLocationId = wantedLocation ? (locationIdByName.get(wantedLocation) ?? null) : null;
           const normalized = { ...itemData, ...(resolvedLocationId ? { locationId: resolvedLocationId } : {}), quantity: normalizeItemQuantity(itemData.quantity, itemData.unit) };
           // 导入也要跑一遍后台洞察,否则这批物品在「需冷藏」「自动标签」里是隐形的。
-          const insight = itemInsight({ name: normalized.name, category: normalized.category, unit: normalized.unit, type: normalized.type });
-          const item = await tx.item.create({ data: { ...normalized, expiryDate: normalized.type === "DURABLE" ? null : normalized.expiryDate, itemCode: codes[index], storage: insight.storage, storageReason: insight.storageReason, autoTags: insight.tags.join(",") } });
+          const item = await tx.item.create({ data: { ...normalized, expiryDate: normalized.type === "DURABLE" ? null : normalized.expiryDate, itemCode: codes[index], ...itemInsightFields({ name: normalized.name, category: normalized.category, unit: normalized.unit, type: normalized.type }) } });
           if (recordPurchase && normalized.price != null) {
             const quantity = Math.max(normalized.quantity, 1);
             await tx.priceRecord.create({ data: { itemId: item.id, itemName: item.name, category: item.category, unitPrice: normalized.price, quantity, totalPrice: normalized.price * quantity, purchasedAt: normalized.purchaseDate || new Date(), store: purchaseStore } });

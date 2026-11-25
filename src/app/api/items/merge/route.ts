@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { apiError, requireWritableUser } from "@/lib/api";
 import { planMerge } from "@/lib/item-merge";
-import { itemInsight } from "@/lib/item-insight";
+import { itemInsightFields } from "@/lib/item-insight";
 
 const mergeSchema = z.object({
   keepId: z.string().min(1),
@@ -35,16 +35,16 @@ export async function POST(request: NextRequest) {
       if ("error" in plan) return { error: plan.error, status: 409 as const };
 
       // 后台自动重算存放建议与标签(数量/单位变了,标签可能跟着变)。
-      const insight = itemInsight({ name: keep.name, category: keep.category, unit: keep.unit, type: keep.type });
+      const insightFields = itemInsightFields({ name: keep.name, category: keep.category, unit: keep.unit, type: keep.type });
       const updated = await tx.item.update({
         where: { id: keep.id },
         data: {
           ...plan.merged,
           purchaseDate: plan.merged.purchaseDate ? new Date(plan.merged.purchaseDate) : null,
           expiryDate: plan.merged.expiryDate ? new Date(plan.merged.expiryDate) : null,
-          storage: insight.storage,
-          storageReason: insight.storageReason,
-          autoTags: insight.tags.join(","),
+          storage: insightFields.storage,
+          storageReason: insightFields.storageReason,
+          autoTags: insightFields.autoTags,
         },
         include: { location: true },
       });
