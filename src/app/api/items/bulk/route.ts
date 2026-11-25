@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiError, requireWritableUser } from "@/lib/api";
 import { bulkItemPatchSchema } from "@/lib/validation";
-import { normalizeItemQuantity } from "@/lib/item-metrics";
 import { z } from "zod";
+import { planItemUpdate, recordConsumeFromUpdate, type ItemFieldPatch } from "@/lib/item-update";
 
 export async function PATCH(request: NextRequest) {
   try {
@@ -25,12 +25,15 @@ export async function PATCH(request: NextRequest) {
       if (!location) return NextResponse.json({ error: "存放位置不存在" }, { status: 400 });
     }
     const result = await prisma.$transaction(async (tx) => {
-      const updated = await tx.item.findMany({ where: { id: { in: ids }, deletedAt: null }, select: { id: true, name: true, unit: true } });
-      // 计数单位(件/瓶…)不能存小数,而每件物品的单位可能不同,所以数量要逐件归一化。
-      if (data.quantity !== undefined) {
-        await Promise.all(updated.map((item) => tx.item.update({ where: { id: item.id }, data: { ...data, quantity: normalizeItemQuantity(data.quantity as number, item.unit) } })));
-      } else {
-        await tx.item.updateMany({ where: { id: { in: ids }, deletedAt: null }, data });
+      const updated = await tx.item.findMany({ where: { id: { in: ids }, deletedAt: null }, select: { id: true, name: true, type: true, unit: true, category: true, quantity: true, remainingPercent: true } });
+      // 逐件走**和单条编辑同一份**语义(lib/item-update):数量按各自单位归一化、耐用品清到期日、
+      // 重算存放建议与自动标签;余量下降时补一条消耗流水并重算日均消耗。
+      // 此前这里直接写字段,于是同一件事两个入口结果不同(实测:改成耐用品后到期日还在、
+      // 余量 80→20 一条流水都不记、改分类后标签停在旧值)。
+      for (const item of updated) {
+        const plan = planItemUpdate(item, data as ItemFieldPatch);
+        const learnedRate = await recordConsumeFromUpdate(tx, { itemId: item.id, itemName: item.name, userId: user.id, plan });
+        await tx.item.update({ where: { id: item.id }, data: learnedRate === null ? plan.data : { ...plan.data, consumeRate: learnedRate } });
       }
       if (updated.length) await tx.activityLog.createMany({ data: updated.map((item) => ({ action: "UPDATE", itemId: item.id, itemName: item.name, userId: user.id, detail: "批量更新物品" })) });
       return updated.length;

@@ -3,12 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { itemPatchSchema } from "@/lib/validation";
 import { apiError, requireWritableUser } from "@/lib/api";
 import { requireUser } from "@/lib/account-auth";
-import { normalizeItemQuantity } from "@/lib/item-metrics";
 import { ensureRestockSuggestion } from "@/lib/restock-suggestion";
-import { itemInsight } from "@/lib/item-insight";
-import { learnConsumeRate } from "@/lib/item-forecast";
 import { deleteStoredImage } from "@/lib/oss";
 import { withWriteRetry } from "@/lib/write-retry";
+import { planItemUpdate, recordConsumeFromUpdate } from "@/lib/item-update";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -44,40 +42,23 @@ export async function PATCH(request: NextRequest, { params }: Context) {
       if (existing.deletedAt) {
         return { error: "这件物品已在回收站,请先从回收站恢复再修改", status: 409 as const };
       }
-      const nextType = parsed.type ?? existing.type;
-      const nextUnit = parsed.unit ?? existing.unit;
-      const normalized = parsed.quantity === undefined ? parsed : { ...parsed, quantity: normalizeItemQuantity(parsed.quantity, nextUnit) };
-      const data = nextType === "DURABLE" ? { ...normalized, expiryDate: null } : normalized;
-      // 后台自动学习:液体用余量刻度记录进度、不走 consume 接口,所以在这里补一条消耗流水,
-      // 再用最近 30 天的真实流水重算日均消耗 —— 用户不用手动填 consumeRate。
-      const nextPercent = data.remainingPercent;
-      const prevPercent = existing.remainingPercent;
-      if (typeof nextPercent === "number" && nextPercent < prevPercent) {
-        const equivalent = ((prevPercent - nextPercent) / 100) * Math.max(existing.quantity, 0);
-        if (equivalent >= 0.1) {
-          await tx.activityLog.create({ data: { action: "CONSUME", itemId: id, itemName: existing.name, userId: user.id, detail: `余量 ${Math.round(prevPercent)}% → ${Math.round(nextPercent)}%`, percentBefore: prevPercent, percentAfter: nextPercent } });
-          const recentEvents = await tx.activityLog.findMany({
-            where: { itemId: id, action: "CONSUME", undoneAt: null, createdAt: { gte: new Date(Date.now() - 30 * 86400000) } },
-            select: { createdAt: true },
-          });
-          // 历史每次下降幅度未知,用本次的等效量作近似,避免为了一个估值再查一堆明细。
-          const learned = learnConsumeRate(recentEvents.map((row) => ({ at: row.createdAt.getTime(), units: equivalent })));
-          if (learned) data.consumeRate = Number(learned.toFixed(3));
-        }
-      }
-
-      // 后台自动重算:名称/分类/单位/类型任一变化都可能改变「该不该冷藏」与标签。
-      const insight = itemInsight({ name: data.name ?? existing.name, category: data.category ?? existing.category, unit: (data.unit ?? existing.unit), type: (data.type ?? existing.type) as unknown as "DURABLE" | "CONSUMABLE" });
-      const withInsight = { ...data, storage: insight.storage, storageReason: insight.storageReason, autoTags: insight.tags.join(",") };
-      const updated = await tx.item.update({ where: { id }, data: withInsight, include: { location: true } });
+      // 归一化数量 / 耐用品清到期日 / 重算洞察 / 判断该不该记消耗 —— 全部走 lib/item-update,
+      // 与「批量编辑」共用同一份定义(此前两条路径各写各的,同一件事结果不一样)。
+      const plan = planItemUpdate(existing, parsed);
+      const data = { ...plan.data };
+      const learnedRate = await recordConsumeFromUpdate(tx, { itemId: id, itemName: existing.name, userId: user.id, plan });
+      if (learnedRate !== null) data.consumeRate = learnedRate;
+      const updated = await tx.item.update({ where: { id }, data, include: { location: true } });
       await tx.activityLog.create({ data: { action: "UPDATE", itemId: updated.id, itemName: updated.name, userId: user.id, detail: "更新物品信息" } });
       // 结论变了就补一条 AI 分析记录:详情页据此显示「这份结论是什么时候算的」。
       if (parsed.aiSummary !== undefined || parsed.aiStorageAdvice !== undefined || parsed.aiUsageAdvice !== undefined || parsed.aiReplenishmentAdvice !== undefined) {
         await tx.activityLog.create({ data: { action: "AI_ANALYZE", itemId: updated.id, itemName: updated.name, userId: user.id, detail: "手动重新分析" } });
       }
       if (recordPurchase && updated.price != null) {
-        const quantity = Math.max(data.quantity ?? updated.quantity, 1);
-        await tx.priceRecord.create({ data: { itemId: updated.id, itemName: updated.name, category: updated.category, unitPrice: updated.price, quantity, totalPrice: updated.price * quantity, purchasedAt: data.purchaseDate || new Date(), store: purchaseStore } });
+        // 用归一化之后的数量(2.5 件 → 3 件):plan.data 的类型是 Prisma 的更新输入,
+        // 这里只取「确实是数字」的那一种情况,拿不到就退回库里刚写进去的值。
+        const quantity = Math.max(typeof plan.data.quantity === "number" ? plan.data.quantity : updated.quantity, 1);
+        await tx.priceRecord.create({ data: { itemId: updated.id, itemName: updated.name, category: updated.category, unitPrice: updated.price, quantity, totalPrice: updated.price * quantity, purchasedAt: parsed.purchaseDate || new Date(), store: purchaseStore } });
       }
       return updated;
     }));
