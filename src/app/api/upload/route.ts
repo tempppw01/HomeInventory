@@ -7,10 +7,11 @@ import sharp from "sharp";
 import { apiError, requireWritableUser } from "@/lib/api";
 import { getOssConfig } from "@/lib/oss";
 import { rateLimit } from "@/lib/rate-limit";
+import { MAX_IMAGE_BYTES, MAX_IMAGE_PIXELS, sharpFailureMessage } from "@/lib/image-limits";
 
 export const runtime = "nodejs";
 
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
 const allowedTypes: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
@@ -44,11 +45,19 @@ export async function POST(request: NextRequest) {
     const date = new Date();
     const objectName = `items/${date.getUTCFullYear()}/${String(date.getUTCMonth() + 1).padStart(2, "0")}/${randomUUID()}.jpg`;
     const source = Buffer.from(await file.arrayBuffer());
-    const bytes = await sharp(source, { failOn: "none", limitInputPixels: 40_000_000 })
-      .rotate()
-      .resize({ width: 1800, height: 1800, fit: "inside", withoutEnlargement: true })
-      .jpeg({ quality: 82, progressive: true, mozjpeg: true })
-      .toBuffer();
+    let bytes: Buffer;
+    try {
+      bytes = await sharp(source, { failOn: "none", limitInputPixels: MAX_IMAGE_PIXELS })
+        .rotate()
+        .resize({ width: 1800, height: 1800, fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: 82, progressive: true, mozjpeg: true })
+        .toBuffer();
+    } catch (error) {
+      // 解码失败(损坏 / 零字节 / 像素超上限)是**用户的问题**,要给能照做的中文,而不是 500。
+      const message = sharpFailureMessage(error);
+      if (message) return NextResponse.json({ error: message }, { status: 400 });
+      throw error;
+    }
     let url = "";
 
     if (config.storageMode === "local" || config.storageMode === "both") {

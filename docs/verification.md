@@ -34,6 +34,7 @@
 | `consume-undo` | 撤销消耗退什么:数量型加回来、余量型退回余量(不动数量)、迁移前的旧记录**拒绝**撤销(宁可不猜也不改库存) |
 | `init-sqlite-drift` | 第三份 schema 也要同步:`scripts/init-sqlite.ts`(全新 SQLite 部署真正用的手写 SQL)不缺表、不缺字段、也没有幽灵列 |
 | `write-retry` | 写事务撞车时只重试「死锁 / 写冲突」这类错误(P2034、deadlock、SQLITE_BUSY),业务错误一次就抛;用尽次数后抛最后一次。SQLite 上复现不出来的 MySQL 500 就出在这里 |
+| `image-limits` | 图片解码失败的翻译:像素超上限 → 说「像素太多/上限 4000 万/手机高像素模式」;损坏 → 「不是有效的图片」;不认识的错误返回 null 交给通用处理;5MB 与 4000 万像素只认一处常量 |
 | `item-merge` / `item-metrics` / `item-sort` / `item-insight` | 合并计划、单位换算、排序、结论文字 |
 | `household-report` / `space-summary` / `chart` / `spend-forecast` | 月报数字、空间摘要、图表聚合 |
 | `csv-import` / `item-type-guess` / `fridge` / `task-recurrence` | 导入解析、类型猜测、冷藏规则、重复任务的下一次到期 |
@@ -47,7 +48,7 @@
 | CI 工作流自检 | 每个步骤有 run/uses、引用的脚本存在、关键作业与检查仍在(工作流无效时 CI 根本不会跑,所以这条放在本地 test:unit 最前) |
 | 两份 schema 同步 | MySQL 用的 `schema.mysql.prisma` 必须与 `schema.prisma` 的表/字段完全一致(容器启动时会用它覆盖正式 schema) |
 
-**347 条**(最近一次全绿)。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
+**351 条**(最近一次全绿)。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
 以便直接测引用了其他模块的文件。
 
 ## 二、API 层(需要服务在跑,CI 里在 `api` 作业)
@@ -80,7 +81,7 @@
 | `verify-import` | 导入接口:合法数据进库并自动建空间、逐行报错、1000 行截断、1000 个编号互不相同、只读 403 | 13 |
 | `verify-payload-budget` | **首屏载荷预算**:gzip 真的生效且**无损**、声明不压缩就不压、`vary` 有声明、压缩比 ≤1/3、单件体积预算、`item.location` 只带 id/name、**导出分支仍是不压缩的完整转储**、探针物品与探针空间都清干净 | 15 |
 | `verify-members-and-sysinfo` | 家庭成员增删(含删号时一并清理)、只读 403;系统信息需登录且不泄露连接串/密钥 | 26 |
-| `verify-image-upload` | 图片上传(本地存储):落盘、读回、大小与类型限制、删除物品时清理文件 | 10 |
+| `verify-image-upload` | 图片上传(本地存储):落盘、读回、大小与类型限制、删除物品时清理文件;**失败路径都要说人话**——损坏内容 / 零字节 / **像素超上限(手机高像素模式常见)** 都是 400 而不是 500,SVG 被拒(存储型 XSS 载体) | 14 |
 | `verify-migrations` | 迁移脚本:编号回填用**本地创建日**、幂等、字母表与在线一致、normalize 只动耐用品(SQLite 与 MySQL 都跑) | 11 | 升级 |
 | `verify-backup-scope` | 完整备份的覆盖面(任务/盘点/偏好/活动记录都在)与体积(超过默认 10 MB 也能恢复) | 20 | 升级 |
 | `verify-auto-backup` | 每日自动备份:负载与手动导出**同构**、保留最近 N 份并如实报告清理数、状态接口 | 20 | 升级 |

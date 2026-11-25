@@ -82,6 +82,23 @@ if (url) {
   const big = await upload(tooBig, "big.png", "image/png");
   check("超过 5MB 被拒且提示可读", big.status === 400 && /5MB|压缩/.test(big.body?.error ?? ""), `status=${big.status} error=${big.body?.error}`);
 
+
+  // 以下四种此前都落成 500「服务器暂时开小差了」——用户只会反复重试。
+  const corrupt = await upload(Buffer.from("this is definitely not an image"), "broken.jpg", "image/jpeg");
+  check("内容是坏的但声明成 jpeg:400 且说「不是有效的图片」", corrupt.status === 400 && /不是有效的图片/.test(corrupt.body?.error ?? ""), `status=${corrupt.status} error=${corrupt.body?.error}`);
+
+  const empty = await upload(Buffer.alloc(0), "empty.jpg", "image/jpeg");
+  check("零字节文件:400 而不是 500", empty.status === 400, `status=${empty.status} error=${empty.body?.error}`);
+
+  // 6400 万像素(PNG 压缩后只有几百 KB):超过应用的 4000 万上限。
+  // 这一条最要紧 —— 很多手机的高像素模式一拍就超,用户会以为服务坏了。
+  const giant = await sharp({ create: { width: 8000, height: 8000, channels: 3, background: "#ffffff" } }).png({ compressionLevel: 9 }).toBuffer();
+  const tooManyPixels = await upload(giant, "giant.png", "image/png");
+  check("像素超上限:400 且说明「像素太多」并给出上限", tooManyPixels.status === 400 && /像素/.test(tooManyPixels.body?.error ?? "") && /4000 万/.test(tooManyPixels.body?.error ?? ""), `status=${tooManyPixels.status} error=${tooManyPixels.body?.error}`);
+
+  // SVG 是「存储型 XSS」的经典载体:即使声明成图片也不能收。
+  const svg = await upload(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'), "evil.svg", "image/svg+xml");
+  check("SVG 被拒(不接受向量图,避免存储型 XSS)", svg.status === 400, `status=${svg.status} error=${svg.body?.error}`);
   const wrongType = await upload(Buffer.from("not an image"), "note.txt", "text/plain");
   check("非图片类型被拒且提示可读", wrongType.status === 400 && /JPG|PNG|WebP|GIF/.test(wrongType.body?.error ?? ""), `status=${wrongType.status} error=${wrongType.body?.error}`);
 }
