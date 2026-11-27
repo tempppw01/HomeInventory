@@ -9,6 +9,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
+import { readFileSync } from "node:fs";
 import { matchesItemFilters, pickVisibleItems } from "../../src/lib/item-visibility.ts";
 
 const ALL = { search: "", typeFilter: "ALL", categoryFilter: "ALL", spaceScope: null };
@@ -90,4 +91,17 @@ test("空间范围与搜索在「已用完」里同样生效(否则点空间筛�
 test("matchesItemFilters 只管条件,不管数量", () => {
   assert.equal(matchesItemFilters(item({ quantity: 0 }), ALL), true);
   assert.equal(matchesItemFilters(item({ quantity: 0 }), { ...ALL, search: "不存在的东西" }), false);
+});
+
+test("源码级守卫:「导出当前筛选」导的必须是屏幕上那一份", () => {
+  // 2026-11-28 探针库实测:点「已用完 1」后屏幕写「1 件」,导出提示条却说「已导出 9 件物品」——
+  // 因为 exportCsv 用的是 items(还在用那份),而两个芯片只作用于 shownItems。
+  // 按钮自己承诺「当前筛选」,就得导屏幕上那份;这条守卫挡住以后又接回 items。
+  const source = readFileSync(new URL("../../src/components/views/items-view.tsx", import.meta.url), "utf8");
+  const at = source.indexOf("const exportCsv = () => {");
+  assert.ok(at > 0, "没找到 exportCsv");
+  const body = source.slice(at, at + 3000);
+  assert.match(body, /shownItems\.map\(/, "导出的行必须来自 shownItems(含「需冷藏 / 已用完」这些芯片的筛选)");
+  assert.doesNotMatch(body, /\bitems\.map\(/, "不要再从 items 取行 —— 那是「还在用」那份,与屏幕上的可能不是一个集合");
+  assert.match(body, /shownItems\.length/, "提示条说的件数也要与导出的行同源");
 });

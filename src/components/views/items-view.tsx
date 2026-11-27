@@ -118,7 +118,7 @@ export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, us
       const text = value === null || value === undefined ? "" : String(value);
       return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
     };
-    const rows = items.map((item) => [
+    const rows = shownItems.map((item) => [
       item.name, item.quantity, item.unit, item.category, item.type === "CONSUMABLE" ? "消耗品" : "耐用品",
       pathById.get(item.locationId ?? "") ?? "", item.remainingPercent, localDateOf(item.purchaseDate), localDateOf(item.expiryDate),
       item.price ?? "", item.itemCode ?? "", item.notes ?? "",
@@ -131,7 +131,7 @@ export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, us
     link.download = `归物-物品清单-${localDateString()}.csv`;
     link.click();
     URL.revokeObjectURL(url);
-    onToast(`已导出 ${items.length} 件物品`);
+    onToast(`已导出 ${shownItems.length} 件物品`);
   };
 
   const exitSelectMode = () => { setSelected(new Set()); setSelectMode(false); };
