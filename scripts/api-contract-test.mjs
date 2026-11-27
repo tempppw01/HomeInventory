@@ -381,13 +381,20 @@ const baseItem = { name: "T-基础物品", category: "日用", type: "CONSUMABLE
 
   const message = String(garbage.body?.error ?? "");
   // 环境差异:没配 AI 时,接口会在压缩图片**之前**返回「请先在设置中配置 AI 接口」,
-  // 这本身是正确行为(总比去处理一张坏图好)。所以:先断言「有可读的中文原因」,
-  // 再按是否配置了 AI 决定要不要断言原因与图片有关。
+  // 这本身是正确行为(总比去处理一张坏图好)。所以两个分支各自断言自己该说的话 ——
+  // 此前这里写的是 `aiConfigured ? message.includes("图片") : true`:没配 AI 的环境
+  // (CI 就是)会以常量 true 记一条 PASS,名字却在说「提示与图片有关」。名字与量到的东西
+  // 对不上,那条 PASS 是假的。现在两个分支都在量真话。
   record("ai", "批量识别:坏图片返回了可读的中文原因", message.length > 0, `error=${message}`);
 
   const aiConfigured = message.length > 0 && !message.includes("配置 AI");
-  record("ai", "批量识别:已配置 AI 时坏图片提示与图片有关", aiConfigured ? message.includes("图片") : true, `aiConfigured=${aiConfigured} error=${message}`);
-  if (!aiConfigured) console.log("      提示:本环境未配置 AI,跳过「提示与图片有关」的断言(配置检查先返回)")
+  record(
+    "ai",
+    aiConfigured ? "批量识别:已配置 AI 时坏图片提示与图片有关" : "批量识别:未配置 AI 时提示先去配置(而不是去解一张坏图)",
+    aiConfigured ? message.includes("图片") : /配置/.test(message),
+    `aiConfigured=${aiConfigured} error=${message}`,
+  );
+  if (!aiConfigured) console.log("      提示:本环境未配置 AI,量到的是「先配置 AI」这条提示")
 }
 
 // ============ 6. tasks ============
@@ -407,18 +414,43 @@ const baseItem = { name: "T-基础物品", category: "日用", type: "CONSUMABLE
 
 // ============ 7. prices ============
 {
-  const created1 = await call("POST", "/api/items", { ...baseItem, name: "T-带价格物品", price: 99.9, purchaseDate: "2026-11-01" });
-  const id = created1.body?.id;
+  // 这一节此前两条检查都是「永远绿」:
+  //   · 「创建带价格物品后价格记录」断言 `prices.status === 200 && (rows.length >= 0)`
+  //     —— 后半句恒真,而且创建时根本没传 recordPurchase,所以一条价格记录都不会有;
+  //   · 「删除物品后价格记录不应残留」断言 `del.status < 500 && true` —— `&& true` 什么也没量。
+  // 实测结论(2026-11-27,本地实例):
+  //   recordPurchase=false → 0 条;recordPurchase=true → 1 条(单价/数量/总价都对得上);
+  //   永久删除物品后,那条记录**保留**为名称快照,itemId 被置空(设计如此,
+  //   见 DELETE_PERMANENT 的 detail「历史关联已保留为名称快照」)。
+  // 于是这里改成量这三件真事:记了才有、数对得上、删了留快照但不再指向物品。
+  // 采购日取「今天」:`GET /api/prices` 只回**最新 100 条**,用固定日期(比如 2026-11-01)
+  // 在记录多的库上会被挤出窗口,这条检查就会因为「找不到」而不是因为「没记账」变红。
+  const today = new Date().toISOString().slice(0, 10);
+  const created1 = await call("POST", "/api/items", { ...baseItem, name: "T-带价格物品", price: 99.9, purchaseDate: today, recordPurchase: false });
+  const silentId = created1.body?.id;
+  if (silentId) created.items.push(silentId);
+
+  const created2 = await call("POST", "/api/items", { ...baseItem, name: "T-带价格物品-记账", price: 99.9, purchaseDate: today, recordPurchase: true });
+  const id = created2.body?.id;
   if (id) created.items.push(id);
+
   const prices = await call("GET", "/api/prices");
   const rows = Array.isArray(prices.body) ? prices.body : (prices.body?.items ?? []);
-  record("prices", "创建带价格物品后价格记录", prices.status === 200 && (rows.length >= 0), `status=${prices.status} rows=${rows.length}`);
+  const mine = rows.filter((row) => row.itemId === id);
+  record("prices", "没勾「记录采购」时不该产生价格记录", prices.status === 200 && rows.filter((row) => row.itemId === silentId).length === 0, `status=${prices.status} 未勾选的记录数=${rows.filter((row) => row.itemId === silentId).length}`);
+  record("prices", "勾了「记录采购」后价格记录出现且金额对得上", mine.length === 1 && mine[0].unitPrice === 99.9 && mine[0].totalPrice === 99.9 * 2, `条数=${mine.length} 单价=${mine[0]?.unitPrice} 总价=${mine[0]?.totalPrice}(期望 ${99.9 * 2})`);
+  const priceRecordId = mine[0]?.id ?? null;
+  if (priceRecordId) created.prices.push(priceRecordId);
 
-  const del = await call("DELETE", `/api/items/${id}`);
+  const del = await call("DELETE", `/api/items/${id}`, { permanent: true });
   const pricesAfter = await call("GET", "/api/prices");
   const rowsAfter = Array.isArray(pricesAfter.body) ? pricesAfter.body : (pricesAfter.body?.items ?? []);
-  const orphan = rowsAfter.filter((row) => row.itemId === id);
-  record("prices", "删除物品后价格记录不应残留(或应保留快照)", del.status < 500 && true, `残留=${orphan.length}(若>0 需确认是否有意保留)`);
+  const stillMine = rowsAfter.filter((row) => row.itemId === id);
+  // 按 id 找「那条」记录:同名物品可能存在(本套件自己就会造),只有 id 能证明是它。
+  const snapshot = priceRecordId ? rowsAfter.filter((row) => row.id === priceRecordId) : [];
+  record("prices", "永久删除物品后价格记录保留为名称快照(itemId 置空,不再指向已删物品)",
+    del.status === 200 && stillMine.length === 0 && snapshot.length === 1 && snapshot[0].itemId === null && String(snapshot[0].itemName) === "T-带价格物品-记账",
+    `status=${del.status} 仍指向该物品=${stillMine.length} 快照条数=${snapshot.length} 快照 itemId=${JSON.stringify(snapshot.map((row) => row.itemId))} 快照名=${JSON.stringify(snapshot.map((row) => row.itemName))}`);
 }
 
 // ============ 8. 并发 ============
@@ -497,6 +529,28 @@ if (!process.argv.includes("--keep")) {
   }
   const lingering = (await sweep("/api/items?includeDeleted=1", "items", "name")) + (await sweep("/api/tasks", "tasks", "title"));
   console.log(`清理补扫:永久删除 ${purged} 件 T- 物品 / ${tasks} 个 T- 任务 / ${(dash.shopping ?? []).filter((entry) => String(entry.name ?? "").startsWith(PREFIX)).length} 条 T- 采购;仍残留 ${lingering} 条`);
+
+  // 价格记录没有删除接口(财务历史本来就是只增的),所以上面那节「记录采购」造的
+  // 一条会留在库里、并进入本月支出图表 —— 本地跑一遍就污染自己的账。这里直接清掉:
+  // 只动 itemId 已置空(物品已永久删除)且名字带本套件前缀的行,别的都不碰。
+  if (process.env.DATABASE_URL) {
+    try {
+      const { PrismaClient } = await import("@prisma/client");
+      const prisma = new PrismaClient();
+      try {
+        const gone = await prisma.priceRecord.deleteMany({ where: { itemId: null, itemName: { startsWith: PREFIX } } });
+        console.log(`清理补扫:价格记录删除 ${gone.count} 条(本套件造的 T- 快照)`);
+      } finally {
+        await prisma.$disconnect();
+      }
+    } catch (error) {
+      console.log(`清理补扫:价格记录未清理(${error instanceof Error ? error.message.slice(0, 80) : String(error).slice(0, 80)})`);
+    }
+  } else {
+    // 不能像以前那样悄悄什么都不做:没设 DATABASE_URL 就无法定位库,
+    // 那条记录会留下并进入「本月支出」图表 —— 至少要说清楚,让人知道要手动删。
+    console.log("清理补扫:未设置 DATABASE_URL,本套件造的那条「T-带价格物品-记账」价格记录会留在库里(财务文件里看得见),需要手动删");
+  }
 }
 
 const failed = results.filter((row) => !row.ok);

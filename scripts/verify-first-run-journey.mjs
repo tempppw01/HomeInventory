@@ -48,13 +48,16 @@ const api = (method, path, body) => page.evaluate(async ({ method, path, body })
 // ---------- 前置:把库清空到「只剩账号」 ----------
 const beforeClean = await api("GET", "/api/items?includeDeleted=1", null);
 for (const item of beforeClean.json ?? []) await api("DELETE", `/api/items/${item.id}`, { permanent: true });
-const shopping = await api("GET", "/api/shopping", null);
-for (const entry of shopping.json ?? []) await api("DELETE", `/api/shopping/${entry.id}`, null);
+// 采购项要从 dashboard 读:`/api/shopping` 只有 POST,GET 回 405 ——
+// 此前这里就是 `GET /api/shopping`,`shopping.json` 恒为 null,循环一次都不进,
+// 「从 0 开始」的前置其实一直留着库里的采购项没清(而下面那条前置断言也没看采购)。
+const shoppingList = await api("GET", "/api/dashboard", null);
+for (const entry of shoppingList.json?.shopping ?? []) await api("DELETE", `/api/shopping/${entry.id}`, null);
 const dashboard0 = await api("GET", "/api/dashboard", null);
 for (const location of dashboard0.json?.locations ?? []) await api("DELETE", `/api/locations/${location.id}`, null);
 
 const emptied = await api("GET", "/api/dashboard", null);
-check("前置:库已清空(否则这一套测的不是「从 0 开始」)", (emptied.json?.items ?? []).length === 0 && (emptied.json?.locations ?? []).length === 0, `物品=${(emptied.json?.items ?? []).length} 空间=${(emptied.json?.locations ?? []).length}`);
+check("前置:库已清空(否则这一套测的不是「从 0 开始」)", (emptied.json?.items ?? []).length === 0 && (emptied.json?.locations ?? []).length === 0 && (emptied.json?.shopping ?? []).length === 0, `物品=${(emptied.json?.items ?? []).length} 空间=${(emptied.json?.locations ?? []).length} 采购=${(emptied.json?.shopping ?? []).length}`);
 
 /** 让「欢迎使用」引导重新出现 */
 const openGuide = async () => {

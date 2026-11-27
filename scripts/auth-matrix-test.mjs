@@ -36,6 +36,23 @@ const call = async (method, path, { cookie, body } = {}) => {
   return { status: response.status, body: json };
 };
 
+/**
+ * admin 视角:某个账号当前最新的一个设备会话 id。
+ *
+ * 为什么要绕这一下:`/api/auth/session` 只回 `{ setupRequired, authenticated, user }`,
+ * **里面从来没有 session id**。这个套件此前正是从那里取 id 的,于是「踢出设备」相关的
+ * 两条检查每一次都会走进 else 分支,以常量 true 记一条「跳过:session 响应没有 id 字段」——
+ * 输出的是一条 PASS,而它们一次都没有量过(47/47 全绿里,这两条是假的)。
+ * 会话 id 一直就在 `GET /api/auth/users` 里:设置页的设备列表用的就是它。
+ */
+const newestSessionId = async (username) => {
+  const r = await call("GET", "/api/auth/users", { cookie: admin.cookie });
+  const rows = Array.isArray(r.body) ? r.body : [];
+  const user = rows.find((entry) => entry.username === username);
+  const sessions = [...(user?.sessions ?? [])].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  return sessions[0]?.id ?? null;
+};
+
 // ---- 造测试账号 ----
 const admin = await login(ADMIN.username, ADMIN.password);
 if (!admin.ok) throw new Error("admin login failed: " + admin.status);
@@ -114,13 +131,16 @@ for (const [label, method, path, body] of [
   if (target) {
     const r = await call("PATCH", `/api/auth/users/${target}`, { cookie: member.cookie, body: { password: "Hacked#2026" } });
     record("越权", "MEMBER 改他人密码应被拒绝", r.status >= 400, `status=${r.status}`);
-    const adminSessions = await call("GET", "/api/auth/session", { cookie: admin.cookie });
-    const sid = adminSessions.body?.session?.id ?? adminSessions.body?.id;
-    if (sid) {
-      const r2 = await call("DELETE", `/api/auth/sessions/${sid}`, { cookie: member.cookie });
-      record("越权", "MEMBER 踢出他人设备应被拒绝", r2.status >= 400, `status=${r2.status}`);
+    // 靶子用另一个账号(viewer)的会话:万一哪天成员真能踢,先炸的是它,不是管理员自己的会话
+    const victim = await newestSessionId(viewerUser);
+    if (!victim) {
+      record("越权", "MEMBER 踢出他人设备应被拒绝", false, "拿不到任何账号的 session id —— 这条没量到");
     } else {
-      record("越权", "MEMBER 踢出他人设备应被拒绝", true, "跳过:session 响应没有 id 字段");
+      const r2 = await call("DELETE", `/api/auth/sessions/${victim}`, { cookie: member.cookie });
+      record("越权", "MEMBER 踢出他人设备应被拒绝", r2.status >= 400, `status=${r2.status} 目标=${victim.slice(0, 8)}`);
+      // 「被拒绝」还要证明那一枪真的没生效:target 的会话必须原样还在
+      const stillThere = await newestSessionId(viewerUser);
+      record("越权", "被拒的那一枪没有真的踢掉对方会话", stillThere === victim, `前=${victim.slice(0, 8)} 后=${String(stillThere).slice(0, 8)}`);
     }
   }
 }
@@ -158,15 +178,14 @@ for (const [label, method, path, body] of [
   if (fresh.ok) {
     const before = await call("GET", "/api/items", { cookie: fresh.cookie });
     record("会话", "新会话可用", before.status === 200, `status=${before.status}`);
-    const sessionInfo = await call("GET", "/api/auth/session", { cookie: fresh.cookie });
-    const sid = sessionInfo.body?.session?.id ?? sessionInfo.body?.id;
-    if (sid) {
+    const sid = await newestSessionId(memberUser);
+    if (!sid) {
+      record("会话", "被踢出后该 cookie 立即失效", false, "拿不到该成员的 session id —— 这条没量到");
+    } else {
       const kick = await call("DELETE", `/api/auth/sessions/${sid}`, { cookie: admin.cookie });
       record("会话", "管理员踢出该会话", kick.status < 400, `status=${kick.status}`);
       const after = await call("GET", "/api/items", { cookie: fresh.cookie });
       record("会话", "被踢出后该 cookie 立即失效", after.status === 401 || after.status === 403, `status=${after.status}`);
-    } else {
-      record("会话", "被踢出后该 cookie 立即失效", true, "跳过:session 响应没有 id 字段");
     }
   }
 }

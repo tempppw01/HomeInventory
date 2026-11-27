@@ -5,6 +5,62 @@
 
 ---
 
+## [v0.1.103] - 2026-11-27
+
+这一轮量的是**「报告里写着『跳过』或『已清理干净』的时候,那条检查到底还有没有在量东西」** —— 一条永远成立的断言,会把缺陷一直藏到有人手动翻库为止。
+
+### 先量:四条检查在报告里长成「通过」,实际什么都没量
+
+| 套件 | 报告里长这样 | 实际 | 量到的证据 |
+| --- | --- | --- | --- |
+| `auth-matrix-test` | 「[越权] MEMBER 踢出他人设备应被拒绝 / 被拒的那一枪没有真的踢掉对方会话」 | `/api/auth/session` **从来不返回 session id**,两次调用都走进 else 分支,各记一条常量 `true` 的「跳过:session 响应没有 id 字段」 | 会话 id 一直在 `GET /api/auth/users` 的 `sessions[]` 里(设置页的设备列表用的就是它) |
+| `verify-narrow-layout` | 「首页 AI 建议卡片已渲染(触摸目标检查没有空跑)」 | 没配 AI 的环境走 `!aiAvailable` 分支,记的是 `check(<同一个名字>, true, "跳过:…")` —— 一个字面量 `true` | 修后在**没配 AI 的实例**上实测:卡片确实不渲染(22/22) |
+| `verify-experience` | 「只读账号不再显示写入口 / 只读账号有明确说明」 | 没有 `PROBE_VIEWER_PASS` 时记两条常量 `true` 的「skipped」 | 有只读账号时实测:`loginForm=false create=0 edit=0 consume=0 shopping=0 batch=0 notice=true` |
+| `api-contract-test` | 「创建带价格物品后价格记录」 | 断言是 `prices.status === 200 && (rows.length >= 0)` —— 后半句恒真,而且创建时根本没传 `recordPurchase`,**一条价格记录都不会有** | 实测:`recordPurchase=false` → 0 条;`true` → 1 条(单价 99.9 / 数量 2 / 总价 19.8) |
+| `api-contract-test` | 「删除物品后价格记录不应残留(或应保留快照)」 | 断言是 `del.status < 500 && true` —— `&& true` 什么也没量 | 实测:永久删除后记录**保留**为名称快照、`itemId` 被置空(设计如此) |
+| `api-contract-test` | 「批量识别:已配置 AI 时坏图片提示与图片有关」 | 没配 AI 的环境(CI 就是)记 `: true` | 实测:未配 AI 时回 400「请先在设置中配置 AI 接口」 |
+
+### 又量到一个:两条套件的「清理」每跑一次白跑一次
+
+`verify-restock-pause-ui` 与 `verify-first-run-journey` 都用 `GET /api/shopping` 读采购清单 —— 而**这个接口只有 `POST`,GET 回 405**。于是:
+
+```
+GET /api/shopping → 405 → Array.isArray(undefined) 为假 → 循环一次都不进
+```
+
+清理不报错,前置断言也不看采购项。实测本机家用库里因此攒下了 `暂停口径检查·酱油` 这条 PENDING 采购项,而套件**仍然 17/17 通过**(报告里只有「比对用的物品已清理干净」,没有采购项的位置)。
+
+### 修了什么
+
+- `scripts/auth-matrix-test.mjs`:新增 `newestSessionId(username)`(读 `GET /api/auth/users`),「越权踢人」改打**只读账号**的会话并加一条「被拒的那一枪没有真的踢掉对方会话」,「会话踢出即失效」也改用真实 id。**47 → 49 条,全部真的在量。**
+- `scripts/verify-narrow-layout.mjs`:没配 AI 时不再记常量 `true`,而是去**证明卡片真的没渲染**(`意外渲染=false`)。
+- `scripts/verify-experience.mjs`:缺只读账号时两条检查记**失败**并写明「没量到,没有设置 PROBE_VIEWER_PASS」,不再是绿色。
+- `scripts/api-contract-test.mjs`:两条价格检查改成量三件真事(没勾不记账 / 勾了金额对得上 / 永久删除后留快照但 `itemId` 置空),AI 那条两个分支各说各的真话;顺带补上**价格记录的清理**(财务历史没有删除接口,只能直连库清掉自己造的那条)。
+- `scripts/verify-restock-pause-ui.mjs` / `scripts/verify-first-run-journey.mjs`:采购清单改从 `/api/dashboard` 读,并各加/补一条断言,让「清理干净」这件事真的有位置可以红。**restock 17 → 18 条。**
+
+### 负向测试(把修好的地方弄坏,确认会红)
+
+| 场景 | 结果 |
+| --- | --- |
+| `verify-experience` 不带 `PROBE_VIEWER_PASS` | **42/44**,两条 FAIL 并写明「没量到」(修前是 44/44 全绿) |
+| `auth-matrix` 让那一枪真的踢掉对方会话 | **48/49**,`[越权] 被拒的那一枪…` → `前=cmwz2047 后=null` |
+| `verify-narrow-layout` 在有 AI 的实例上强制走「没配 AI」分支 | **21/22**,`意外渲染=true` |
+| `api-contract-test` 未勾选的那件也记账 | **70/71**,`未勾选的记录数=1` |
+| `api-contract-test` 只软删物品(不永久删) | **70/71**,`仍指向该物品=1`,快照 itemId 没被置空 |
+| `api-contract-test` 未配置 AI 分支改断言「与图片有关」 | **70/71**,量到的是「请先在设置中配置 AI 接口」 |
+| `verify-restock-pause-ui` 清理改回 405 路径 | **17/18**,`还剩 1 条采购项` |
+| `verify-first-run-journey` 清空前置改回 405 路径 | **15/16**,`物品=0 空间=0 采购=1` |
+
+### 环境 skip 与假跳过的分界(这一轮定下来的口径)
+
+真正的环境差异(AI 没配、当前数据下分支不可达、没有 Chromium、没有 `LOCAL_UPLOAD_DIR`)继续按 `SKIP` 打印并**从分母里去掉**(`verify-ai-guards` / `verify-restore-from-file` / `verify-sqlite-upgrade` 一直如此);而**名字在声称量了某件事、值却是常量 `true`** 的,一律改成量真事或记失败。这一轮清掉的六处都属于后者。
+
+### 已知但仍未清的历史残留(下一步的候选)
+
+家用库 `data/home-inventory.db` 的 `priceRecord` 里有 **151 条**记录,其中约 150 条是历史套件留下的快照(`双击检查-…`、`ENT2-…`、`B-电钻/洗衣液/洗洁精` 等,`itemId` 均为 null)。它们会进入财务图表。这是本轮**没有**动的东西 —— 删用户数据需要你点头;套件侧只做了「自己造的自己清」。
+
+---
+
 ## [v0.1.102] - 2026-11-27
 
 这一轮量的是**「扫码页遇到不能按件消耗的东西,说的是什么」** —— 同一个判断,服务端、扫码页、打印出来的二维码标签三处是不是一个说法。

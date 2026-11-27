@@ -175,10 +175,27 @@ const alertsMention = async (name) => {
   return text.includes(name);
 };
 
+/**
+ * 采购项清单只有 `/api/dashboard` 给(`/api/shopping` **没有 GET**,请求它回 405)。
+ *
+ * 这里此前写的是 `api("GET", "/api/shopping")`:405 → `Array.isArray(undefined)` 为假 →
+ * 循环一次都不进,界面根本不会报错,于是「清理」这一步**每跑一次就白跑一次**,
+ * 而最后那条「比对用的物品已清理干净」只看物品 —— 实测本机库里因此攒下了
+ * 「暂停口径检查·酱油」这条 PENDING 采购项,套件仍然 17/17 通过。
+ */
+const pendingShoppingNames = async () => {
+  const dashboard = await api("GET", "/api/dashboard");
+  return (Array.isArray(dashboard.body?.shopping) ? dashboard.body.shopping : []).map((row) => row.name);
+};
+
+const scopeShoppingRows = async () => {
+  const dashboard = await api("GET", "/api/dashboard");
+  return (Array.isArray(dashboard.body?.shopping) ? dashboard.body.shopping : []).filter((row) => row.name === SCOPE_NAME);
+};
+
 /** 按名字清掉这次比对造的物品与它自动生成的采购建议(套件跑完库里不该多东西) */
 const removeScopeItem = async () => {
-  const shopping = await api("GET", "/api/shopping");
-  for (const row of (Array.isArray(shopping.body) ? shopping.body : []).filter((entry) => entry.name === SCOPE_NAME)) {
+  for (const row of await scopeShoppingRows()) {
     await api("DELETE", `/api/shopping/${row.id}`);
   }
   const items = await api("GET", "/api/items");
@@ -222,7 +239,10 @@ if (scopeId) {
 await removeScopeItem();
 const leftovers = await api("GET", "/api/items");
 const stillThere = (Array.isArray(leftovers.body) ? leftovers.body : []).filter((entry) => entry.name === SCOPE_NAME).length;
+const stillShopping = (await pendingShoppingNames()).filter((name) => name === SCOPE_NAME).length;
 check("比对用的物品已清理干净", stillThere === 0, `还剩 ${stillThere} 件`);
+// 这条以前不存在 —— 于是「采购项没清掉」在报告里根本没有位置,只能靠人去翻库。
+check("比对用的采购项已清理干净(不再每跑一次留一条)", stillShopping === 0, `还剩 ${stillShopping} 条采购项`);
 
 await context.close();
 await browser.close();

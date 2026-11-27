@@ -362,7 +362,13 @@ for (let i = 0; i < 5; i += 1) {
   });
 
   if (!aiAvailable) {
-    check("首页 AI 建议卡片已渲染(触摸目标检查没有空跑)", true, "跳过:本环境未配置 AI,卡片按设计不渲染");
+    // 没配 AI 时卡片按设计不渲染 —— 那就去证明「它真的没渲染」,而不是记一条常量 true。
+    // 此前这条写的是 check(<同一个名字>, true, "跳过:…"):名字在说「卡片已渲染、检查没有空跑」,
+    // 实际断言的是一个字面量 true —— 一条永远成立的 PASS,什么也没量到。
+    await page.goto(BASE + "/");
+    await page.waitForTimeout(1800);
+    const renderedAnyway = await page.evaluate(() => Boolean(document.querySelector('[aria-label="AI 本周建议"]')));
+    check("未配置 AI 时首页不渲染 AI 建议卡片(这条替代了原先那句假跳过)", !renderedAnyway, `意外渲染=${renderedAnyway}`);
   } else {
     await page.goto(BASE + "/");
     await page.waitForTimeout(2000);

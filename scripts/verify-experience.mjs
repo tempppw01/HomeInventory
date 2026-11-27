@@ -618,8 +618,11 @@ viewerChecks: {
   await page.goto(BASE, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(1500);
   if (!VIEWER_PASS) {
-    check("只读账号不再显示写入口", true, "skipped: set PROBE_VIEWER_PASS to run this check");
-    check("只读账号有明确说明", true, "skipped: set PROBE_VIEWER_PASS to run this check");
+    // 没有只读账号就等于这两条根本没量:以前记的是 true,于是「跳过」在报告里
+    // 长成了「通过」。现在如实记失败,让缺账号这件事必须被处理。
+    const detail = "没量到:没有设置 PROBE_VIEWER_PASS,无法登录只读账号(见 docs/verification.md)";
+    check("只读账号不再显示写入口", false, detail);
+    check("只读账号有明确说明", false, detail);
     await context.close();
     break viewerChecks;
   } else if (await page.locator("#auth-username").count()) {
