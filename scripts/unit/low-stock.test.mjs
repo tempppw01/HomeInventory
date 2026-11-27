@@ -8,6 +8,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { isLowStock, LIQUID_LOW_PERCENT } from "../../src/lib/low-stock.ts";
+import { needsRestock } from "../../src/lib/item-metrics.ts";
 
 const base = {
   name: "洗衣液",
@@ -66,6 +67,35 @@ test("暂停补货期内不再提醒,过期后恢复", () => {
   assert.equal(isLowStock({ ...item, restockPausedUntil: new Date(now - 86400000) }), true);
 });
 
-test("不传 now 时忽略暂停设置(纯展示场景)", () => {
-  assert.equal(isLowStock({ ...base, quantity: 1, minQuantity: 2, restockPausedUntil: new Date(Date.now() + 86400000) }), true);
+test("不传 now 时按当前时间判断 —— 暂停期内就不提醒", () => {
+  // 这条断言此前是反的(「不传 now 时忽略暂停设置(纯展示场景)」),也正是缺陷的来源:
+  // 物品卡角标、空间摘要、月报这三个只做展示的调用点都没传 now,
+  // 于是用户暂停了某件东西,概览的「低库存」少了它、同一张卡片上却还挂着「需补货」。
+  // 暂停的语义是「这件东西别再跟我说」,不该因为调用点忘了传参就失效。
+  const item = { ...base, quantity: 1, minQuantity: 2 };
+  const future = new Date(Date.now() + 86400000);
+  const past = new Date(Date.now() - 86400000);
+
+  assert.equal(isLowStock({ ...item, restockPausedUntil: future }), false, "暂停期内不该说该补货");
+  assert.equal(isLowStock({ ...item, restockPausedUntil: past }), true, "暂停期过了要恢复提醒");
+  assert.equal(isLowStock({ ...item, restockPausedUntil: null }), true);
+});
+
+test("客户端角标与服务端生成采购建议共用同一条液体线", () => {
+  const liquid = { ...base, quantity: 5, minQuantity: 0 };
+  const now = new Date(2026, 10, 20, 12, 0, 0).getTime();
+
+  for (const percent of [LIQUID_LOW_PERCENT, LIQUID_LOW_PERCENT + 1]) {
+    assert.equal(
+      isLowStock({ ...liquid, remainingPercent: percent }, now),
+      needsRestock({ ...liquid, remainingPercent: percent }, now),
+      `余量 ${percent}% 时两边结论不一致`,
+    );
+  }
+});
+
+test("服务端「数量 0 也要买」与客户端「角标不重复提示」是有意不同", () => {
+  const empty = { ...base, quantity: 0, minQuantity: 2, remainingPercent: 100 };
+  assert.equal(isLowStock(empty), false, "角标:已经用完的东西不用再挂「需补货」");
+  assert.equal(needsRestock(empty), true, "采购建议:用完了正是该买的时候");
 });

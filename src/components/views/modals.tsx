@@ -13,6 +13,7 @@ import type { Item, Location } from "@/types";
 import { wouldFormLocationCycle } from "@/lib/location-tree";
 import { ReadOnlyContext } from "@/components/shared";
 import { isLiquidConsumable } from "@/lib/item-metrics";
+import { LIQUID_LOW_PERCENT } from "@/lib/restock-limits";
 import { APP_VERSION } from "@/lib/version";
 import { Field } from "@/components/ui-kit";
 import { Empty, ListRow } from "@/components/ui-kit";
@@ -63,7 +64,7 @@ export function NotificationsModal({ lowStock, expiring, expired, onClose, onOpe
   const alerts = [
     ...expired.map((item) => ({ item, label: `${["食品", "饮品"].includes(item.category) ? "食品" : "物品"}已过期 · ${new Date(item.expiryDate!).toLocaleDateString("zh-CN")}`, color: "var(--danger)" })),
     ...expiring.filter((item) => !expired.some((old) => old.id === item.id)).map((item) => ({ item, label: `${["食品", "饮品"].includes(item.category) ? "食品即将到期" : "即将到期"} · ${new Date(item.expiryDate!).toLocaleDateString("zh-CN")}`, color: "var(--warning)" })),
-    ...lowStock.filter((item) => !expired.some((old) => old.id === item.id)).map((item) => ({ item, label: isLiquidConsumable(item) && item.remainingPercent <= 20 ? `剩余量仅 ${Math.round(item.remainingPercent)}%` : `库存仅剩 ${item.quantity} ${item.unit}`, color: "#e37d25" })),
+    ...lowStock.filter((item) => !expired.some((old) => old.id === item.id)).map((item) => ({ item, label: isLiquidConsumable(item) && item.remainingPercent <= LIQUID_LOW_PERCENT ? `剩余量仅 ${Math.round(item.remainingPercent)}%` : `库存仅剩 ${item.quantity} ${item.unit}`, color: "#e37d25" })),
   ];
   // 今天是用户设定的每周盘点日 → 给一个直接进入盘点的入口。
   // (这个偏好以前是死开关:能设、能存、没人用。)

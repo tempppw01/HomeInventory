@@ -46,7 +46,9 @@ export function spaceSummary(items: readonly SpaceItemInput[], locationId: strin
       if (Number.isFinite(time) && time <= soon) expiring += 1;
     }
     value += (item.price ?? 0) * item.quantity;
-    if (isLowStock(item)) lowStock += 1;
+    // 传 now:空间卡上的「N 件该补货」和概览的「低库存」必须是同一个答案,
+    // 暂停补货中的物品两边都不算(此前这里没传,暂停了照样计入)。
+    if (isLowStock(item, now)) lowStock += 1;
   }
 
   return {

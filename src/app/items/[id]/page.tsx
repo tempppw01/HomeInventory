@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { currentUser } from "@/lib/account-auth";
 import { getAiConfig } from "@/lib/ai";
 import { dailyUsageCost, estimatedUseDays, isLiquidConsumable } from "@/lib/item-metrics";
+import { LIQUID_LOW_PERCENT } from "@/lib/restock-limits";
 import { itemAiHighlights, aiHighlightsAddNewInfo } from "@/lib/item-ai";
 import { STORAGE_LABEL } from "@/lib/item-insight";
 import { Panel } from "@/components/ui-kit";
@@ -137,7 +138,7 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
                   />
                 )}
               </div>
-              {showRemaining && <Stat icon={<Droplets size={14} />} label="当前剩余量" value={`${Math.round(item.remainingPercent)}%`} tone={item.remainingPercent <= 20 ? "var(--danger)" : undefined} />}
+              {showRemaining && <Stat icon={<Droplets size={14} />} label="当前剩余量" value={`${Math.round(item.remainingPercent)}%`} tone={item.remainingPercent <= LIQUID_LOW_PERCENT ? "var(--danger)" : undefined} />}
             </div>
           </Panel>
 

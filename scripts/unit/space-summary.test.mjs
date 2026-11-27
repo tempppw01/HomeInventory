@@ -74,6 +74,24 @@ test("摘要文案只列出有内容的项", () => {
   assert.doesNotMatch(text, /临期/);
 });
 
+test("暂停补货中的物品不算「该补货」——空间卡与概览必须同一个答案", () => {
+  // 起因:spaceSummary 当初没把 now 传给 isLowStock,而那个参数「不传就跳过暂停判定」。
+  // 结果用户暂停了某件东西,概览的「低库存」少算它、空间卡上仍写着「N 件该补货」。
+  const pausedItem = (until) => ({
+    locationId: "loc-1", type: "CONSUMABLE", quantity: 1, minQuantity: 5, price: null,
+    expiryDate: null, storage: null, name: "酱油", category: "调味", unit: "瓶",
+    remainingPercent: 100, restockPausedUntil: until,
+  });
+
+  assert.equal(spaceSummary([pausedItem(null)], "loc-1", NOW).lowStock, 1, "没暂停要算");
+  assert.equal(spaceSummary([pausedItem(new Date(NOW + 86400000))], "loc-1", NOW).lowStock, 0, "暂停期内不算");
+  assert.equal(spaceSummary([pausedItem(new Date(NOW - 86400000))], "loc-1", NOW).lowStock, 1, "暂停期过了要恢复");
+
+  const paused = spaceSummary([pausedItem(new Date(NOW + 86400000))], "loc-1", NOW);
+  assert.doesNotMatch(spaceSummaryText(paused), /该补货/);
+  assert.equal(spaceAlert(spaceSummary([pausedItem(new Date(NOW + 86400000))], "loc-1", NOW)), null, "暂停期内也不该给空间挂黄点");
+});
+
 test("空空间给明确提示,而不是一串 0", () => {
   const summary = spaceSummary([], "loc-1", NOW);
   assert.equal(spaceSummaryText(summary), "还没放东西");

@@ -119,6 +119,19 @@ test("一句话结论按严重程度挑选", () => {
   assert.equal(reportHeadline(buildHouseholdReport({ ...EMPTY })), "库存状态良好,暂时没有需要特别处理的事");
 });
 
+test("暂停补货中的物品不进「该补货的」", () => {
+  // 月报此前也没把 now 传下去,于是同一件暂停了的东西:概览不提它、月报照列。
+  const paused = (until) => ({
+    ...baseItem({ name: "酱油", quantity: 1, minQuantity: 5 }),
+    category: "调味", remainingPercent: 100, restockPausedUntil: until,
+  });
+  const lowStock = (items) => buildHouseholdReport({ ...EMPTY, items }).lowStock;
+
+  assert.deepEqual(lowStock([paused(null)]), ["酱油"]);
+  assert.deepEqual(lowStock([paused(new Date(NOW.getTime() + 86400000))]), [], "暂停期内不该列出来");
+  assert.deepEqual(lowStock([paused(new Date(NOW.getTime() - 86400000))]), ["酱油"], "暂停期过了要恢复");
+});
+
 test("结论句说的是真实件数,不是列表截断后的条数", () => {
   // 起因:列表为了排版只留最急的 8 条,而结论句直接数了这个列表。
   // 实测库里 311 件已过期时,月报顶部写着「有 8 件已经过期」—— 差了 39 倍。

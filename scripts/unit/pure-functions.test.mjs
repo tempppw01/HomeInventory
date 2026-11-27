@@ -10,6 +10,7 @@ import {
   isCountUnit, normalizeItemQuantity, needsRestock, restockQuantity,
 } from "../../src/lib/item-metrics.ts";
 import { isMedicineCategory, medicineCategoryLabel, suggestMedicineCategory, MEDICINE_CATEGORIES } from "../../src/lib/categories.ts";
+import { LIQUID_LOW_PERCENT } from "../../src/lib/restock-limits.ts";
 import { guessItemType } from "../../src/lib/item-type-guess.ts";
 
 const NOW = new Date("2026-11-17T12:00:00+08:00");
@@ -54,9 +55,11 @@ test("耐用品永远不补货", () => {
   assert.equal(needsRestock({ ...durable, quantity: 0, minQuantity: 5, remainingPercent: 0 }), false);
 });
 
-test("液体的剩余量 ≤20% 触发补货", () => {
-  assert.equal(needsRestock({ ...consumable, quantity: 10, minQuantity: 0, remainingPercent: 20 }), true);
-  assert.equal(needsRestock({ ...consumable, quantity: 10, minQuantity: 0, remainingPercent: 21 }), false);
+test("液体的剩余量 ≤ LIQUID_LOW_PERCENT 触发补货", () => {
+  // 阈值写成常量而不是字面量 20:这条线此前在服务端和客户端各抄了一份,
+  // 改了其中一处就会变成「角标说该补货、服务端不生成采购项」。
+  assert.equal(needsRestock({ ...consumable, quantity: 10, minQuantity: 0, remainingPercent: LIQUID_LOW_PERCENT }), true);
+  assert.equal(needsRestock({ ...consumable, quantity: 10, minQuantity: 0, remainingPercent: LIQUID_LOW_PERCENT + 1 }), false);
 });
 
 test("补货数量至少为 1,即使缺口为负", () => {

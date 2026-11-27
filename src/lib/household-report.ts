@@ -75,7 +75,8 @@ export function buildHouseholdReport(input: ReportInput): HouseholdReport {
     value += (item.price ?? 0) * item.quantity;
     const rate = item.consumeRate ?? 0;
     if (item.type === "CONSUMABLE" && rate >= 0.1 && (item.price ?? 0) > 0) monthlySpend += rate * 30 * (item.price ?? 0);
-    if (isLowStock(item)) lowStock.push(item.name);
+    // 用月报自己的 now,暂停补货中的物品不进「该补货的」——与概览/提醒中心同一个口径
+    if (isLowStock(item, input.now.getTime())) lowStock.push(item.name);
   }
 
   // 先按窗口过滤出**全部**要到期 / 已过期的,数清楚再决定列表里放哪几条。

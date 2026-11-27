@@ -63,17 +63,21 @@ const clickMenu = (text) => page.evaluate((needle) => {
   return true;
 }, text);
 
-// 先确保没有残留的暂停状态
+// 先让待会儿要点的第一张卡片回到「未暂停」状态。
+// 这里**不能**用「库里有没有暂停物品」来判断:家人真的暂停过别的物品是正常的
+// (本地这套就是对着真实家用库跑的),那样会去恢复另一件东西,等于没处理这张卡片。
 {
-  const before = await pausedNames();
-  if (before.length) {
-    await openMenu();
-    if (before.length) {
-      await clickMenu("恢复补货提醒");
-      await page.waitForTimeout(2200);
-    }
+  const items = await openMenu();
+  if (items.some((entry) => entry.includes("恢复补货提醒"))) {
+    await clickMenu("恢复补货提醒");
+    await page.waitForTimeout(2200);
   }
 }
+
+// 动手前的暂停名单:断言只针对「这次点下去的那一件」。
+// 此前这里要求恢复后全库一件不剩 —— 只要家里有别的物品处于暂停期就会误报。
+const pausedBaseline = await pausedNames();
+let pausedThisRun = [];
 
 // ① 菜单里有入口
 {
@@ -92,7 +96,8 @@ const clickMenu = (text) => page.evaluate((needle) => {
     await clickMenu("暂停补货提醒");
     await page.waitForTimeout(2600);
     const names = await pausedNames();
-    check("点击后物品进入暂停期(数据已写入)", names.length > 0, `暂停中的物品=${names.join(",") || "无"}`);
+    pausedThisRun = names.filter((name) => !pausedBaseline.includes(name));
+    check("点击后物品进入暂停期(数据已写入)", pausedThisRun.length === 1, `本次暂停=${pausedThisRun.join(",") || "无"};库里暂停中的=${names.join(",") || "无"}`);
 
     const feedback = await page.evaluate(() => /已暂停补货提醒/.test(document.body.innerText));
     check("给出了可见反馈", feedback, "没有看到提示文字");
@@ -108,9 +113,116 @@ const clickMenu = (text) => page.evaluate((needle) => {
     await clickMenu("恢复补货提醒");
     await page.waitForTimeout(2600);
     const names = await pausedNames();
-    check("恢复后暂停期被清掉", names.length === 0, `仍在暂停=${names.join(",")}`);
+    const stillPaused = pausedThisRun.filter((name) => names.includes(name));
+    check("恢复后「这一件」的暂停期被清掉", stillPaused.length === 0, `仍在暂停=${stillPaused.join(",") || "无"}`);
   }
 }
+
+// 4 暂停之后,所有界面必须同时改口
+//
+// 由来:isLowStock 的 now 参数当初写成可选,「不传就跳过暂停判定」,
+// 而物品卡角标 / 空间摘要 / 月报这三个只做展示的调用点恰好都没传。
+// 于是用户暂停了某件东西:概览的「低库存」少算了它,同一张卡片上却还挂着「需补货」——
+// 同一个「该补货」在一屏里有 4 项和 6 项两个答案。
+//
+// 这一节只验「改了口的界面是否一致」:暂停通过接口写(界面入口本身由上面 1-3 节覆盖),
+// 这样断言不依赖卡片排序,也不会因为选中了别的物品而变成假通过。
+const SCOPE_NAME = "暂停口径检查·酱油";
+
+const api = (method, path, body) => page.evaluate(async (request) => {
+  const response = await fetch(request.path, {
+    method: request.method,
+    cache: "no-store",
+    headers: request.body ? { "content-type": "application/json" } : undefined,
+    body: request.body ? JSON.stringify(request.body) : undefined,
+  });
+  let parsed = null;
+  try { parsed = await response.json(); } catch { parsed = null; }
+  return { status: response.status, body: parsed };
+}, { method, path, body });
+
+/** 概览上的「低库存 N 项」 */
+const overviewLowStock = async () => {
+  await page.goto(BASE);
+  await page.waitForTimeout(2600);
+  await dismissBlockingDialogs(page);
+  return page.evaluate(() => {
+    const text = document.querySelector(".dashboard-overview")?.innerText ?? "";
+    const matched = text.match(/低库存\D{0,4}(\d+)\s*项/);
+    return matched ? Number(matched[1]) : null;
+  });
+};
+
+/** 物品页上「需补货」角标的个数 */
+const restockBadges = async () => {
+  await page.goto(`${BASE}/items`);
+  await page.waitForTimeout(2600);
+  await dismissBlockingDialogs(page);
+  return page.evaluate(() => Array.from(document.querySelectorAll("*"))
+    .filter((node) => node.children.length === 0 && (node.textContent || "").trim() === "需补货").length);
+};
+
+/** 提醒中心里是否提到某件物品 */
+const alertsMention = async (name) => {
+  await page.goto(BASE);
+  await page.waitForTimeout(2400);
+  await dismissBlockingDialogs(page);
+  await page.locator('button[aria-label="查看提醒"]').first().click();
+  await page.waitForTimeout(1000);
+  const text = await page.locator('[role="dialog"][aria-modal="true"]').first().innerText();
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(600);
+  return text.includes(name);
+};
+
+/** 按名字清掉这次比对造的物品与它自动生成的采购建议(套件跑完库里不该多东西) */
+const removeScopeItem = async () => {
+  const shopping = await api("GET", "/api/shopping");
+  for (const row of (Array.isArray(shopping.body) ? shopping.body : []).filter((entry) => entry.name === SCOPE_NAME)) {
+    await api("DELETE", `/api/shopping/${row.id}`);
+  }
+  const items = await api("GET", "/api/items");
+  for (const row of (Array.isArray(items.body) ? items.body : []).filter((entry) => entry.name === SCOPE_NAME)) {
+    await api("DELETE", `/api/items/${row.id}`);
+    await api("DELETE", `/api/items/${row.id}`, { permanent: true });
+  }
+};
+
+await removeScopeItem();
+const created = await api("POST", "/api/items", {
+  name: SCOPE_NAME, category: "调味", type: "CONSUMABLE", unit: "瓶", quantity: 1, minQuantity: 5,
+});
+check("为口径比对建了一件低库存消耗品", created.status === 200 || created.status === 201, `status=${created.status}`);
+const scopeId = created.body?.id;
+
+const badgesBefore = await restockBadges();
+const metricBefore = await overviewLowStock();
+const mentionedBefore = await alertsMention(SCOPE_NAME);
+check("暂停前:物品页上这件东西带着「需补货」角标", badgesBefore > 0, `角标总数=${badgesBefore}`);
+check("暂停前:概览的「低库存」算上了它", typeof metricBefore === "number" && metricBefore > 0, `低库存=${metricBefore}`);
+check("暂停前:提醒中心会提到它", mentionedBefore, "提醒中心里没有这条");
+
+if (scopeId) {
+  await api("PATCH", `/api/items/${scopeId}`, { restockPausedUntil: new Date(Date.now() + 7 * 86400000).toISOString() });
+
+  const badgesPaused = await restockBadges();
+  const metricPaused = await overviewLowStock();
+  const mentionedPaused = await alertsMention(SCOPE_NAME);
+  check("暂停后:卡片角标跟着消失", badgesPaused === badgesBefore - 1, `角标 ${badgesBefore} → ${badgesPaused}(应少 1)`);
+  check("暂停后:概览的「低库存」也少算它", metricPaused === metricBefore - 1, `低库存 ${metricBefore} → ${metricPaused}(应少 1)`);
+  check("暂停后:提醒中心不再提它", mentionedPaused === false, "提醒中心仍然列着");
+
+  await api("PATCH", `/api/items/${scopeId}`, { restockPausedUntil: null });
+  const badgesRestored = await restockBadges();
+  const metricRestored = await overviewLowStock();
+  check("恢复提醒后:角标回来", badgesRestored === badgesBefore, `角标 ${badgesPaused} → ${badgesRestored}(应回到 ${badgesBefore})`);
+  check("恢复提醒后:概览也回到原数", metricRestored === metricBefore, `低库存 ${metricPaused} → ${metricRestored}(应回到 ${metricBefore})`);
+}
+
+await removeScopeItem();
+const leftovers = await api("GET", "/api/items");
+const stillThere = (Array.isArray(leftovers.body) ? leftovers.body : []).filter((entry) => entry.name === SCOPE_NAME).length;
+check("比对用的物品已清理干净", stillThere === 0, `还剩 ${stillThere} 件`);
 
 await context.close();
 await browser.close();

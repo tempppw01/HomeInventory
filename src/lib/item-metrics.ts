@@ -1,4 +1,5 @@
 import { isRestockPaused } from "@/lib/low-stock";
+import { LIQUID_LOW_PERCENT } from "@/lib/restock-limits";
 type ItemMetricsInput = {
   type: "DURABLE" | "CONSUMABLE";
   name: string;
@@ -71,7 +72,7 @@ export function needsRestock(
   if (item.type !== "CONSUMABLE") return false;
   if (isRestockPaused(item, now)) return false;
   return (item.minQuantity > 0 && item.quantity <= item.minQuantity)
-    || (isLiquidConsumable(item) && item.remainingPercent <= 20);
+    || (isLiquidConsumable(item) && item.remainingPercent <= LIQUID_LOW_PERCENT);
 }
 
 export function restockQuantity(item: { quantity: number; minQuantity: number }) {

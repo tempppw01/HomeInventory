@@ -29,14 +29,14 @@
 | 模块 | 覆盖要点 |
 | --- | --- |
 | `validation` / 日期 | 两种合法写法、非法值与不存在的日期、时间点字段保留时刻 |
-| `low-stock` / `expiry-status` | 该补货的两种触发、暂停期、今天到期算临期而非过期 |
+| `low-stock` / `expiry-status` | 该补货的两种触发;**「暂停补货提醒」在所有调用点都算数** —— 包括不传 `now` 的纯展示面(角标/空间摘要/月报),不传就跳过暂停这个坑已经用断言钉住;液体阈值与「生成采购建议」同源;今天到期算临期而非过期 |
 | `item-forecast` | 消耗速度学习、重复分组(含「一方包含另一方」) |
 | `consume-undo` | 撤销消耗退什么:数量型加回来、余量型退回余量(不动数量)、迁移前的旧记录**拒绝**撤销(宁可不猜也不改库存) |
 | `init-sqlite-drift` | 第三份 schema 也要同步:`scripts/init-sqlite.ts`(全新 SQLite 部署真正用的手写 SQL)不缺表、不缺字段、也没有幽灵列 |
 | `write-retry` | 写事务撞车时只重试「死锁 / 写冲突」这类错误(P2034、deadlock、SQLITE_BUSY),业务错误一次就抛;用尽次数后抛最后一次。SQLite 上复现不出来的 MySQL 500 就出在这里 |
 | `image-limits` | 图片解码失败的翻译:像素超上限 → 说「像素太多/上限 4000 万/手机高像素模式」;损坏 → 「不是有效的图片」;不认识的错误返回 null 交给通用处理;5MB 与 4000 万像素只认一处常量 |
 | `item-merge` / `item-metrics` / `item-sort` / `item-insight` | 合并计划、单位换算、排序、结论文字 |
-| `household-report` / `space-summary` / `chart` / `spend-forecast` | 月报数字、空间摘要、图表聚合 |
+| `household-report` / `space-summary` / `chart` / `spend-forecast` | 月报数字、空间摘要、图表聚合(月报与空间摘要里的「该补货」和概览同一口径:暂停补货中的物品不算) |
 | `csv-import` / `item-type-guess` / `fridge` / `task-recurrence` | 导入解析、类型猜测、冷藏规则、重复任务的下一次到期 |
 | `password` / `validation`(账号) | 密码强度各档、用户名规则 |
 | `local-date` / `weekly-review` / `relative-time` | 本地日历日、每周盘点设定日、相对时间文案 |
@@ -48,7 +48,7 @@
 | CI 工作流自检 | 每个步骤有 run/uses、引用的脚本存在、关键作业与检查仍在(工作流无效时 CI 根本不会跑,所以这条放在本地 test:unit 最前) |
 | 两份 schema 同步 | MySQL 用的 `schema.mysql.prisma` 必须与 `schema.prisma` 的表/字段完全一致(容器启动时会用它覆盖正式 schema) |
 
-**375 条**(最近一次全绿)。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
+**379 条**(最近一次全绿)。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
 以便直接测引用了其他模块的文件。
 
 ## 二、API 层(需要服务在跑,CI 里在 `api` 作业)
@@ -131,7 +131,7 @@
 | `verify-weekly-review` | 每周盘点只在设定日给出入口 | 7 | 流程 |
 | `verify-empty-states` | 搜索无结果的空状态、清空后恢复 | 7 | 流程 |
 | `verify-qr-scan` | 无 BarcodeDetector 时用 jsQR 兜底解码:应用自己的二维码走「图片」模式能识别并推进盘点 | 7 | 流程 |
-| `verify-restock-pause-ui` | 卡片菜单暂停 / 恢复补货提醒 | 6 | 流程 |
+| `verify-restock-pause-ui` | 卡片菜单暂停 / 恢复补货提醒(按名字核对「这一件」,不假设全库没有别的暂停物品);并断言暂停后**概览的「低库存」、物品卡角标、提醒中心三处同时改口**、恢复后三处同时回来 —— 角标曾经不认这个开关 | 17 | 流程 |
 | `verify-batch-drafts` | AI 批量识别的草稿列表:现场生成商品图 → 真的识别出草稿 → 移除中间一条后焦点落在接替它的那条上、再按回车不会连带删下一条(未配置 AI 时打印跳过) | 6 | 流程 |
 | `verify-audit-confirm-flow` | 盘点全流程:进度推进与刷新保留、结束页数字与服务端记录一致、**写入失败会说出来**、「重新开始」清零;**服务端边界**(荒唐数量被拒 / 确认数夹到总数 / 小数取整 / 空间名截 60 / 历史不留不合理记录、最多 20 条) | 19 | 流程 |
 | `verify-axe` | axe-core 全站扫描:11 个页面 × 3 种视口/主题 = 33 次,断言零违规 | 3 | 无障碍 |
