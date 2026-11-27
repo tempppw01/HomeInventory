@@ -17,6 +17,7 @@ import { spendForecast, spendSummary } from "@/lib/spend-forecast";
 import { AiInsightsCard } from "@/components/ai-insights-card";
 import { MonthlyBars, RankBars, ShareBar } from "@/components/charts";
 import { monthOverMonthLabel } from "@/lib/chart";
+import { INVENTORY_SHARE_ROWS, isSelectableShareRow, topWithOtherRows } from "@/lib/category-share";
 import { categoryIconMap } from "@/components/shared";
 import { ReadOnlyContext, View, expiryDays, expiryDateLabel, expiryAdvice, expiryGroupLabel } from "../shared";
 import { useConfirm } from "@/components/confirm-dialog";
@@ -51,7 +52,8 @@ export function DashboardView({ data, forecastItems, now, lowStock, expiring, ex
     quantity: item.quantity, remainingPercent: item.remainingPercent,
     consumeRate: item.consumeRate ?? null, expiryDate: item.expiryDate, restockPausedUntil: item.restockPausedUntil,
   })));
-  // 库存分布:按分类统计件数,看看家里东西主要集中在哪里(只取前 6 类,其余合并为「其他」)。
+  // 库存分布:按分类统计件数,看看家里东西主要集中在哪里(前 INVENTORY_SHARE_ROWS 类,其余合并为「其他」)。
+  // 合并规则与金额面板共用同一个函数 —— 这条规则已经存在(下面「本月花在哪」曾漏了它),不该有两份。
   const inventoryShare = (() => {
     const buckets = new Map<string, number>();
     for (const item of data.items) {
@@ -60,11 +62,7 @@ export function DashboardView({ data, forecastItems, now, lowStock, expiring, ex
       const key = item.category;
       buckets.set(key, (buckets.get(key) ?? 0) + 1);
     }
-    const sorted = [...buckets.entries()].sort((left, right) => right[1] - left[1]);
-    const head = sorted.slice(0, 6).map(([label, value]) => ({ label, value }));
-    const restCount = sorted.slice(6).reduce((sum, [, value]) => sum + value, 0);
-    if (restCount > 0) head.push({ label: "其他", value: restCount });
-    return head;
+    return topWithOtherRows(buckets, INVENTORY_SHARE_ROWS);
   })();
 
   const duplicates = duplicateGroups(data.items.map((item) => ({
@@ -190,7 +188,7 @@ export function DashboardView({ data, forecastItems, now, lowStock, expiring, ex
             <ChevronDown size={17} className="shrink-0 transition group-open:rotate-180" style={{ color: "var(--muted)" }} />
           </summary>
           <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--hairline)" }}>
-            <ShareBar rows={inventoryShare} ariaLabel="按分类的物品种类分布" onSelect={onOpenCategory} isSelectable={(label) => label !== "其他"} valueFormatter={(value) => `${value} 件`} />
+            <ShareBar rows={inventoryShare} ariaLabel="按分类的物品种类分布" onSelect={onOpenCategory} isSelectable={isSelectableShareRow} valueFormatter={(value) => `${value} 件`} />
             <p className="mb-0 mt-3 text-xs muted">共 {data.items.length} 件物品,其中消耗品 {data.items.filter((item) => item.type === "CONSUMABLE").length} 件。</p>
           </div>
         </details>

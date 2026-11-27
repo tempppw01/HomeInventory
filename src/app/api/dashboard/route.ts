@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/account-auth";
 import { getAiConfig } from "@/lib/ai";
 import { monthlyBuckets } from "@/lib/chart";
 import { compressedJson } from "@/lib/next-json";
+import { CATEGORY_SHARE_ROWS, topWithOtherRows } from "@/lib/category-share";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,10 @@ export async function GET(request: NextRequest) {
 
     const categoryTotals = new Map<string, number>();
     priceRecords.filter((record) => record.purchasedAt >= currentMonthStart).forEach((record) => categoryTotals.set(record.category, (categoryTotals.get(record.category) || 0) + record.totalPrice));
+    // 分类金额:前 CATEGORY_SHARE_ROWS 类 + 尾部合并成「其他」。
+    // 这里原先直接把数组砍到前 4 条,尾部类别就这么没了 —— 而面板的百分比是按传进去的行算的,
+    // 于是「本月 ¥10370」和四行之和(¥10332)对不上,百分比却还是 100%(见 lib/category-share.ts)。
+    const byCategory = topWithOtherRows(categoryTotals, CATEGORY_SHARE_ROWS).map((row) => ({ category: row.label, total: row.value }));
     const consumption = new Map<string, { itemName: string; count: number; lastUsedAt: string }>();
     consumptionLogs.forEach((entry) => {
       if (!entry.itemName) return;
@@ -55,7 +60,7 @@ export async function GET(request: NextRequest) {
       items: itemsWithAiTime,
       locations,
       shopping,
-      finance: { currentMonthTotal, averageMonthly: sixMonthTotal / 6, recordCount: priceRecords.length, monthly, recent: priceRecords.slice(0, 5), byCategory: [...categoryTotals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([category, total]) => ({ category, total })) },
+      finance: { currentMonthTotal, averageMonthly: sixMonthTotal / 6, recordCount: priceRecords.length, monthly, recent: priceRecords.slice(0, 5), byCategory },
       consumption: [...consumption.values()].sort((a, b) => b.count - a.count).slice(0, 5),
       // AI 未配置时前端把按钮换成「去设置」引导,而不是让用户点了才看到报错。
       aiAvailable: Boolean(await getAiConfig()),

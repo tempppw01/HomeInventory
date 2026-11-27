@@ -11,6 +11,7 @@ import { PREFERENCE_LIMITS } from "@/lib/preference-limits";
 import { buildHouseholdReport, reportHeadline } from "@/lib/household-report";
 import { MonthlyBars, ShareBar } from "@/components/charts";
 import { monthlyBuckets } from "@/lib/chart";
+import { CATEGORY_SHARE_ROWS, topWithOtherRows } from "@/lib/category-share";
 import { ReportPrintButton } from "@/components/report-print-button";
 
 export const dynamic = "force-dynamic";
@@ -85,7 +86,9 @@ export default async function ReportPage() {
     if (new Date(record.purchasedAt) < monthStart) continue;
     categoryTotals.set(record.category, (categoryTotals.get(record.category) ?? 0) + record.totalPrice);
   }
-  const byCategory = [...categoryTotals.entries()].map(([category, total]) => ({ label: category, value: Number(total.toFixed(2)) })).sort((left, right) => right.value - left.value).slice(0, 4);
+  // 与概览同一个上限、同一条合并规则:月报此前也把数组砍到前 4 条,尾部类别在打印稿上整个消失,
+  // 而百分比照样加起来 100%(见 lib/category-share.ts 的实测记录)。
+  const byCategory = topWithOtherRows(categoryTotals, CATEGORY_SHARE_ROWS).map((row) => ({ label: row.label, value: Number(row.value.toFixed(2)) }));
 
   const report = buildHouseholdReport({
     now,
