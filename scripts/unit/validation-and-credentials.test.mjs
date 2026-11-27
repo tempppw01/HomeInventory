@@ -7,8 +7,9 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
-import { bulkItemPatchSchema, itemPatchSchema, itemSchema, locationSchema, memberSchema, shoppingSchema } from "../../src/lib/validation.ts";
+import { bulkItemPatchSchema, itemPatchSchema, itemSchema, locationSchema, memberSchema, shoppingSchema, taskCreateSchema } from "../../src/lib/validation.ts";
 import { createItemCode, createItemCodeBatch } from "../../src/lib/item-code.ts";
 import { activityLabel, ACTIVITY_LABELS } from "../../src/lib/activity-label.ts";
 import { passwordStrength, generatePassword, PASSWORD_MIN_LENGTH, USERNAME_PATTERN } from "../../src/lib/password.ts";
@@ -398,4 +399,38 @@ test("上次补货时间:可以清空", () => {
 
 test("上次补货时间:非法字符串被拒", () => {
   assert.equal(itemPatchSchema.safeParse({ lastRestockedAt: "昨天下午" }).success, false);
+});
+
+test("采购项弹层必须把接口报错说出来,不能点了没反应(源码级守卫)", () => {
+  // 2026-11-28 真浏览器实测:添加采购项时填 85 个字的名字(输入框没有 maxLength),
+  // 点「加入清单」之后 —— 接口 400、弹层里一个字都没有、也没有提示条,
+  // 原因只作为未捕获错误落在控制台;换成只有不可见字符的名字同样如此。
+  // 隔壁「添加家庭空间」弹层一直是对的(setError + 行内提示),这条守住这个差别。
+  const source = readFileSync(new URL("../../src/components/views/modals.tsx", import.meta.url), "utf8");
+  const start = source.indexOf("export function ShoppingModal");
+  assert.notEqual(start, -1, "modals.tsx 里应该有 ShoppingModal");
+  const body = source.slice(start, source.indexOf("export function LocationModal"));
+  assert.match(body, /catch \(reason\)/, "ShoppingModal 的提交没有 catch:接口报错会被静默丢掉");
+  assert.match(body, /error && <p/, "ShoppingModal 没有把报错显示在弹层里");
+});
+
+test("表单里够得着的「填过头」都说得出是哪一项(不再是英文内部字样)", () => {
+  // 同一轮实测:添加空间填 36 个字 → 弹层里只有英文那句
+  // 「String must contain at most 30 character(s)」;
+  // 数量框只挡了下限(min=0.1),填 1000000 或非数字会直接打到接口。
+  const cases = [
+    [shoppingSchema, { name: "采购项".repeat(30) }, "采购项名称最多 80 个字"],
+    [shoppingSchema, { name: "厨房纸", quantity: 1000000 }, "数量最多 999999"],
+    [shoppingSchema, { name: "厨房纸", quantity: "abc" }, "数量要填一个数字"],
+    [shoppingSchema, { name: "厨房纸", quantity: 0 }, "数量要大于 0"],
+    [locationSchema, { name: "空间".repeat(20) }, "空间名称最多 30 个字"],
+    [taskCreateSchema, { title: "任务".repeat(45), dueAt: "2026-12-01" }, "任务名称最多 80 个字"],
+    [taskCreateSchema, { title: "换滤网", dueAt: "2026-12-01", description: "备注".repeat(300) }, "任务备注最多 500 个字"],
+  ];
+  for (const [schema, input, expected] of cases) {
+    const result = schema.safeParse(input);
+    assert.equal(result.success, false, `${expected}:应当被拒`);
+    assert.equal(result.error.issues[0].message, expected);
+    assert.doesNotMatch(result.error.issues[0].message, englishInternals);
+  }
 });

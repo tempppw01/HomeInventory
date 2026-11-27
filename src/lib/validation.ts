@@ -211,8 +211,8 @@ export const shoppingPatchSchema = z.object({
 
 /** 任务的增删改。recurrence 用宽松字符串,非法值在路由里降级为 NONE(既有行为)。 */
 export const taskCreateSchema = z.object({
-  title: z.string().trim().min(1, "请输入任务名称").max(80),
-  description: z.string().max(500).optional().nullable(),
+  title: z.string().trim().min(1, "请输入任务名称").max(80, "任务名称最多 80 个字"),
+  description: z.string().max(500, "任务备注最多 500 个字").optional().nullable(),
   dueAt: z.string().trim().min(1, "请选择有效日期"),
   recurrence: z.string().max(20).optional(),
 });
@@ -262,8 +262,8 @@ export const searchHistorySchema = z.object({
   query: z.string().trim().min(1, "搜索词不能为空").max(120),
 });
 export const shoppingSchema = z.object({
-  name: z.string().trim().min(1, "请输入采购项").max(80).refine((value) => !isInvisibleName(value), INVISIBLE_NAME_MESSAGE),
-  quantity: z.coerce.number().positive().max(999999).default(1),
+  name: z.string().trim().min(1, "请输入采购项").max(80, "采购项名称最多 80 个字").refine((value) => !isInvisibleName(value), INVISIBLE_NAME_MESSAGE),
+  quantity: z.coerce.number({ invalid_type_error: "数量要填一个数字" }).positive("数量要大于 0").max(999999, "数量最多 999999").default(1),
   unit: z.string().trim().min(1).max(12).default("件"),
   category: z.union([z.string().max(40), z.null()]).optional().transform((value) => value || null),
   priority: z.coerce.number().int().min(0).max(2).default(1),
@@ -271,7 +271,7 @@ export const shoppingSchema = z.object({
 });
 
 export const locationSchema = z.object({
-  name: z.string().trim().min(1, "请输入空间名称").max(30).refine((value) => !isInvisibleName(value), INVISIBLE_NAME_MESSAGE),
+  name: z.string().trim().min(1, "请输入空间名称").max(30, "空间名称最多 30 个字").refine((value) => !isInvisibleName(value), INVISIBLE_NAME_MESSAGE),
   icon: z.string().max(30).default("Package"),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default("#7c3aed"),
   thumbnailUrl: z.union([z.string().url().max(1000), z.literal(""), z.null()]).optional().transform((value) => value || null),
