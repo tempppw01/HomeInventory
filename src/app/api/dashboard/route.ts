@@ -6,6 +6,7 @@ import { getAiConfig } from "@/lib/ai";
 import { monthlyBuckets } from "@/lib/chart";
 import { compressedJson } from "@/lib/next-json";
 import { CATEGORY_SHARE_ROWS, topWithOtherRows } from "@/lib/category-share";
+import { rankConsumption } from "@/lib/consumption-ranking";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
       prisma.location.findMany({ include: { parent: { select: { id: true, name: true } }, _count: { select: { items: true } } }, orderBy: { createdAt: "asc" } }),
       prisma.shoppingItem.findMany({ orderBy: [{ status: "asc" }, { priority: "desc" }, { createdAt: "desc" }] }),
       prisma.priceRecord.findMany({ where: { purchasedAt: { gte: sixMonthStart } }, orderBy: { purchasedAt: "desc" } }),
-      prisma.activityLog.findMany({ where: { action: "CONSUME", undoneAt: null }, select: { itemName: true, createdAt: true }, orderBy: { createdAt: "desc" }, take: 500 }),
+      prisma.activityLog.findMany({ where: { action: "CONSUME", undoneAt: null }, select: { itemId: true, itemName: true, createdAt: true }, orderBy: { createdAt: "desc" }, take: 500 }),
       prisma.householdPreference.upsert({ where: { id: "default" }, create: {}, update: {} }),
       prisma.householdTask.findMany({ where: { status: "OPEN" }, orderBy: { dueAt: "asc" }, take: 8 }),
     ]);
@@ -48,11 +49,10 @@ export async function GET(request: NextRequest) {
     // 这里原先直接把数组砍到前 4 条,尾部类别就这么没了 —— 而面板的百分比是按传进去的行算的,
     // 于是「本月 ¥10370」和四行之和(¥10332)对不上,百分比却还是 100%(见 lib/category-share.ts)。
     const byCategory = topWithOtherRows(categoryTotals, CATEGORY_SHARE_ROWS).map((row) => ({ category: row.label, total: row.value }));
-    const consumption = new Map<string, { itemName: string; count: number; lastUsedAt: string }>();
-    consumptionLogs.forEach((entry) => {
-      if (!entry.itemName) return;
-      const previous = consumption.get(entry.itemName);
-      consumption.set(entry.itemName, { itemName: entry.itemName, count: (previous?.count || 0) + 1, lastUsedAt: previous?.lastUsedAt || entry.createdAt.toISOString() });
+    // 榜单按 itemId 归并(流水的 itemName 只是记录那一刻的名字快照,见 lib/consumption-ranking):
+    // 同一件物品改名前后按名字聚合会在榜上算成两件,把真正用得多的挤下去。
+    const consumption = rankConsumption(consumptionLogs, {
+      nameById: new Map(items.map((item) => [item.id, item.name])),
     });
     // 这份响应带着整份库存(1200 件时约 1 MB),必须压:Next 的 compress **不覆盖**
     // route handler,实测 standalone(Docker 路径)与 next start 都是原样发出去的。
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
       locations,
       shopping,
       finance: { currentMonthTotal, averageMonthly: sixMonthTotal / 6, recordCount: priceRecords.length, monthly, recent: priceRecords.slice(0, 5), byCategory },
-      consumption: [...consumption.values()].sort((a, b) => b.count - a.count).slice(0, 5),
+      consumption,
       // AI 未配置时前端把按钮换成「去设置」引导,而不是让用户点了才看到报错。
       aiAvailable: Boolean(await getAiConfig()),
       preferences: { expiryReminderDays: preferences.expiryReminderDays, lowStockReminder: preferences.lowStockReminder, weeklyReviewEnabled: preferences.weeklyReviewEnabled, weeklyReviewDay: preferences.weeklyReviewDay },

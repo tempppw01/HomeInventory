@@ -92,7 +92,7 @@ export interface DashboardData {
   locations: Location[];
   shopping: ShoppingItem[];
   finance: { currentMonthTotal: number; averageMonthly: number; recordCount: number; recent: PriceRecord[]; byCategory: { category: string; total: number }[]; monthly: { label: string; value: number }[] };
-  consumption: { itemName: string; count: number; lastUsedAt: string }[];
+  consumption: { itemId: string | null; itemName: string; count: number; lastUsedAt: string }[];
   preferences?: { expiryReminderDays: number; lowStockReminder: boolean; weeklyReviewEnabled: boolean; weeklyReviewDay: number };
   tasks: HouseholdTask[];
   /** AI 未配置时前端把 AI 按钮换成「去设置」引导,而不是让用户点了才看到报错。 */
