@@ -4,7 +4,6 @@ import type { CSSProperties } from "react";
 import { Archive } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { ConsumeScan } from "@/components/consume-scan";
-import { isLiquidConsumable } from "@/lib/item-metrics";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +36,7 @@ export default async function ConsumePage({ params }: { params: Promise<{ id: st
         </Link>
       </nav>
       <div className="flex flex-1 items-center">
-        <ConsumeScan item={{ ...item, liquid: isLiquidConsumable(item) }} />
+        <ConsumeScan item={item} />
       </div>
     </div>
   );

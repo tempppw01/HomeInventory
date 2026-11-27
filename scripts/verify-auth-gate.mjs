@@ -154,7 +154,11 @@ await page.waitForTimeout(600);
   });
 
   if (!probe.code) {
-    console.log("      跳过「扫码页无需登录」:探针物品没建出来");
+    // 探针是「已登录状态下建一件消耗品」,建不出来意味着别的环节坏了 ——
+    // 此前这里只打印一句「跳过」就继续,于是套件照样 18/18 全绿:一条没量到的检查
+    // 不应该看起来像通过(2026-11-27 同一类问题的另一半)。
+    check("扫码消耗页无需登录即可访问(设计如此)", false, "探针物品没建出来,这条没量到");
+    check("公开扫码路径真的完成了消耗", false, "同上:探针物品没建出来");
   } else {
     const anonContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const anonPage = await anonContext.newPage();

@@ -8,8 +8,12 @@
 //   · 打开页面消耗**正好 1 件**(不是 2 件 —— React 严格模式下 effect 会双跑,靠 requestId 兜住)
 //   · 再次打开(相当于第二天再扫一次)再消耗 1 件 —— 这是设计语义,钉住它
 //   · 接口层幂等:同一个 requestId 重复提交只减 1 次
-//   · 液体物品走「余量」而不是数量
+//   · 液体物品走「余量」而不是数量,而且**不发**那个注定 409 的请求
+//   · 耐用品同液体:说明态、不发请求、数量不动(此前它会照发一个必然 409 的请求)
 //   · 不存在的编号 → 404 页面
+//
+// 每个探针物品的「建出来了吗」都单独一条检查:探针没建出来时,后面的断言会静默消失,
+// 而汇总行照样显示全绿 —— 一条没量到的检查不该看起来像通过。
 //
 // 用法:PROBE_USER=bgs PROBE_PASS=... node scripts/verify-consume-scan.mjs
 
@@ -63,6 +67,30 @@ const dropItem = async (id) => {
   await api("DELETE", `/api/items/${id}`, { permanent: true });
 };
 
+// 读扫码页:文案 + 那句提示的实际颜色(说明态 / 报错态靠颜色区分,只读文本读不出来)
+const readScanView = async (target) => target.evaluate(() => {
+  const main = document.querySelector("main");
+  const message = [...(main?.querySelectorAll("div") ?? [])]
+    .reverse()
+    .find((node) => /font-bold/.test(String(node.className || "")) && (node.innerText || "").trim());
+  return {
+    text: (main?.innerText || "").replace(/\n+/g, " | "),
+    message: (message?.innerText || "").trim(),
+    messageColor: message ? getComputedStyle(message).color : "",
+  };
+});
+
+// 盯住「这个页面有没有真的发那个请求」—— 只断言「页面没报错」是不够的:
+// 请求发出去了、服务端也拒了,页面照样可能显示成一句文明话。
+const watchConsumePosts = (target) => {
+  const posts = [];
+  const onRequest = (request) => {
+    if (request.method() === "POST" && request.url().includes("/api/public/consume")) posts.push(request.url());
+  };
+  target.on("request", onRequest);
+  return { posts, stop: () => target.off("request", onRequest) };
+};
+
 // ---------- ① 打开页面:消耗正好 1 件 ----------
 {
   const item = await makeItem({ name: "扫码消耗验收品", category: "日用", type: "CONSUMABLE", unit: "包", quantity: 3 });
@@ -74,6 +102,10 @@ const dropItem = async (id) => {
     const text = await page.evaluate(() => (document.querySelector("main")?.innerText || "").replace(/\n+/g, " | "));
     check("扫码页认出了物品", text.includes("扫码消耗") && text.includes("扫码消耗验收品"), text.slice(0, 160));
     check("页面给出了消耗结果提示", /已消耗 1/.test(text), text.slice(0, 160));
+    // 页脚那句「请只扫描“消耗1包”二维码」必须真的把单位填进去。
+    // 这不是假想的问题:把这段 JSX 文本改写成模板字符串时,{item.unit} 会原样印在页面上
+    // —— 本轮改动的第一版就是这样,而当时所有检查都是绿的。
+    check("页脚把单位填进去了(不是字面的 {item.unit})", text.includes("消耗1包") && !text.includes("{item.unit}"), text.slice(-120));
 
     const after = await readItem(item.id);
     check("打开一次只消耗 1 件(不是 2 件)", Number(after?.quantity) === 2, `实际=${after?.quantity}`);
@@ -91,6 +123,7 @@ const dropItem = async (id) => {
 // ---------- ③ 接口层幂等:同一个 requestId 只减一次 ----------
 {
   const item = await makeItem({ name: "幂等验收品", category: "日用", type: "CONSUMABLE", unit: "包", quantity: 2 });
+  check("创建幂等探针物品", Boolean(item?.id), JSON.stringify(item).slice(0, 120));
   if (item?.id) {
     const requestId = randomUUID();
     const first = await api("POST", "/api/public/consume", { itemId: item.id, requestId });
@@ -108,22 +141,54 @@ const dropItem = async (id) => {
 // ---------- ④ 液体走余量 ----------
 {
   const item = await makeItem({ name: "扫码液体验收品", category: "饮品", type: "CONSUMABLE", unit: "瓶", quantity: 2, remainingPercent: 100 });
+  check("创建液体探针物品", Boolean(item?.id), JSON.stringify(item).slice(0, 120));
   if (item?.id) {
+    const watch = watchConsumePosts(page);
     await page.goto(`${BASE}/consume/${item.itemCode || item.id}`);
     await page.waitForTimeout(2600);
+    watch.stop();
     const after = await readItem(item.id);
     const pageText = await page.evaluate(() => (document.querySelector("main")?.innerText || "").replace(/\n+/g, " | "));
 
     // 液体在这里**不该**被扣件数:余量要在应用的刻度里记录,扫码页只负责说明。
     // (我第一次把断言写成了「余量应当下降」—— 那是我猜的语义,不是产品的。)
+    const view = await readScanView(page);
     check("液体不按件数扣(数量不变)", Number(after?.quantity) === 2, `数量=${after?.quantity}`);
     check("液体不会被悄悄改余量", Number(after?.remainingPercent) === 100, `余量=${after?.remainingPercent}%`);
     check("页面明确告诉用户液体该怎么记", /余量刻度/.test(pageText), pageText.slice(0, 160));
+    // 「没收下货」和「没开口要」是两件事:页面既然知道是液体,就不该先发一个注定 409 的请求。
+    check("液体页不发那个注定 409 的消耗请求", watch.posts.length === 0, `POST 次数=${watch.posts.length}`);
+    check("液体页是说明态,不是红色报错", view.messageColor !== "rgb(220, 38, 38)", `提示=「${view.message}」color=${view.messageColor}`);
     await dropItem(item.id);
   }
 }
 
-// ---------- ⑤ 不存在的编号 → 404 ----------
+// ---------- ⑤ 耐用品:同样只说明,不发那个注定 409 的请求 ----------
+// 实测(2026-11-27,修之前):耐用品的扫码页会 POST /api/public/consume,服务端按设计回
+// 409「耐用品不能通过扫码消耗」—— 控制台留下一条 409,页面上是红字错误态。
+// 而这个页面渲染标题的时候**就已经知道**物品是耐用品(类型就印在名字下面),
+// 没有理由先撞一次墙,再把服务端的拒绝语原样端出来。
+{
+  const item = await makeItem({ name: "扫码耐用品验收品", category: "工具", type: "DURABLE", unit: "个", quantity: 2 });
+  check("创建耐用品探针物品", Boolean(item?.id), JSON.stringify(item).slice(0, 120));
+  if (item?.id) {
+    const watch = watchConsumePosts(page);
+    await page.goto(`${BASE}/consume/${item.itemCode || item.id}`);
+    await page.waitForTimeout(2600);
+    watch.stop();
+    const view = await readScanView(page);
+    const after = await readItem(item.id);
+
+    check("耐用品页说明「不能通过扫码消耗」", /耐用品不能通过扫码消耗/.test(view.text), view.text.slice(0, 160));
+    check("耐用品页不发那个注定 409 的消耗请求", watch.posts.length === 0, `POST 次数=${watch.posts.length}`);
+    check("耐用品数量没被改动", Number(after?.quantity) === 2, `数量=${after?.quantity}`);
+    check("耐用品页是说明态,不是红色报错", view.messageColor !== "rgb(220, 38, 38)", `提示=「${view.message}」color=${view.messageColor}`);
+    check("耐用品页不再教用户去扫「消耗 1 个」的码", !/请只扫描/.test(view.text), view.text.slice(-140));
+    await dropItem(item.id);
+  }
+}
+
+// ---------- ⑥ 不存在的编号 → 404 ----------
 {
   const response = await page.goto(`${BASE}/consume/INV-20260101-ZZZZZZ`, { waitUntil: "domcontentloaded" }).catch(() => null);
   await page.waitForTimeout(1200);

@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import {
   usageDays, dailyUsageCost, isLiquidConsumable, estimatedUseDays,
   isCountUnit, normalizeItemQuantity, needsRestock, restockQuantity,
+  scanConsumeBlocker, SCAN_CONSUME_BLOCKER_MESSAGE,
 } from "../../src/lib/item-metrics.ts";
 import { isMedicineCategory, medicineCategoryLabel, suggestMedicineCategory, MEDICINE_CATEGORIES } from "../../src/lib/categories.ts";
 import { LIQUID_LOW_PERCENT } from "../../src/lib/restock-limits.ts";
@@ -90,6 +91,24 @@ test("耐用品永远不是液体", () => {
 
 test("液体不参与剩余天数估算", () => {
   assert.equal(estimatedUseDays({ ...consumable, quantity: 3, consumeRate: 1 }), null);
+});
+
+// ---------------------------------------------------------------- 扫码页能不能按件消耗
+// 这个页面只会「减 1 件」,所以判定必须和它实际能做的事一致。
+// 实测(2026-11-27,v0.1.101):耐用品没有走这条判定,于是扫码页照发一个必然 409 的请求。
+test("耐用品不能走扫码按件消耗(界面此前漏了这一档)", () => {
+  assert.equal(scanConsumeBlocker({ ...durable, name: "螺丝刀", category: "工具", unit: "个" }), "durable");
+  assert.equal(SCAN_CONSUME_BLOCKER_MESSAGE.durable, "耐用品不能通过扫码消耗", "文案要与接口 409 里的原话一致");
+});
+
+test("液体也不能走扫码按件消耗,但给的是余量刻度那句话", () => {
+  assert.equal(scanConsumeBlocker({ ...consumable, name: "洗衣液", category: "清洁", unit: "瓶" }), "liquid");
+  assert.match(SCAN_CONSUME_BLOCKER_MESSAGE.liquid, /余量刻度/);
+  assert.notEqual(SCAN_CONSUME_BLOCKER_MESSAGE.liquid, SCAN_CONSUME_BLOCKER_MESSAGE.durable, "两种原因两句话,不能合并成一句通用提示");
+});
+
+test("能按件消耗的消耗品不受影响", () => {
+  assert.equal(scanConsumeBlocker({ ...consumable, name: "抽纸", category: "日用", unit: "包" }), null);
 });
 
 // ---------------------------------------------------------------- 使用天数 / 日均成本

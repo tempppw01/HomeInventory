@@ -66,16 +66,23 @@ if (!login.ok) {
 }
 await dismissBlockingDialogs(page);
 
-const itemId = await page.evaluate(async () => {
+const sweepTarget = await page.evaluate(async () => {
   try {
     const response = await fetch("/api/items?pageSize=1");
     if (!response.ok) return null;
     const data = await response.json();
-    return Array.isArray(data) ? (data[0]?.id ?? null) : (data?.items?.[0]?.id ?? null);
+    const first = Array.isArray(data) ? data[0] : data?.items?.[0];
+    return first ? { id: first.id, name: first.name, type: first.type } : null;
   } catch {
     return null;
   }
 });
+const itemId = sweepTarget?.id ?? null;
+// 详情页 / 扫码页拿的是「库里最新的一件」。它可能是耐用品,也可能是液体 ——
+// 这两类在扫码页都按设计不消耗,所以「没有 4xx」才是对的。把挑中的是什么印出来,
+// 以后红了才知道当时扫的是哪一类(2026-11-27 这里挑到耐用品,而扫码页对耐用品
+// 照发了一个注定 409 的请求 —— 套件红了,但红得对;修的是扫码页,不是这条检查)。
+if (sweepTarget) console.log(`      详情页 / 扫码页取「最新的一件」:${sweepTarget.name}(${sweepTarget.type})`);
 
 const ROUTES = ["/", "/items", "/tasks", "/locations", "/audit", "/report", "/settings", "/about", "/offline"];
 if (itemId) ROUTES.push(`/items/${itemId}`, `/consume/${itemId}`);

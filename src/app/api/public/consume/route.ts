@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { isLiquidConsumable } from "@/lib/item-metrics";
+import { SCAN_CONSUME_BLOCKER_MESSAGE, scanConsumeBlocker } from "@/lib/item-metrics";
 import { ensureRestockSuggestion } from "@/lib/restock-suggestion";
 import { refreshConsumeRate } from "@/lib/consume-rate";
 import { withWriteRetry } from "@/lib/write-retry";
@@ -30,11 +30,10 @@ export async function POST(request: NextRequest) {
       if (previous?.item) return { item: previous.item, duplicate: true as const };
       const current = await tx.item.findFirst({ where: { id: itemId, deletedAt: null } });
       if (!current) return { error: "物品不存在", status: 404 as const };
-      if (current.type !== "CONSUMABLE") return { error: "耐用品不能通过扫码消耗", status: 409 as const };
-      // Keep the public QR flow consistent with the authenticated consume API:
-      // liquids are tracked by their remaining percentage, not by decrementing
-      // a whole bottle/container from the item count.
-      if (isLiquidConsumable(current)) return { error: "液体请通过余量刻度记录使用进度", status: 409 as const };
+      // 能不能按件消耗由 scanConsumeBlocker 一处判定,界面(src/components/consume-scan.tsx)
+      // 拿的是同一个函数和同一份文案 —— 此前两边各写各的,界面漏了「耐用品」这一档。
+      const blocker = scanConsumeBlocker(current);
+      if (blocker) return { error: SCAN_CONSUME_BLOCKER_MESSAGE[blocker], status: 409 as const };
 
       const changed = await tx.item.updateMany({
         where: { id: itemId, deletedAt: null, type: "CONSUMABLE", quantity: { gte: 1 } },

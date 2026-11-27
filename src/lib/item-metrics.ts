@@ -32,6 +32,30 @@ export function isLiquidConsumable(item: Pick<ItemMetricsInput, "type" | "name" 
   return /水|奶|饮料|酒|油|液|露|乳|汁|酱|洗发|沐浴/.test(item.name);
 }
 
+/**
+ * 扫码页只会做一件事:把数量减 1。所以只有「能按件消耗的消耗品」才该走它。
+ *
+ * 这两类东西必须被挡在请求之前,而且**界面与服务端要用同一套判断** ——
+ * 实测(2026-11-27,v0.1.101):扫码页对液体先说明再动手,对耐用品却照发
+ * POST /api/public/consume,服务端按设计回 409「耐用品不能通过扫码消耗」,
+ * 于是控制台留下一条 409、页面上是红字错误态 —— 而页面渲染标题时就已经知道
+ * 这件东西是耐用品。同一个原因两处两种说法,迟早还会再走散一次。
+ */
+export type ScanConsumeBlocker = "durable" | "liquid";
+
+export const SCAN_CONSUME_BLOCKER_MESSAGE: Record<ScanConsumeBlocker, string> = {
+  durable: "耐用品不能通过扫码消耗",
+  liquid: "液体请通过余量刻度记录使用进度",
+};
+
+export function scanConsumeBlocker(
+  item: Pick<ItemMetricsInput, "type" | "name" | "category" | "unit">,
+): ScanConsumeBlocker | null {
+  if (item.type !== "CONSUMABLE") return "durable";
+  if (isLiquidConsumable(item)) return "liquid";
+  return null;
+}
+
 /** 消耗品按近期消耗速度还能用几天;液体按整瓶记录,不参与估算。 */
 export function estimatedUseDays(item: Pick<ItemMetricsInput, "type" | "name" | "category" | "unit"> & { quantity: number; consumeRate: number | null }) {
   if (item.type !== "CONSUMABLE" || isLiquidConsumable(item) || !item.consumeRate || item.consumeRate < 0.1 || item.quantity <= 0) return null;
