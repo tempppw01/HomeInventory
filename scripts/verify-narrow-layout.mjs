@@ -178,7 +178,7 @@ for (let i = 0; i < 5; i += 1) {
   await page.locator('button[aria-label="打开归物助手"]').last().click();
   await page.waitForTimeout(1600);
 
-  const panel = await page.evaluate(() => {
+  const panel = await page.evaluate(async () => {
     const dialog = Array.from(document.querySelectorAll('[role="dialog"]')).find((node) => (node.getAttribute("aria-label") || "").includes("归物助手"));
     if (!dialog) return null;
     const lineCount = (node, fallback) => {
@@ -190,6 +190,54 @@ for (let i = 0; i < 5; i += 1) {
     const h2 = dialog.querySelector("h2");
     const subtitle = dialog.querySelector("p");
     const textarea = dialog.querySelector("textarea");
+
+    // 可点元素只在「那一刻在视口里」时才被检查 —— 元素一旦被挤出可视区就会被静默跳过。
+    // 教训(实测):助手里两个 32px 的消息按钮躲了很久,直到别处改动把它们顶进可视区才被发现。
+    // 所以这里把滚动容器从头滚到尾,逐个位置用**探针**判定(探针能抓到「命中区被兄弟元素盖住」
+    // 这种几何判据看不出的问题),再把结果并起来。
+    const dialogButtons = Array.from(dialog.querySelectorAll("button"));
+    const scrollers = Array.from(dialog.querySelectorAll("*")).filter((node) => {
+      const style = getComputedStyle(node);
+      const scrollable = /(auto|scroll)/.test(style.overflowY);
+      return scrollable && node.scrollHeight > node.clientHeight + 8;
+    });
+    const scroller = scrollers.sort((a, b) => b.scrollHeight - a.scrollHeight)[0] ?? null;
+    const smallButtonLabels = new Set();
+    const measure = () => {
+      for (const button of dialogButtons) {
+        const rect = button.getBoundingClientRect();
+        if (rect.width < 4 || rect.height < 4) continue;
+        const centerInView = rect.y + rect.height / 2 > 0 && rect.y + rect.height / 2 < window.innerHeight;
+        if (!centerInView) continue;
+        const cx = rect.x + rect.width / 2;
+        const cy = rect.y + rect.height / 2;
+        const probe = (dx, dy) => {
+          const el = document.elementFromPoint(cx + dx, cy + dy);
+          return Boolean(el && (el === button || button.contains(el)));
+        };
+        const verticalOk = rect.height >= 40 || (probe(0, -19) && probe(0, 19));
+        const horizontalOk = rect.width >= 40 || (probe(-19, 0) && probe(19, 0));
+        const ok = rect.width >= 32 ? verticalOk : verticalOk && horizontalOk;
+        if (!ok) {
+          const label = (button.getAttribute("aria-label") || button.textContent || "").trim().slice(0, 16) || button.tagName;
+          smallButtonLabels.add(`${label}(${Math.round(rect.width)}x${Math.round(rect.height)})`);
+        }
+      }
+    };
+    const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    measure();
+    if (scroller) {
+      const original = scroller.scrollTop;
+      const step = Math.max(120, Math.round(scroller.clientHeight * 0.8));
+      for (let offset = 0; offset <= scroller.scrollHeight - scroller.clientHeight + step; offset += step) {
+        scroller.scrollTop = offset;
+        await nextFrame();
+        measure();
+      }
+      scroller.scrollTop = original;
+      await nextFrame();
+    }
+
     return {
       titleLines: lineCount(h2, 22),
       subtitleLines: lineCount(subtitle, 16),
@@ -199,21 +247,8 @@ for (let i = 0; i < 5; i += 1) {
         const rect = node.getBoundingClientRect();
         return rect.width > 4 && (rect.right > window.innerWidth + 2 || rect.left < -2);
       }).length,
-      smallTargets: Array.from(dialog.querySelectorAll("button")).filter((button) => {
-        const rect = button.getBoundingClientRect();
-        if (rect.width < 4 || rect.height < 4) return false;
-        const centerInView = rect.y + rect.height / 2 > 0 && rect.y + rect.height / 2 < window.innerHeight;
-        if (!centerInView) return false;
-        const cx = rect.x + rect.width / 2;
-        const cy = rect.y + rect.height / 2;
-        const probe = (dx, dy) => {
-          const el = document.elementFromPoint(cx + dx, cy + dy);
-          return Boolean(el && (el === button || button.contains(el)));
-        };
-        const verticalOk = rect.height >= 40 || (probe(0, -19) && probe(0, 19));
-        const horizontalOk = rect.width >= 40 || (probe(-19, 0) && probe(19, 0));
-        return !(rect.width >= 32 ? verticalOk : verticalOk && horizontalOk);
-      }).length,
+      smallTargets: smallButtonLabels.size,
+      smallButtonLabels: [...smallButtonLabels],
     };
   });
 
@@ -225,7 +260,7 @@ for (let i = 0; i < 5; i += 1) {
     check("输入框保持单行高度", panel.textareaHeight <= 52, `height=${panel.textareaHeight}`);
     check("placeholder 足够短(不至于折行)", (panel.placeholder || "").length <= 8, `placeholder=${panel.placeholder}`);
     check("助手面板内没有元素溢出视口", panel.overflow === 0, `overflowing=${panel.overflow}`);
-    check("助手面板内可点元素都 ≥40px", panel.smallTargets === 0, `small=${panel.smallTargets}`);
+    check("助手面板内可点元素都 ≥40px(滚到底也算)", panel.smallTargets === 0, `small=${panel.smallTargets} ${(panel.smallButtonLabels || []).join(" / ")}`);
   }
 }
 
@@ -418,35 +453,77 @@ for (let i = 0; i < 5; i += 1) {
 {
   const records = [];
 
+  // 量一个弹窗:滚动容器滚到底,用**探针**判定每个按钮在窄屏上是否真的按得中。
+  // 为什么不用纯几何(算上 .tap-target 的 8px 扩展):实测有反例 —— 两个按钮并肩排在一行时,
+  // 扩出来的命中区被旁边的兄弟盖住,几何算出来「48px 够大」,手指点下去却打不开。
+  // 探针(在中心 ±19px 处 elementFromPoint 看命中谁)才如实反映这一点。
   const measureDialog = () =>
-    page.evaluate(() => {
+    page.evaluate(async () => {
       const dialog = Array.from(document.querySelectorAll('[role="dialog"]')).filter((node) => node.getBoundingClientRect().width > 0).pop();
       if (!dialog) return null;
-      const hitAreaOk = (node) => {
+      const geometryOk = (node) => {
         const rect = node.getBoundingClientRect();
-        // .tap-target::after { inset: -8px } 这类扩展:把伪元素的扩展量算进命中区
         const after = getComputedStyle(node, "::after");
         const hasExpansion = after.content && after.content !== "none" && after.position === "absolute";
         const inset = hasExpansion ? Math.abs(parseFloat(after.inset) || 0) : 0;
-        const hitHeight = rect.height + inset * 2;
-        const hitWidth = rect.width + inset * 2;
-        const verticalOk = hitHeight >= 40;
-        const horizontalOk = hitWidth >= 40;
-        // 文本类按钮(宽度本就够)只看纵向命中高度;图标按钮两边都要够
+        const verticalOk = rect.height + inset * 2 >= 40;
+        const horizontalOk = rect.width + inset * 2 >= 40;
         return rect.width >= 32 ? verticalOk : verticalOk && horizontalOk;
       };
-      const small = Array.from(dialog.querySelectorAll("button, a, select"))
-        .filter((node) => {
+      const nodes = Array.from(dialog.querySelectorAll("button, a, select"));
+      const probes = nodes.map(() => null);
+      const probeOnce = () => {
+        nodes.forEach((node, index) => {
           const rect = node.getBoundingClientRect();
-          if (rect.width < 4 || rect.height < 4) return false;
-          return !hitAreaOk(node);
-        })
-        .map((node) => (node.getAttribute("aria-label") || node.textContent || "").trim().slice(0, 14) || node.tagName);
+          if (rect.width < 4 || rect.height < 4) return;
+          const cx = rect.x + rect.width / 2;
+          const cy = rect.y + rect.height / 2;
+          if (cy <= 0 || cy >= window.innerHeight || cx <= 0 || cx >= window.innerWidth) return;
+          const hit = (dx, dy) => {
+            const el = document.elementFromPoint(cx + dx, cy + dy);
+            return Boolean(el && (el === node || node.contains(el)));
+          };
+          const verticalOk = rect.height >= 40 || (hit(0, -19) && hit(0, 19));
+          const horizontalOk = rect.width >= 40 || (hit(-19, 0) && hit(19, 0));
+          probes[index] = rect.width >= 32 ? verticalOk : verticalOk && horizontalOk;
+        });
+      };
+      const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      probeOnce();
+      // 第一帧就进过视口的按钮数:滚动之前只有这些会被旧写法检查到
+      const atRest = probes.filter((value) => value !== null).length;
+      const scroller = Array.from(dialog.querySelectorAll("*"))
+        .filter((node) => /(auto|scroll)/.test(getComputedStyle(node).overflowY) && node.scrollHeight > node.clientHeight + 8)
+        .sort((a, b) => b.scrollHeight - a.scrollHeight)[0];
+      if (scroller) {
+        const original = scroller.scrollTop;
+        const step = Math.max(120, Math.round(scroller.clientHeight * 0.8));
+        for (let offset = 0; offset <= scroller.scrollHeight - scroller.clientHeight + step; offset += step) {
+          scroller.scrollTop = offset;
+          await nextFrame();
+          probeOnce();
+        }
+        scroller.scrollTop = original;
+        await nextFrame();
+      }
+      const small = [];
+      let unreached = 0;
+      nodes.forEach((node, index) => {
+        const rect = node.getBoundingClientRect();
+        if (rect.width < 4 || rect.height < 4) return;
+        if (probes[index] === null) {
+          // 滚遍整个弹窗都没能把它挪进视口:退回几何判据,并记一笔(别让它悄悄跳过)
+          unreached += 1;
+          if (!geometryOk(node)) small.push(`${(node.getAttribute("aria-label") || node.textContent || "").trim().slice(0, 14) || node.tagName}(未进过视口)`);
+          return;
+        }
+        if (!probes[index]) small.push((node.getAttribute("aria-label") || node.textContent || "").trim().slice(0, 14) || node.tagName);
+      });
       const overflow = Array.from(dialog.querySelectorAll("*")).filter((node) => {
         const rect = node.getBoundingClientRect();
         return rect.width > 4 && (rect.right > window.innerWidth + 2 || rect.left < -2);
       }).length;
-      return { small, overflow };
+      return { small, overflow, unreached, measured: probes.filter((value) => value !== null).length, atRest, total: nodes.length };
     });
 
   // 录入物品
@@ -479,7 +556,9 @@ for (let i = 0; i < 5; i += 1) {
   await page.waitForTimeout(600);
 
   const problems = records.filter((record) => record.small.length || record.overflow);
-  const detail = records.map((record) => `${record.name}:${record.small.length ? record.small.join("/") : "ok"}/overflow=${record.overflow}`).join(" | ");
+  const detail = records.map((record) => `${record.name}:${record.small.length ? record.small.join("/") : "ok"}/overflow=${record.overflow}/未进过视口=${record.unreached ?? "?"}`).join(" | ");
+  // 覆盖数写出来:证明这条检查不是空跑,也说明「只看视口内」会漏掉多少(滚动前 / 滚动后 / 总数)
+  console.log(`      弹窗触摸目标扫描:${records.map((record) => `${record.name} ${record.atRest}/${record.measured}/${record.total}`).join(" · ")}（滚动前/滚动后/总数）`);
   check("窄屏下主要弹窗可点元素 ≥40px 且不溢出", problems.length === 0, detail);
 }
 
