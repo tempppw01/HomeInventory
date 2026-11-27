@@ -616,6 +616,38 @@ check("进度条不会盖住顶栏按钮的点击", !overlay.inBar, JSON.stringi
 
 await page.waitForTimeout(900);
 
+// ------------------------------------------------------------------------ P2-12
+// 导入失败时,提示里要能看到**哪一行、为什么**。
+//
+// 实测(2026-11-28,真实浏览器,两种文件各传一次):
+//   · 整批都不合法 → 提示只有一个「导入失败」:逐行原因在 result.errors 里,
+//     而界面在 !ok && !count 时直接 throw,把原因整个丢掉了(importResultText 一次没被调用);
+//   · 部分合法 → 显示了原因,但那条原因是 zod 的英文内部字样:
+//     「跳过 1 处(第 2 行:String must contain at most 500 character(s))」。
+await writeFile(`${OUT}/import-bad-row.csv`, `名称,分类,数量,单位,备注\n${PREFIX}-导入坏行,日用,1,件,${"备".repeat(600)}\n`, "utf8");
+await page.goto(`${BASE}/settings`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(900);
+await settleDialogs(page);
+const importInput = page.locator('input[type="file"][accept*=".csv"]');
+if (!(await importInput.count())) {
+  await page.locator("text=数据安全与家庭成员").first().click().catch(() => {});
+  await page.waitForTimeout(600);
+}
+await page.evaluate(() => {
+  window.__toastLog = [];
+  const record = () => document.querySelectorAll('[role="status"]').forEach((el) => {
+    const text = (el.innerText || "").trim();
+    if (text && !window.__toastLog.includes(text)) window.__toastLog.push(text);
+  });
+  record();
+  new MutationObserver(record).observe(document.body, { childList: true, subtree: true, characterData: true });
+});
+await importInput.first().setInputFiles(`${OUT}/import-bad-row.csv`);
+await page.waitForTimeout(2500);
+const importToast = await page.evaluate(() => (window.__toastLog || []).join(" | "));
+check("导入整批失败时,提示里说得出「哪一行、为什么」", /第 1 行/.test(importToast) && /备注/.test(importToast), `toast="${importToast}"`);
+check("导入失败的原因里没有英文内部字样", importToast.length > 0 && !/expected|received|invalid|must contain|string must|nan/i.test(importToast), `toast="${importToast}"`);
+
 // ------------------------------------------------------------------------- 清理
 const cleanup = await page.evaluate(async (prefix) => {
   const list = async () => {

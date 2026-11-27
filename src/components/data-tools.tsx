@@ -73,8 +73,12 @@ export function DataTools({ role, onToast }: { role: "ADMIN" | "MEMBER" | "VIEWE
     try {
       const response = await fetch("/api/items/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const result = await response.json();
-      if (!response.ok && !result?.count) throw new Error(result.error || "导入失败");
-      onToast(importResultText(Number(result.count ?? 0), result.errors, issues, Array.isArray(result.createdLocations) ? result.createdLocations : []));
+      // 整批都不合法时,原因就在 result.errors 里 —— 这里以前直接 throw「导入失败」,
+      // 把「第 2 行:备注最多 500 个字」这种能照着改的信息整个丢掉了,用户只看到「失败了」。
+      // 只有接口连逐行原因都没给时,才退回它给的 error / 通用文案。
+      const rowErrors = Array.isArray(result?.errors) ? result.errors : null;
+      if (!response.ok && !result?.count && !rowErrors?.length) throw new Error(result?.error || "导入失败");
+      onToast(importResultText(Number(result?.count ?? 0), result?.errors, issues, Array.isArray(result?.createdLocations) ? result.createdLocations : []));
     } catch (error) { onToast(error instanceof Error ? error.message : "导入失败"); }
   };
   // 成员写错了名字要能改:此前只能加、不能删,写错就永远留着。

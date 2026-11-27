@@ -232,6 +232,53 @@ test("数量/余量的越界与非法类型也给中文消息", () => {
   assert.match(bad.error.issues[0].message, /剩余量/);
 });
 
+// ---------- 校验失败的消息必须是用户看得懂的话 ----------
+//
+// 由来:物品的备注/AI 建议/图片地址这些字段上没写消息时,zod 吐的是英文内部字样,而它们会经
+// CSV / JSON 导入**原样显示给用户**。实测(2026-11-28,真实导入):
+//   600 字备注 → String must contain at most 500 character(s)
+//   notes 传数字 → Invalid input;aiSummary 900 字 → String must contain at most 800 character(s)
+//   imageUrl:"abc" → Invalid url
+const englishInternals = /expected|received|invalid|must contain|string must|nan|^url$/i;
+
+test("物品:备注超长或不是文字时,消息是中文", () => {
+  const long = itemSchema.safeParse({ ...baseItem, notes: "备".repeat(600) });
+  assert.equal(long.success, false);
+  assert.match(long.error.issues[0].message, /备注/);
+  assert.doesNotMatch(long.error.issues[0].message, englishInternals);
+
+  const wrongType = itemSchema.safeParse({ ...baseItem, notes: 123 });
+  assert.equal(wrongType.success, false);
+  assert.match(wrongType.error.issues[0].message, /备注/);
+  assert.doesNotMatch(wrongType.error.issues[0].message, englishInternals);
+});
+
+test("物品:AI 建议超长时,消息是中文且指出是哪个字段", () => {
+  const summary = itemSchema.safeParse({ ...baseItem, aiSummary: "x".repeat(900) });
+  assert.equal(summary.success, false);
+  assert.match(summary.error.issues[0].message, /AI 结论/);
+  assert.doesNotMatch(summary.error.issues[0].message, englishInternals);
+
+  const advice = itemSchema.safeParse({ ...baseItem, aiStorageAdvice: "x".repeat(900) });
+  assert.equal(advice.success, false);
+  assert.match(advice.error.issues[0].message, /存放建议/);
+});
+
+test("物品:图片地址不合法时,消息是中文", () => {
+  const bad = itemSchema.safeParse({ ...baseItem, imageUrl: "abc" });
+  assert.equal(bad.success, false);
+  assert.match(bad.error.issues[0].message, /图片地址/);
+  assert.doesNotMatch(bad.error.issues[0].message, englishInternals);
+});
+
+test("物品:备注/AI 建议没填时仍然是 null(不是空串,也不是 undefined)", () => {
+  const parsed = itemSchema.parse({ ...baseItem, notes: "", aiSummary: null, aiStorageAdvice: undefined });
+  assert.equal(parsed.notes, null);
+  assert.equal(parsed.aiSummary, null);
+  assert.equal(parsed.aiStorageAdvice, null);
+  assert.equal(itemSchema.parse({ ...baseItem, notes: "有备注" }).notes, "有备注");
+});
+
 // ---------- 物品编号 ----------
 
 test("物品编号:形如 INV-YYYYMMDD-XXXXXX", () => {

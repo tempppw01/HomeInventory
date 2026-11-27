@@ -108,6 +108,31 @@ await cleanup();
   check("坏行按行号报错", Array.isArray(mixed.body?.errors) && mixed.body.errors[0]?.row === 2, JSON.stringify(mixed.body?.errors)?.slice(0, 120));
 }
 
+// ---------- 3.5 逐行原因必须是用户看得懂的话 ----------
+//
+// 由来:这些 reason 会被界面**原样**放进提示里(「跳过 1 处(第 2 行:…)」),而字段上没写消息
+// 时 zod 吐的是英文内部字样。实测(2026-11-28,真实导入):
+//   600 字备注 → String must contain at most 500 character(s)
+//   imageUrl:"abc" → Invalid url;notes 传数字 → Invalid input
+// 这类消息用户照着改不了,所以这里按「全部行都要有中文原因」来卡。
+{
+  const rows = [
+    { name: `${ITEM_PREFIX}-长备注`, category: "日用", type: "DURABLE", unit: "件", quantity: 1, notes: "备".repeat(600) },
+    { name: `${ITEM_PREFIX}-坏图片`, category: "日用", type: "DURABLE", unit: "件", quantity: 1, imageUrl: "abc" },
+    { name: `${ITEM_PREFIX}-备注非文本`, category: "日用", type: "DURABLE", unit: "件", quantity: 1, notes: 123 },
+    { name: `${ITEM_PREFIX}-长AI`, category: "日用", type: "DURABLE", unit: "件", quantity: 1, aiSummary: "x".repeat(900) },
+  ];
+  const reasons = await call("POST", "/api/items/import", { items: rows });
+  const list = Array.isArray(reasons.body?.errors) ? reasons.body.errors : [];
+  const englishInternals = /expected|received|invalid|must contain|string must|too (big|small)|nan|url/i;
+  const leaked = list.filter((entry) => englishInternals.test(String(entry?.error ?? "")));
+  check("逐行报错的原因里没有英文内部字样", list.length === rows.length && leaked.length === 0,
+    `条数=${list.length} 漏英文=${JSON.stringify(leaked.map((entry) => entry.error))?.slice(0, 140)}`);
+  const noChinese = list.filter((entry) => !/[\u4e00-\u9fa5]/.test(String(entry?.error ?? "")));
+  check("逐行报错的原因都是中文", list.length === rows.length && noChinese.length === 0,
+    `没有中文的=${JSON.stringify(noChinese.map((entry) => entry.error))?.slice(0, 140)}`);
+}
+
 // ---------- ④ 超过 1000 行:截断并明确标记 ----------
 {
   const rows = Array.from({ length: 1005 }, (_, index) => ({ name: `${ITEM_PREFIX}-bulk-${index}`, category: "日用", type: "CONSUMABLE", unit: "件", quantity: 1 }));

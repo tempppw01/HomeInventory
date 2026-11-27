@@ -52,13 +52,30 @@ const optionalDate = z
 // Images can be hosted by OSS (absolute URL) or served by the local upload
 // route. Keep local paths scoped to that route so arbitrary relative paths and
 // traversal segments cannot be persisted as image URLs.
+//
+// 消息必须是中文:这条经 CSV/JSON 导入会**原样显示给用户**(实测导入一行 imageUrl:"abc"
+// 的 JSON,提示里出现的是 zod 的 Invalid url)。
 const imageUrlSchema = z.union([
-  z.string().url().max(1000),
+  z.string().url("图片地址要填完整链接,例如 https://… 或先上传一张图").max(1000, "图片地址最多 1000 个字"),
   z.string()
-    .max(1000)
-    .regex(/^\/api\/uploads\/[A-Za-z0-9/_-]+(?:\.[A-Za-z0-9_-]+)?$/)
-    .refine((value) => !value.includes("..")),
+    .max(1000, "图片地址最多 1000 个字")
+    .regex(/^\/api\/uploads\/[A-Za-z0-9/_-]+(?:\.[A-Za-z0-9_-]+)?$/, "本地上传的图片地址必须形如 /api/uploads/…")
+    .refine((value) => !value.includes(".."), "图片地址里不能有 .."),
 ]);
+
+/**
+ * 可选文本字段:null / 空串 → null,长度越界与非字符串都给中文消息。
+ *
+ * 原先写的是 `z.union([z.string().max(N), z.null()]).optional()` —— 越界时 zod 吐的是
+ * `String must contain at most N character(s)`,非字符串时吐的是 `Invalid input`,
+ * 而这两句都会经导入**原样出现在用户面前的提示里**(实测:CSV 里一个 600 字的备注 →
+ * 「跳过 1 处(第 2 行:String must contain at most 500 character(s))」)。
+ */
+const optionalText = (max: number, label: string) =>
+  z.preprocess(
+    (value) => (value === undefined || value === "" ? null : value),
+    z.string({ invalid_type_error: `${label}要填文字` }).max(max, `${label}最多 ${max} 个字`).nullable(),
+  ).transform((value) => value || null);
 
 /**
  * 名字是不是「只有空白或不可见字符」。
@@ -143,11 +160,11 @@ export const itemSchema = z.object({
   expiryDate: optionalDate,
   imageUrl: z.union([imageUrlSchema, z.literal(""), z.null()]).optional().transform((value) => value || null),
   locationId: z.union([z.string(), z.literal(""), z.null()]).optional().transform((value) => value || null),
-  notes: z.union([z.string().max(500), z.null()]).optional().transform((value) => value || null),
-  aiSummary: z.union([z.string().max(800), z.null()]).optional().transform((value) => value || null),
-  aiStorageAdvice: z.union([z.string().max(800), z.null()]).optional().transform((value) => value || null),
-  aiUsageAdvice: z.union([z.string().max(800), z.null()]).optional().transform((value) => value || null),
-  aiReplenishmentAdvice: z.union([z.string().max(800), z.null()]).optional().transform((value) => value || null),
+  notes: optionalText(500, "备注"),
+  aiSummary: optionalText(800, "AI 结论"),
+  aiStorageAdvice: optionalText(800, "存放建议"),
+  aiUsageAdvice: optionalText(800, "用法建议"),
+  aiReplenishmentAdvice: optionalText(800, "补货建议"),
   recordPurchase: z.boolean().optional().default(false),
   purchaseStore: z.union([z.string().trim().max(80), z.literal(""), z.null()]).optional().transform((value) => value || null),
   restockPausedUntil: z.union([z.string().datetime(), z.literal(""), z.null()]).optional().transform((value) => value ? new Date(value) : null),
