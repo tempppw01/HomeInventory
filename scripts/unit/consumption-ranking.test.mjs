@@ -85,12 +85,14 @@ test("旧名字后来被另一件物品用了:两件物品的次数不能串在�
   assert.deepEqual(rows.map((row) => [row.itemName, row.count]), [["苏打水", 2], ["矿泉水", 1]]);
 });
 
-test("次数相同按最近一次使用排,再相同按名字", () => {
+test("次数相同按最近一次使用排,再相同按码位定序(与运行时的 locale 无关)", () => {
   const rows = rankConsumption([log(OTHER, "乙", 6), log(ITEM, "甲", 5)], {});
   assert.deepEqual(rows.map((row) => row.itemName), ["乙", "甲"]);
-  // 同一秒的两条(时间不分先后)按名字定序,结果稳定不随入参顺序漂。
+  // 同一秒的两条(时间不分先后)按**码位**定序:「乙」(U+4E59) < 「甲」(U+7532)。
+  // 这里特意不用 localeCompare —— 它不传 locale 时看运行时的默认 locale/ICU,实测同一条断言
+  // 本机 Node 26 过、CI 的 Node 22 不过(v0.1.110 的 CI 就是这么红的,Release 也被拦下)。
   const tied = rankConsumption([log(ITEM, "乙", 5), log(OTHER, "甲", 5)], {});
-  assert.deepEqual(tied.map((row) => row.itemName), ["甲", "乙"]);
+  assert.deepEqual(tied.map((row) => row.itemName), ["乙", "甲"]);
 });
 
 test("名字为空的流水不计入(与旧行为一致)", () => {

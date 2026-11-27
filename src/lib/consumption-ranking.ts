@@ -20,6 +20,17 @@ function timeOf(value: Date | string): number {
 }
 
 /**
+ * 按**码位**比较,而不是 localeCompare。
+ *
+ * localeCompare 不传 locale 时用的是运行时的默认 locale 与 ICU 数据,同一份代码在不同 Node 上
+ * 可以排出不同顺序 —— 实测(2026-11-28):这条排序的用例本机 Node 26 是绿的,CI 的 Node 22 红了,
+ * 于是 v0.1.110 的 CI 失败、Release 被拦下。同分时的先后只是展示细节,不该由跑在哪台机器决定。
+ */
+function compareByCodeUnit(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+/**
  * 把消耗流水聚成「最近用得多」的榜单。
  *
  * 流水的 itemName 是**记录那一刻**的名字快照:`ActivityLog` 里留着旧名是为了让历史说得清
@@ -69,7 +80,7 @@ export function rankConsumption(
     .sort((a, b) =>
       b.count - a.count ||
       timeOf(b.lastUsedAt) - timeOf(a.lastUsedAt) ||
-      a.itemName.localeCompare(b.itemName),
+      compareByCodeUnit(a.itemName, b.itemName),
     )
     .slice(0, limit);
 }
