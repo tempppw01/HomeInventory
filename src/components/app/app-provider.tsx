@@ -13,6 +13,7 @@ import { isMedicineCategory } from "@/lib/categories";
 import { localDateString } from "@/lib/local-date";
 import { isLowStock } from "@/lib/low-stock";
 import { findPendingPurchase } from "@/lib/shopping-list";
+import { locationSubtreeIds } from "@/lib/location-tree";
 import { isExpiredDays, isExpiringSoonDays } from "@/lib/expiry-status";
 import { PREFERENCE_LIMITS } from "@/lib/preference-limits";
 
@@ -260,24 +261,11 @@ function useAppState() {
   };
 
   // 选中某个空间时,把它的所有子空间一起算进范围(吊柜里的东西也算厨房的)。
+  // 判定收口在 lib/location-tree 的 locationSubtreeIds:空间卡上的「N 件」用的是同一个函数,
+  // 否则卡片与点进去看到的件数会各说一个数(实测「厨房 1」点进去是 2 件)。
   const spaceScope = useMemo(() => {
     if (!data || locationFilter === "ALL") return null;
-    const children = new Map<string, string[]>();
-    for (const location of data.locations) {
-      const parent = location.parentId ?? "ROOT";
-      children.set(parent, [...(children.get(parent) ?? []), location.id]);
-    }
-    const ids = new Set<string>([locationFilter]);
-    const stack = [locationFilter];
-    while (stack.length) {
-      const current = stack.pop() as string;
-      for (const child of children.get(current) ?? []) {
-        if (ids.has(child)) continue;
-        ids.add(child);
-        stack.push(child);
-      }
-    }
-    return ids;
+    return locationSubtreeIds(data.locations, locationFilter);
   }, [data, locationFilter]);
 
   const filteredItems = useMemo(() => {

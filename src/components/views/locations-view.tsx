@@ -11,12 +11,19 @@ import { useConfirm } from "@/components/confirm-dialog";
 import { Empty, Panel, Screen, Toolbar } from "@/components/ui-kit";
 import { ReadOnlyContext, ExpiryWindowContext, iconMap, locationPath } from "../shared";
 import { spaceSummary, spaceSummaryText, spaceAlert, spaceDeletePrompt } from "@/lib/space-summary";
+import { locationSubtreeIds } from "@/lib/location-tree";
 
 export function LocationsView({ locations, items, onAdd, onOpen, onEdit, onToast, onRefresh }: { locations: Location[]; items: Item[]; onAdd: () => void; onOpen: (name: string, id: string) => void; onEdit: (location: Location) => void; onToast: (message: string) => void; onRefresh: () => Promise<void> }) {
   const [selectedLocationId, setSelectedLocationId] = useState("ALL");
   const visibleLocations = selectedLocationId === "ALL" ? locations : locations.filter((location) => location.id === selectedLocationId);
   const readOnly = useContext(ReadOnlyContext);
-  const countIn = (locationId: string) => items.filter((item) => item.locationId === locationId).length;
+  // 导轨上的数与卡片上的数必须是同一个数,而且**要等于点进去看到的件数**:
+  // 点卡片会用「含下级空间」的范围筛物品页,所以这里也含下级空间。
+  // 实测(2026-11-27):此前只数直接放在这一层的,于是「厨房 1」点进去是 2 件。
+  const countIn = (locationId: string) => {
+    const scope = locationSubtreeIds(locations, locationId);
+    return items.filter((item) => item.locationId !== null && scope.has(item.locationId)).length;
+  };
   return (
     <Screen
       title="家庭空间"
@@ -72,22 +79,27 @@ export function LocationCard({ location, locations, items, index, onOpen, onEdit
   // 状态角标的数据属性,便于测试与读屏以外的视觉提示
   const parent = location.parentId ? locations.find((entry) => entry.id === location.parentId) : null;
   // 这个空间的状态:件数、需冷藏、临期、价值、该补货 —— 一眼看出要不要去整理。
+  // 「N 件」= 这个空间**和它下面所有空间**里的物品 —— 与点卡片进物品页看到的件数一致。
+  // 卡片自己写着「点击空间卡片可直接查看其中的物品」,那就不能让卡片和它引导你去的地方各说一个数。
+  const subtree = [...locationSubtreeIds(locations, location.id)];
+  const childSpaces = locations.filter((entry) => entry.parentId === location.id).length;
   const summary = spaceSummary(items.map((item) => ({
     locationId: item.locationId, type: item.type, quantity: item.quantity, price: item.price,
     expiryDate: item.expiryDate, storage: item.storage ?? null, minQuantity: item.minQuantity,
     name: item.name, category: item.category, unit: item.unit,
     remainingPercent: item.remainingPercent, restockPausedUntil: item.restockPausedUntil ?? null,
-  })), location.id, undefined, expiryWindowDays);
-  const summaryText = spaceSummaryText(summary);
+  })), subtree, undefined, expiryWindowDays);
+  const summaryText = spaceSummaryText(summary, childSpaces);
   const alert = spaceAlert(summary);
   const context = useContextMenu();
   const remove = async () => {
     // 文案逻辑抽到 space-summary.ts 里(纯函数、可单测):
     // 里面有物品时**不再问「确定吗」**,直接说明「还有 N 件,先移走」,并且不发删除请求;
     // 可以删时,把「下级空间会变成顶级」这条后果也说清楚。
+    // 挡住删除的是**直接放在这一层**的物品(服务端就是按 locationId = 本空间 数的),
+    // 而卡片上的件数现在含下级空间 —— spaceDeletePrompt 会把这句差别说出来。
     const itemCount = items.filter((item) => item.locationId === location.id).length;
-    const childCount = locations.filter((entry) => entry.parentId === location.id).length;
-    const prompt = spaceDeletePrompt(location.name, itemCount, childCount);
+    const prompt = spaceDeletePrompt(location.name, itemCount, childSpaces);
     if (prompt) {
       const agreed = await askConfirm(prompt.message, { title: prompt.title, confirmLabel: prompt.confirmLabel, cancelLabel: prompt.cancelLabel, tone: prompt.blocked ? "primary" : "danger" });
       if (prompt.blocked || !agreed) return;

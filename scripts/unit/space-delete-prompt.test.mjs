@@ -44,3 +44,17 @@ test("只有一件物品时也说「1 件」(不是「1 件物品(s)」这种机
   assert.ok(prompt);
   assert.match(prompt.message, /还有 1 件物品/);
 });
+
+test("有下级空间 + 本级也有物品:说清挡住删除的是本级的这几件", () => {
+  // 2026-11-27 补:空间卡上的「N 件」现在**含下级空间**,而挡住删除的是直接放在本层的物品
+  // (服务端按 locationId = 本空间 数)。不提这句,用户会觉得「卡片明明写 2 件,怎么只说 1 件」。
+  const prompt = spaceDeletePrompt("厨房", 1, 1);
+  assert.ok(prompt);
+  assert.equal(prompt.blocked, true);
+  assert.match(prompt.message, /还有 1 件物品/, "挡删除的件数按本层算");
+  assert.match(prompt.message, /下级空间里的物品不算在这 1 件里/, "把卡片多出来的那部分说清楚");
+  assert.match(prompt.message, /1 个下级空间会变成顶级空间/);
+
+  // 没有下级时不该出现这段解释
+  assert.doesNotMatch(spaceDeletePrompt("抽屉", 2, 0)?.message ?? "", /下级空间/);
+});

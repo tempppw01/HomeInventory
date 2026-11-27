@@ -635,6 +635,13 @@ jobs:
           PROBE_USER: leadcheck
           PROBE_PASS: Lead#2026
         run: node scripts/verify-restock-pause-ui.mjs
+      # 空间卡上的「N 件」是不是点进去看到的那个数(自己造三层探针空间树,量完删净)。
+      # 不要求空库,但要求能写:它自己建空间 / 建物品 / 删干净。
+      - name: 空间件数一致性检查(卡片 = 点进去的件数;下级空间的物品也算在本空间里)
+        env:
+          PROBE_USER: leadcheck
+          PROBE_PASS: Lead#2026
+        run: node scripts/verify-space-counts-ui.mjs
       - name: 每周盘点提醒检查
         env:
           PROBE_USER: leadcheck

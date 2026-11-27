@@ -4,6 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { spaceSummary, spaceSummaryText, spaceAlert } from "../../src/lib/space-summary.ts";
+import { locationSubtreeIds } from "../../src/lib/location-tree.ts";
 
 const item = (patch) => ({
   // 注意用 in 判断:显式传 null 表示「没有位置」,不能用 ?? 兜底
@@ -26,6 +27,43 @@ test("只统计该空间的物品", () => {
     item({ locationId: null }),
   ], "loc-1", NOW);
   assert.equal(summary.count, 1);
+});
+
+test("传一组空间 id 时把它下面所有空间的物品都算进来(卡片上的数 = 点进去看到的数)", () => {
+  // 起因(2026-11-27 实测):卡片只数「直接放在这一层」的,而点卡片进物品页是按「含下级空间」筛的。
+  // 于是「厨房」卡片写 1 件、点进去 2 件;自己没物品、下级有物品的空间卡片写「还没放东西」,
+  // 点进去却有东西。现在两边用同一个范围。
+  const tree = [
+    { id: "厨房", parentId: null },
+    { id: "吊柜", parentId: "厨房" },
+    { id: "上层", parentId: "吊柜" },
+    { id: "客厅", parentId: null },
+  ];
+  const scope = [...locationSubtreeIds(tree, "厨房")];
+  assert.deepEqual(scope.sort(), ["上层", "吊柜", "厨房"].sort(), "自己 + 儿子 + 孙子");
+
+  const summary = spaceSummary([
+    item({ locationId: "厨房", quantity: 6, price: 4 }),
+    item({ locationId: "吊柜", quantity: 12, price: 1 }),
+    item({ locationId: "上层", quantity: 1, price: 100 }),
+    item({ locationId: "客厅", quantity: 3, price: 1 }),
+  ], scope, NOW);
+  assert.equal(summary.count, 3, "厨房这一支的 3 件都算(客厅的不算)");
+  assert.equal(summary.value, 6 * 4 + 12 * 1 + 1 * 100);
+
+  // 下级空间的「件数」仍然只算它自己这一支
+  assert.equal(spaceSummary([item({ locationId: "吊柜" }), item({ locationId: "上层" })], [...locationSubtreeIds(tree, "吊柜")], NOW).count, 2);
+  // 只有一个 id 的老用法不受影响
+  assert.equal(spaceSummary([item({ locationId: "厨房" }), item({ locationId: "吊柜" })], "厨房", NOW).count, 1);
+});
+
+test("库里有环时求子树不会打转", () => {
+  const broken = [
+    { id: "a", parentId: "c" },
+    { id: "b", parentId: "a" },
+    { id: "c", parentId: "b" },
+  ];
+  assert.deepEqual([...locationSubtreeIds(broken, "a")].sort(), ["a", "b", "c"]);
 });
 
 test("统计需冷藏(含开封后冷藏)", () => {
@@ -122,6 +160,14 @@ test("空空间给明确提示,而不是一串 0", () => {
   const summary = spaceSummary([], "loc-1", NOW);
   assert.equal(spaceSummaryText(summary), "还没放东西");
   assert.equal(spaceAlert(summary), null);
+});
+
+test("有下级空间时把这件事说出来(否则同一屏上「2 件 / 1 件」像多数了一件)", () => {
+  const summary = spaceSummary([item({ locationId: "loc-1" }), item({ locationId: "loc-2" })], ["loc-1", "loc-2"], NOW);
+  assert.match(spaceSummaryText(summary, 1), /2 件 · 含 1 个下级空间/);
+  assert.doesNotMatch(spaceSummaryText(summary), /下级空间/, "没有下级空间就不要提");
+  // 自己和下级都是空的时候,也要说清「下级也是空的」,别让人以为下面还有东西
+  assert.match(spaceSummaryText(spaceSummary([], "loc-1", NOW), 2), /还没放东西.*下级空间也是空的/);
 });
 
 test("状态角标:临期最严重,其次是该补货", () => {

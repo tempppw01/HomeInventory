@@ -12,7 +12,40 @@
 // 所以判定收到这里:沿上级链往上走,走到自己就是环;走到一个已经在链上的节点也算环
 // (说明库里本来就有脏数据);链太深也当环处理 —— 宁可拒绝一次编辑,也不要写出绕不完的结构。
 
-export type LocationNode = { id: string; parentId: string | null };
+export type LocationNode = { id: string; parentId?: string | null };
+
+/**
+ * 这个空间自己,加上它的全部下级空间(含孙辈)。
+ *
+ * 为什么需要一处统一的判定(2026-11-27 实测):空间卡上的「N 件」与点进去看到的件数
+ * 不是同一个数 —— 卡片只数**直接放在这一层**的物品,而点卡片进物品页时按「含下级空间」
+ * 筛(这个范围原本只写在 app-provider 里)。于是:
+ *   · 「厨房」卡片写「1 件」,点进去看到 2 件(另一件在吊柜里);
+ *   · 更明显的是「验收探针·储藏间」:卡片写「**还没放东西**」(它自己确实没有物品),
+ *     可点进去有 1 件 —— 东西在它的下级空间「货架」里。
+ * 卡片那句提示语是「点击空间卡片可直接查看其中的物品」,所以卡片上的数就该等于点进去
+ * 看到的数;盘点的范围另说(它写明了「仅当前空间」)。
+ *
+ * 库里有环(老数据)时也不能原地打转:访问过的节点直接跳过。
+ */
+export function locationSubtreeIds(locations: readonly LocationNode[], rootId: string): Set<string> {
+  const children = new Map<string, string[]>();
+  for (const node of locations) {
+    const parent = node.parentId ?? "ROOT";
+    children.set(parent, [...(children.get(parent) ?? []), node.id]);
+  }
+  const ids = new Set<string>([rootId]);
+  const stack = [rootId];
+  while (stack.length) {
+    const current = stack.pop() as string;
+    for (const child of children.get(current) ?? []) {
+      if (ids.has(child)) continue;
+      ids.add(child);
+      stack.push(child);
+    }
+  }
+  return ids;
+}
 
 /** 单条链的最大深度。家庭空间不会有几十层,超过就当异常。 */
 const MAX_DEPTH = 64;

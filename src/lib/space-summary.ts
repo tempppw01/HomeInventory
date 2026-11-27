@@ -46,14 +46,19 @@ export type SpaceSummary = {
  * @param windowDays 临期窗口(天),来自用户设置的「保质期提前 N 天」。
  *   默认值只给单测用 —— 界面必须把用户的设置传进来,否则又会出现
  *   「改了设置但空间卡不认」。
+ * @param locationIds 算进摘要的空间:**自己 + 下级空间**(用 locationSubtreeIds 求),
+ *   这样卡片上的「N 件」就等于点卡片进物品页看到的件数。传单个字符串仍然只算那一个空间
+ *   (老调用方式保留)。此前只收一个 id 并且只比 `item.locationId === id`,
+ *   于是「自己没物品、下级空间有」的空间卡片写着「还没放东西」,点进去却有东西。
  */
 export function spaceSummary(
   items: readonly SpaceItemInput[],
-  locationId: string,
+  locationIds: string | readonly string[],
   now = Date.now(),
   windowDays: number = PREFERENCE_LIMITS.expiryReminderDays.fallback,
 ): SpaceSummary {
-  const scoped = items.filter((item) => item.locationId === locationId);
+  const ids = typeof locationIds === "string" ? new Set([locationIds]) : new Set(locationIds);
+  const scoped = items.filter((item) => item.locationId !== null && ids.has(item.locationId));
   let cold = 0;
   let expiring = 0;
   let expired = 0;
@@ -90,10 +95,15 @@ export function spaceSummary(
 /**
  * 卡片上那一行摘要。只列出「有内容」的项,空空间给一句明确的提示,
  * 而不是让用户对着一堆 0 猜。
+ *
+ * @param childSpaces 这个空间有几个**直接下级空间**。有下级时把这件事说出来:
+ *   否则「厨房 2 件」与「吊柜 1 件」摆在同一屏上,看着像多数了一件
+ *   (其实是厨房自己的 1 件 + 吊柜里的 1 件)。
  */
-export function spaceSummaryText(summary: SpaceSummary) {
-  if (summary.count === 0) return "还没放东西";
+export function spaceSummaryText(summary: SpaceSummary, childSpaces = 0) {
+  if (summary.count === 0) return childSpaces > 0 ? "还没放东西(下级空间也是空的)" : "还没放东西";
   const parts = [`${summary.count} 件`];
+  if (childSpaces) parts.push(`含 ${childSpaces} 个下级空间`);
   if (summary.cold) parts.push(`${summary.cold} 件需冷藏`);
   // 已过期比临期更急,先说;两者分开数,不再混成一句「N 件临期」
   if (summary.expired) parts.push(`${summary.expired} 件已过期`);
@@ -119,6 +129,10 @@ export function spaceAlert(summary: SpaceSummary): "danger" | "warning" | null {
  * 另外一条从来没被说出来的后果:删掉父空间时,它的下级空间会被置为顶级
  * (schema 里 Location.parent 是 onDelete: SetNull)。不丢东西,但也不是「什么都没发生」。
  *
+ * 还有一处容易误会(2026-11-27 补):**挡住删除的是「直接放在这一层」的物品**
+ * (服务端就是按 `locationId = 本空间` 数的),而空间卡上的「N 件」现在含下级空间 ——
+ * 于是卡片写 2 件、这里说「还有 1 件」。有下级空间时把这句话说出来,免得用户以为数错了。
+ *
  * 纯函数,便于单测:返回 null 表示「根本不能删」,否则给出确认框要用的三段文案。
  */
 export function spaceDeletePrompt(locationName: string, itemCount: number, childCount: number): {
@@ -132,7 +146,8 @@ export function spaceDeletePrompt(locationName: string, itemCount: number, child
     return {
       blocked: true,
       title: "这个空间里还有物品",
-      message: `“${locationName}”里还有 ${itemCount} 件物品,不能直接删除。先把这些物品移到别的空间(打开物品改「存放位置」),或者先处理掉它们。`,
+      message: `“${locationName}”里还有 ${itemCount} 件物品,不能直接删除。先把这些物品移到别的空间(打开物品改「存放位置」),或者先处理掉它们。`
+        + (childCount > 0 ? `下级空间里的物品不算在这 ${itemCount} 件里 —— 删掉本空间时,${childCount} 个下级空间会变成顶级空间,里面的东西不受影响。` : ""),
       confirmLabel: "知道了",
       cancelLabel: "关闭",
     };
