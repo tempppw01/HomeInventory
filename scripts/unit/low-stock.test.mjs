@@ -7,7 +7,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { isLowStock, LIQUID_LOW_PERCENT } from "../../src/lib/low-stock.ts";
+import { isLowStock, LIQUID_LOW_PERCENT, lowStockTrigger } from "../../src/lib/low-stock.ts";
 import { needsRestock } from "../../src/lib/item-metrics.ts";
 
 const base = {
@@ -98,4 +98,16 @@ test("服务端「数量 0 也要买」与客户端「角标不重复提示」�
   const empty = { ...base, quantity: 0, minQuantity: 2, remainingPercent: 100 };
   assert.equal(isLowStock(empty), false, "角标:已经用完的东西不用再挂「需补货」");
   assert.equal(needsRestock(empty), true, "采购建议:用完了正是该买的时候");
+});
+
+test("该补货是数量线还是液体线:按**真正触发**的那条说", () => {
+  // 起因(2026-11-27 实测):同一件东西在提醒中心说「库存仅剩 1 瓶」,在概览首屏却说
+  // 「余量只剩 100%,低于你设的提醒线」—— 首屏当时按「是不是液体」选说法,不是按谁触发;
+  // 100% 显然不低。两处要同一套判定,这个函数就是那套判定。
+  const liquid = { ...base, quantity: 1, minQuantity: 5, remainingPercent: 100 };
+  assert.equal(lowStockTrigger(liquid), "count", "液体但数量不够 → 数量线");
+  assert.equal(lowStockTrigger({ ...liquid, quantity: 5, remainingPercent: 15 }), "count", "两条都成立时,数量是更具体的理由");
+  assert.equal(lowStockTrigger({ ...liquid, quantity: 5, minQuantity: 0, remainingPercent: 15 }), "liquid", "只有余量见底才说余量");
+  assert.equal(lowStockTrigger({ ...liquid, quantity: 5, minQuantity: 0, remainingPercent: 100 }), null, "两条都不成立就不是该补货");
+  assert.equal(lowStockTrigger({ ...liquid, quantity: 0, remainingPercent: 0 }), null, "用完的不算「该补货」(与 isLowStock 一致)");
 });

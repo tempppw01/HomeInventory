@@ -1,6 +1,6 @@
 {
   "name": "home-inventory",
-  "version": "0.1.99",
+  "version": "0.1.100",
   "private": true,
   "engines": {
     "node": ">=22"
@@ -25,7 +25,7 @@
     "test:backup": "node scripts/backup-roundtrip-test.mjs",
     "test:edge": "node scripts/edge-input-test.mjs",
     "test:scale": "node scripts/scale-perf-test.mjs",
-    "test:ui": "node scripts/verify-experience.mjs && node scripts/verify-entry-fixes.mjs && node scripts/verify-report-page.mjs && node scripts/verify-narrow-layout.mjs && node scripts/verify-layout-budget.mjs && node scripts/verify-a11y.mjs && node scripts/verify-modals-a11y.mjs && node scripts/verify-nested-controls.mjs && node scripts/verify-axe.mjs && node scripts/verify-batch-drafts.mjs && node scripts/verify-date-picker.mjs && node scripts/verify-menus-a11y.mjs && node scripts/verify-contrast.mjs && node scripts/verify-bundle-budget.mjs && node scripts/verify-item-template.mjs && node scripts/verify-item-detail.mjs && node scripts/verify-item-merge.mjs && node scripts/verify-restock-pause-ui.mjs && node scripts/verify-weekly-review.mjs && node scripts/verify-empty-states.mjs && node scripts/verify-first-run.mjs && node scripts/verify-offline.mjs && node scripts/verify-print-layout.mjs && node scripts/verify-qr-scan.mjs && node scripts/verify-consume-scan.mjs && node scripts/verify-auth-gate.mjs && node scripts/verify-role-ui.mjs && node scripts/verify-about-and-version.mjs && node scripts/verify-overview-focus.mjs && node scripts/verify-item-card-layout.mjs && node scripts/verify-audit-confirm-flow.mjs && node scripts/verify-readonly-ui.mjs && node scripts/verify-runtime-errors.mjs",
+    "test:ui": "node scripts/verify-experience.mjs && node scripts/verify-entry-fixes.mjs && node scripts/verify-report-page.mjs && node scripts/verify-shopping-list-ui.mjs && node scripts/verify-narrow-layout.mjs && node scripts/verify-layout-budget.mjs && node scripts/verify-a11y.mjs && node scripts/verify-modals-a11y.mjs && node scripts/verify-nested-controls.mjs && node scripts/verify-axe.mjs && node scripts/verify-batch-drafts.mjs && node scripts/verify-date-picker.mjs && node scripts/verify-menus-a11y.mjs && node scripts/verify-contrast.mjs && node scripts/verify-bundle-budget.mjs && node scripts/verify-item-template.mjs && node scripts/verify-item-detail.mjs && node scripts/verify-item-merge.mjs && node scripts/verify-restock-pause-ui.mjs && node scripts/verify-weekly-review.mjs && node scripts/verify-empty-states.mjs && node scripts/verify-first-run.mjs && node scripts/verify-offline.mjs && node scripts/verify-print-layout.mjs && node scripts/verify-qr-scan.mjs && node scripts/verify-consume-scan.mjs && node scripts/verify-auth-gate.mjs && node scripts/verify-role-ui.mjs && node scripts/verify-about-and-version.mjs && node scripts/verify-overview-focus.mjs && node scripts/verify-item-card-layout.mjs && node scripts/verify-audit-confirm-flow.mjs && node scripts/verify-readonly-ui.mjs && node scripts/verify-runtime-errors.mjs",
     "test:all": "sh scripts/run-all-tests.sh",
     "test:p2": "node scripts/verify-p2-features.mjs"
   },

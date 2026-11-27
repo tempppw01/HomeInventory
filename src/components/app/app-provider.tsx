@@ -12,6 +12,7 @@ import { matchesSearch } from "@/lib/item-search";
 import { isMedicineCategory } from "@/lib/categories";
 import { localDateString } from "@/lib/local-date";
 import { isLowStock } from "@/lib/low-stock";
+import { findPendingPurchase } from "@/lib/shopping-list";
 import { isExpiredDays, isExpiringSoonDays } from "@/lib/expiry-status";
 import { PREFERENCE_LIMITS } from "@/lib/preference-limits";
 
@@ -427,6 +428,11 @@ function useAppState() {
     }
   };
   const addRestockSuggestion = async (item: Item) => {
+    // 已经在清单里就别再「加」一份:清单上的数量是**合并**出来的,而按钮上写的是「加入采购清单」。
+    // 实测(2026-11-27)在概览首屏连点两次,清单上的 4 盒变成 8 盒(建议补的量本来就是 4 盒)。
+    // 首屏现在不会再给这种按钮(见 dashboard-view 的 lowStockFocus),这里兜住 AI 建议卡片那条路径。
+    const existing = findPendingPurchase(data?.shopping ?? [], item.name, item.unit);
+    if (existing) { setToast(`「${item.name}」已经在采购清单里了(${existing.quantity} ${existing.unit})`); return; }
     const quantity = isLiquidConsumable(item) ? 1 : Math.max(item.minQuantity - item.quantity, 1);
     try {
       await request("/api/shopping", { method: "POST", body: JSON.stringify({ name: item.name, quantity, unit: item.unit, category: item.category, priority: 2, source: "restock-suggestion" }) });

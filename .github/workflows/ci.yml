@@ -746,6 +746,15 @@ jobs:
           PROBE_USER: leadcheck
           PROBE_PASS: Lead#2026
         run: node scripts/verify-first-run-journey.mjs
+      # 采购清单的三个界面是不是同一种说法(概览首屏 / 概览清单小节 / 物品页清单)。
+      # 必须接在上面那个**空库实例**后面:首屏挑哪一件事由数据决定,有别的低库存 / 临期物品在,
+      # 首屏就不会挑到探针物品,断言会量在别的东西上。套件自己也会先断言「目标实例是空的」。
+      - name: 采购清单一致性检查(首屏不再重复邀请 / 常买看得见 / 三个界面的数一致)
+        env:
+          BASE_URL: http://127.0.0.1:3002
+          PROBE_USER: leadcheck
+          PROBE_PASS: Lead#2026
+        run: node scripts/verify-shopping-list-ui.mjs
       # 换机迁移:把 3001 的完整备份恢复进**空库实例**(3002),核对一件不少。
       # 此前恢复端的去重按「名称+位置」判重复 —— 空库上同名物品会被丢掉大半,实测 333 件只进 23 件。
       - name: 换机迁移检查(备份恢复进空库实例:物品一件不少 / 重复恢复幂等)

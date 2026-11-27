@@ -6,12 +6,13 @@ import {
   CalendarDays, Snowflake, Warehouse } from "lucide-react";
 import { useContext, useEffect, useState } from "react";
 import type { DashboardData, Item, ShoppingItem } from "@/types";
-import { isLiquidConsumable } from "@/lib/item-metrics";
 import { itemAiHighlights } from "@/lib/item-ai";
 import { Badge, SectionHead } from "@/components/ui-kit";
 import { Empty, Hero, ListRow, Metric, Panel, Screen } from "@/components/ui-kit";
 import { daysLeftFor, duplicateGroups, restockForecast } from "@/lib/item-forecast";
 import { fridgePlan, fridgeSummary } from "@/lib/fridge";
+import { findPendingPurchase, isPendingPurchase } from "@/lib/shopping-list";
+import { lowStockTrigger } from "@/lib/low-stock";
 import { spendForecast, spendSummary } from "@/lib/spend-forecast";
 import { AiInsightsCard } from "@/components/ai-insights-card";
 import { MonthlyBars, RankBars, ShareBar } from "@/components/charts";
@@ -88,6 +89,21 @@ export function DashboardView({ data, forecastItems, now, lowStock, expiring, ex
     return () => cancelAnimationFrame(frame);
   }, []);
   const changeRecentView = (next: "cards" | "list") => { setRecentView(next); localStorage.setItem("home-inventory-recent-view-v2", next); };
+  // 「需要补货」那一句的说明文字(首屏与下面那一行共用一个口径)。
+  // 按**真正触发的那条线**说:液体也可能是数量不够,而「余量只剩 100%」这种话谁也不该看到。
+  const lowStockDetail = (item: Item) => (lowStockTrigger(item) === "liquid"
+    ? `余量只剩 ${Math.round(item.remainingPercent)}%,低于你设的提醒线。`
+    : `还剩 ${item.quantity} ${item.unit},提醒线是 ${item.minQuantity} ${item.unit}。`);
+  // 首屏那一下「加入采购清单」:清单里已经有这一件时不再重复邀请。
+  // 实测(2026-11-27):同一件东西「补货建议」不吭声(它按名字排除了已在清单的),首屏却还请你加入;
+  // 点一次,清单上的数量从 4 盒变成 8 盒 —— 服务端会**合并**同名同单位的待采购项。
+  const topLow = lowStock[0] ?? null;
+  const topLowOnList = topLow ? findPendingPurchase(pending, topLow.name, topLow.unit) : null;
+  const lowStockFocus = !topLow
+    ? null
+    : topLowOnList
+      ? { headline: `「${topLow.name}」需要补货`, detail: `${lowStockDetail(topLow)}采购清单里已经有一份(${topLowOnList.quantity} ${topLowOnList.unit}),买回来打勾即可。`, action: "查看采购清单", run: () => onNavigate("items") }
+      : { headline: `「${topLow.name}」需要补货`, detail: lowStockDetail(topLow), ...act(topLow, "加入采购清单", () => onAddRestock(topLow)) };
   // 首屏只回答一个问题:「现在最该做什么」。按 已过期 > 快到期 > 需要补货 的顺序,
   // 挑出唯一一件最紧急的事;数量与清单分别交给 Metric 一行和折叠面板,不再重复叙述。
   const focusTone = expired.length ? "danger" : expiring.length ? "warning" : lowStock.length ? "warning" : "success";
@@ -100,12 +116,9 @@ export function DashboardView({ data, forecastItems, now, lowStock, expiring, ex
       ? { headline: `「${expired[0].name}」已经过期`, detail: `${expiryDateLabel(expired[0], now)} —— 处理掉,或者更新保质期。`, ...act(expired[0], "处理这件", () => onEdit(expired[0])) }
       : expiring[0]
         ? { headline: `「${expiring[0].name}」快到期了`, detail: `${expiryDateLabel(expiring[0], now)} · ${expiryAdvice(expiring[0])}`, ...act(expiring[0], "现在处理", () => onEdit(expiring[0])) }
-        : lowStock[0]
-          ? { headline: `「${lowStock[0].name}」需要补货`, detail: isLiquidConsumable(lowStock[0]) ? `余量只剩 ${Math.round(lowStock[0].remainingPercent)}%,低于你设的提醒线。` : `还剩 ${lowStock[0].quantity} ${lowStock[0].unit},提醒线是 ${lowStock[0].minQuantity} ${lowStock[0].unit}。`, ...act(lowStock[0], "加入采购清单", () => onAddRestock(lowStock[0])) }
-          : { headline: "今天没有需要处理的事", detail: `${data.items.length} 件物品都在保质期内,库存也够用 —— 可以趁现在做一次盘点。`, action: "盘点一次", run: () => onNavigate("audit") };
+        : lowStockFocus ?? { headline: "今天没有需要处理的事", detail: `${data.items.length} 件物品都在保质期内,库存也够用 —— 可以趁现在做一次盘点。`, action: "盘点一次", run: () => onNavigate("audit") };
   const attentionCount = lowStock.length + expiring.length + expired.length;
-  const pendingNames = new Set(pending.map((item) => item.name.trim().toLocaleLowerCase()));
-  const restockSuggestions = lowStock.filter((item) => !pendingNames.has(item.name.trim().toLocaleLowerCase())).slice(0, 3);
+  const restockSuggestions = lowStock.filter((item) => !isPendingPurchase(pending, item.name, item.unit)).slice(0, 3);
   const urgentExpiry = [...expired, ...expiring.filter((item) => isExpiringUrgentDays(expiryDays(item, now)))]
     .sort((a, b) => new Date(a.expiryDate!).getTime() - new Date(b.expiryDate!).getTime());
   const expiryGroups = urgentExpiry.reduce<Record<string, Item[]>>((groups, item) => {
@@ -208,7 +221,7 @@ export function DashboardView({ data, forecastItems, now, lowStock, expiring, ex
                 key={item.id}
                 icon={CircleAlert}
                 title={item.name}
-                meta={isLiquidConsumable(item) ? `余量 ${Math.round(item.remainingPercent)}%` : `建议补 ${Math.max(item.minQuantity - item.quantity, 1)} ${item.unit}`}
+                meta={lowStockTrigger(item) === "liquid" ? `余量 ${Math.round(item.remainingPercent)}%` : `建议补 ${Math.max(item.minQuantity - item.quantity, 1)} ${item.unit}`}
                 trailing={!readOnly ? <button type="button" onClick={() => onAddRestock(item)} className="btn-ghost min-h-11 shrink-0 px-3 text-xs sm:min-h-10" style={{ color: "var(--primary)" }}>加入</button> : undefined}
               />)}</div>
             </section>}

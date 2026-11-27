@@ -63,3 +63,17 @@ export function isLowStock(item: LowStockInput, now: number = Date.now()): boole
   if (item.minQuantity > 0 && item.quantity <= item.minQuantity) return true;
   return isLiquidConsumable(item) && item.remainingPercent <= LIQUID_LOW_PERCENT;
 }
+
+/**
+ * 该补货是**哪条线**触发的:数量线,还是液体余量线。
+ *
+ * 为什么单独一个函数(2026-11-27 实测):概览首屏与「补货建议」此前按「是不是液体」选说法,
+ * 而提醒中心按**真正触发的那条线**选。同一件东西于是有两个答案 ——
+ * 提醒中心说「库存仅剩 1 瓶」(数量线触发),首屏说「余量只剩 100%,低于你设的提醒线」。
+ * 100% 显然不低:界面要说的是「为什么」,就得按真正触发的那条线说。
+ * 判定顺序与 isLowStock 一致:数量线优先(两条都成立时,数量是更具体的理由)。
+ */
+export function lowStockTrigger(item: LowStockInput, now: number = Date.now()): "count" | "liquid" | null {
+  if (!isLowStock(item, now)) return null;
+  return item.minQuantity > 0 && item.quantity <= item.minQuantity ? "count" : "liquid";
+}

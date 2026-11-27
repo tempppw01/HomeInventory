@@ -21,6 +21,7 @@ import { ReadOnlyContext, ItemQuickFilter, expiryDateLabel, request, ExpiryWindo
 import { Modal } from "./modals";
 import { localDateString, localDateOf } from "@/lib/local-date";
 import { isLowStock, isRestockPaused } from "@/lib/low-stock";
+import { boughtFavoritePurchases } from "@/lib/shopping-list";
 import { expiryStatusFor } from "@/lib/expiry-status";
 
 const TYPE_FILTERS = [["ALL", "全部"], ["DURABLE", "耐用品"], ["CONSUMABLE", "消耗品"], ["MEDICINE", "医药"]] as const;
@@ -92,6 +93,9 @@ export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, lo
   const bulk = async (body: Record<string, unknown>, successMessage = "批量更新完成") => { try { await request("/api/items/bulk", { method: "PATCH", body: JSON.stringify({ ...body, ids: [...selected] }) }); setSelected(new Set()); setBulkLocationOpen(false); onToast(successMessage); } catch (error) { onToast(error instanceof Error ? error.message : "批量更新失败"); } };
   const bulkDelete = async () => { if (!(await askConfirm(`确定将选中的 ${selected.size} 件物品移入回收站吗?可以稍后在回收站恢复。`, { title: "移入回收站", confirmLabel: "移入回收站" }))) return; try { await request("/api/items/bulk", { method: "DELETE", body: JSON.stringify({ ids: [...selected] }) }); const ids = [...selected]; setSelected(new Set()); onToastWithUndo(ids.length + " 件已移入回收站", async () => { await request("/api/items/bulk", { method: "PATCH", body: JSON.stringify({ ids, restore: true }) }); }); } catch (error) { onToast(error instanceof Error ? error.message : "批量删除失败"); } };
   const pendingShopping = shopping.filter((item) => item.status === "PENDING");
+  // ★ 常买:提示语说「已加入常买清单」,这一栏就得真的存在。采购项一标成「已购买」就离开上面那份
+  // 待购列表(实测 3 项 → 2 项),常买标记从此看不到也点不到 —— 买过的常买项留在这里,点勾就回待购。
+  const boughtFavorites = boughtFavoritePurchases(shopping);
   const presentCategories = Array.from(new Set(allItems.map((item) => item.category).filter(Boolean)));
   const medicineCategories = presentCategories.filter(isMedicineCategory);
   const categoryOptions = filter === "MEDICINE"
@@ -243,6 +247,10 @@ export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, lo
           {pendingShopping.length
             ? pendingShopping.map((item) => <ShoppingRow key={item.id} item={item} onToggle={() => onToggleShopping(item)} onFavorite={() => onFavoriteShopping(item)} onDelete={() => onDeleteShopping(item.id)} />)
             : <Empty icon={ShoppingBasket} title="暂时没有需要采购的东西" text="需要添置时,用页面右上角的「添加采购项」记一笔。" />}
+          {boughtFavorites.length > 0 && <div className="mt-3 border-t pt-1" style={{ borderColor: "var(--hairline)" }}>
+            <p className="mb-1 mt-2 text-xs muted">常买 · 买过的留在这里,点一下右边的勾就能改回待采购。</p>
+            {boughtFavorites.map((item) => <ShoppingRow key={item.id} item={item} onToggle={() => onToggleShopping(item)} onFavorite={() => onFavoriteShopping(item)} onDelete={() => onDeleteShopping(item.id)} />)}
+          </div>}
         </div>
       </details>
     </Screen>
@@ -359,6 +367,12 @@ export function RemainingLevel({ value, onChange }: { value: number; onChange: (
 }
 
 
+/**
+ * 采购项的一行。
+ *
+ * `done`(已购买)这一支此前没有任何调用点 —— 物品页只把待采购的行传进来,于是「已购买」的行
+ * 谁都看不到,常买标记也就跟着消失。现在「常买」那一栏会把买过的行传进来(见上面的 boughtFavorites)。
+ */
 export function ShoppingRow({ item, onToggle, onFavorite, onDelete, compact = false }: { item: ShoppingItem; onToggle: () => void; onFavorite?: () => void; onDelete: () => void; compact?: boolean }) {
   const done = item.status === "PURCHASED";
   const context = useContextMenu();

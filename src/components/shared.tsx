@@ -8,6 +8,7 @@ import { usageDays } from "@/lib/item-metrics";
 import { EXPIRING_SOON_DAYS } from "@/lib/expiry-status";
 import { APP_VERSION } from "@/lib/version";
 import { isMedicineCategory, MEDICINE_CATEGORIES } from "@/lib/categories";
+import { normalizedPurchaseName } from "@/lib/shopping-list";
 
 import { DatePickerPreset } from "@/components/date-picker";
 export const ReadOnlyContext = createContext(false);
@@ -169,7 +170,8 @@ export function moneyValue(value: string) {
 }
 
 export function normalizedItemName(value: string) {
-  return value.trim().replace(/\s+/g, "").toLocaleLowerCase();
+  // 实现在 lib/shopping-list:名字归一只有一套(去空白 + 忽略大小写),两处各写一遍迟早会漂开。
+  return normalizedPurchaseName(value);
 }
 
 export function locationPath(location: Location | null | undefined, locations: Location[]) {

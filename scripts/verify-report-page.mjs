@@ -284,6 +284,33 @@ const PROBE_SPACE = "月报窗口探针台";
   check("探针数据已清理干净", remaining === 0, `还剩 ${remaining} 件`);
 }
 
+// ---------- 前置:下面两组对照量的是**种子夹具**,先自证它们在库里 ----------
+// 实测(2026-11-27):在一个没播种的实例上跑这个套件,会连着红 3 条,报的是「用完的那件不在月报里」
+// 「开封后冷藏的那件不在概览里」—— 看着像产品缺陷,其实是 `seed-ci-fixtures` 没跑过,库里根本没有那几件。
+// 我第一次遇到时照着失败信息去查产品代码,查完才发现记错了前提。所以先问一句「夹具在不在」:
+// 不在就只报这一条并停下,免得把「环境没准备好」读成「功能坏了」。
+const FIXTURES = [
+  "界面检查·已经用完的挂面",
+  "界面检查·暂停补货的牙膏",
+  "界面检查·已经喝完的鲜奶",
+  "界面检查·开封后冷藏的果酱",
+];
+const itemRows = await (await context.request.get(`${BASE}/api/items`)).json();
+const itemNames = (Array.isArray(itemRows) ? itemRows : []).map((entry) => entry.name);
+const missingFixtures = FIXTURES.filter((name) => !itemNames.includes(name));
+check(
+  "种子夹具在库里(下面 11 条对照都围绕这几件夹具)",
+  missingFixtures.length === 0,
+  `缺少:${missingFixtures.join(" / ")} —— 这个套件要跑在**播种过的**实例上,先跑 node scripts/seed-ci-fixtures.mjs(CI 里由作业自己跑)`,
+);
+if (missingFixtures.length) {
+  await context.close();
+  await browser.close();
+  const earlyFailed = results.filter((entry) => !entry.ok);
+  console.log(`\n${results.length - earlyFailed.length}/${results.length} 通过`);
+  process.exit(1);
+}
+
 // ---------- 用完的消耗品:月报与概览必须都列出来 ----------
 // 项目自己的口径(CHANGELOG v0.1.94):「用完的物品会出现在月报的『快用完了』里(正是该补货的
 // 东西),而不是凭空消失」。实测(2026-11-27)月报列 5 件、概览只列 4 件 —— 概览那份清单被
