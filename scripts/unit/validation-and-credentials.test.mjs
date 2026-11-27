@@ -8,7 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { itemPatchSchema, itemSchema, locationSchema, memberSchema, shoppingSchema } from "../../src/lib/validation.ts";
+import { bulkItemPatchSchema, itemPatchSchema, itemSchema, locationSchema, memberSchema, shoppingSchema } from "../../src/lib/validation.ts";
 import { createItemCode, createItemCodeBatch } from "../../src/lib/item-code.ts";
 import { activityLabel, ACTIVITY_LABELS } from "../../src/lib/activity-label.ts";
 import { passwordStrength, generatePassword, PASSWORD_MIN_LENGTH, USERNAME_PATTERN } from "../../src/lib/password.ts";
@@ -150,6 +150,86 @@ test("物品:金额字符串能解析,负数与非数字仍然拒绝", () => {
   assert.equal(of({ price: "19,90" }), 19.9, "逗号小数点也要认");
   assert.equal(itemSchema.safeParse({ ...baseItem, price: "abc" }).success, false);
   assert.equal(itemSchema.safeParse({ ...baseItem, price: -1 }).success, false);
+});
+
+// ---------- 「没填」不是一个值:余量与数量上的同一个坑 ----------
+//
+// 由来:z.coerce.number() 把 null / "" / undefined 全算成 0(Number(null) === 0、Number("") === 0),
+// 于是「没填」和「0」在库里成了同一个东西 —— 而这两个 0 都有后果:
+// 余量 0% 会被 item-metrics 判「需补货」、被 item-forecast 按 0 算用量;数量 0 件的物品
+// 不出现在任何列表里。实测(真实接口):remainingPercent=null → 存 0(界面显示「需补货 0%」)
+// 而不传 → 100;quantity=null / "" → 201 存 0。
+test("物品:没填余量(null / 空串 / 不传)走默认 100,不是 0%", () => {
+  const of = (patch) => itemSchema.parse({ ...baseItem, ...patch }).remainingPercent;
+  assert.equal(of({ remainingPercent: null }), 100, "remainingPercent=null 应是默认 100");
+  assert.equal(of({ remainingPercent: "" }), 100, "remainingPercent=\"\" 应是默认 100");
+  assert.equal(of({ remainingPercent: "   " }), 100, "全是空格也应是默认 100");
+  assert.equal(of({}), 100, "不传该字段应是默认 100");
+});
+
+test("物品:显式 0% 余量仍然保留(那是「用完了」,不是没填)", () => {
+  const of = (patch) => itemSchema.parse({ ...baseItem, ...patch }).remainingPercent;
+  assert.equal(of({ remainingPercent: 0 }), 0);
+  assert.equal(of({ remainingPercent: "0" }), 0);
+  assert.equal(of({ remainingPercent: 50 }), 50);
+});
+
+test("物品:数量没填时给中文错误,不再静默存成 0 件", () => {
+  for (const value of [null, "", "   "]) {
+    const result = itemSchema.safeParse({ ...baseItem, quantity: value });
+    assert.equal(result.success, false, `quantity=${JSON.stringify(value)} 应该被拒`);
+    assert.match(result.error.issues[0].message, /数量/, "错误消息要说中文的「数量」");
+  }
+  const missing = itemSchema.safeParse({ ...baseItem, quantity: undefined });
+  assert.equal(missing.success, false, "完全不传数量也应该被拒");
+  assert.match(missing.error.issues[0].message, /数量/);
+});
+
+test("物品:显式 0 件仍然接受(消耗到最后一瓶时应用自己会写成 0)", () => {
+  assert.equal(itemSchema.parse({ ...baseItem, quantity: 0 }).quantity, 0);
+  assert.equal(itemSchema.parse({ ...baseItem, quantity: "0" }).quantity, 0);
+  assert.equal(itemSchema.parse({ ...baseItem, quantity: 2.5 }).quantity, 2.5);
+});
+
+test("局部更新:不传 = 不改;显式 0 = 真的改成 0;显式 null 的余量回到默认 100", () => {
+  // partial() 让「不传」短路成 undefined,调用方据此跳过这一项。
+  assert.equal(itemPatchSchema.parse({}).remainingPercent, undefined, "不传应保持 undefined(=不改)");
+  assert.equal(itemPatchSchema.parse({ remainingPercent: 0 }).remainingPercent, 0, "显式 0 要保留");
+  assert.equal(itemPatchSchema.parse({ quantity: 0 }).quantity, 0, "数量 0 要保留(消耗到最后一瓶就是这个状态)");
+  // 显式 null 在 partial() 下走不到「不改」那条短路,所以它落到内层:余量有默认值 → 100。
+  // 这是写明了的取舍:两种「没填」都不再是 0%,而「不改」的写法是**不传这个键**。
+  assert.equal(itemPatchSchema.parse({ remainingPercent: null }).remainingPercent, 100, "显式 null 应回到默认 100,不是 0%");
+  // 数量没有默认值,所以显式 null 只能被拒绝(中文消息),而不是静默变成 0 件。
+  const q = itemPatchSchema.safeParse({ quantity: null });
+  assert.equal(q.success, false, "显式 null 的数量应被拒");
+  assert.match(q.error.issues[0].message, /数量/);
+});
+
+test("批量更新:数量/余量传 null 或空串 = 这一项不改,不会把选中的物品改成 0", () => {
+  // 带一个真的要改的字段,才能看出空值那几项被当成了「不改」。
+  const of = (patch) => bulkItemPatchSchema.parse({ ids: ["x"], category: "日用", ...patch });
+  assert.equal(of({ quantity: null }).quantity, undefined, "批量数量 null = 不改");
+  assert.equal(of({ quantity: "" }).quantity, undefined, "批量数量空串 = 不改");
+  assert.equal(of({ remainingPercent: null }).remainingPercent, undefined, "批量余量 null = 不改");
+  assert.equal(of({ remainingPercent: "" }).remainingPercent, undefined, "批量余量空串 = 不改");
+  assert.equal(of({ quantity: 0 }).quantity, 0, "显式 0 要保留");
+  assert.equal(of({ remainingPercent: 0 }).remainingPercent, 0, "显式 0% 要保留");
+  // 整请求只有空值时:一个改动都没有,应当被拒 —— 而不是「默默什么都不做」或「改成 0」。
+  const only = bulkItemPatchSchema.safeParse({ ids: ["x"], quantity: null });
+  assert.equal(only.success, false);
+  assert.match(only.error.issues[0].message, /没有可更新的内容/);
+});
+
+test("数量/余量的越界与非法类型也给中文消息", () => {
+  const q = itemSchema.safeParse({ ...baseItem, quantity: -1 });
+  assert.equal(q.success, false);
+  assert.match(q.error.issues[0].message, /数量/);
+  const p = itemSchema.safeParse({ ...baseItem, remainingPercent: 101 });
+  assert.equal(p.success, false);
+  assert.match(p.error.issues[0].message, /剩余量/);
+  const bad = itemSchema.safeParse({ ...baseItem, remainingPercent: "abc" });
+  assert.equal(bad.success, false);
+  assert.match(bad.error.issues[0].message, /剩余量/);
 });
 
 // ---------- 物品编号 ----------

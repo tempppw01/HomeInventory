@@ -75,13 +75,47 @@ export function isInvisibleName(value: string) {
 /** 名称类字段统一的「必须看得见」规则 */
 const INVISIBLE_NAME_MESSAGE = "名称不能只有不可见字符,请填一个看得见的名字";
 
+/**
+ * 「没填」不是一个值 —— 把 null / undefined / 空串统一成「这个字段没出现」。
+ *
+ * `z.coerce.number()` 会把它们全算成 0(Number(null) === 0、Number("") === 0),于是「没填」
+ * 和「0」在库里变成同一个东西。而这个 schema 里两个 0 都**有后果**:
+ *   · 余量 0% → item-metrics 判「需补货」、item-forecast 按 0 算用量;
+ *   · 数量 0 件 → 不出现在任何列表里(列表只取 quantity > 0)。
+ * 实测(2026-11-28,对着真实接口打,对照「不传这个字段」):
+ *   remainingPercent=null → 存 0(界面列表显示「需补货 0%」)、"" → 存 0;不传 → 100;
+ *   quantity=null → 201 存 0、"" → 201 存 0(物品在界面上直接看不见)。
+ *
+ * 所以:显式的 0 一律保留(那是真的 0,消耗到最后一瓶也会产生它),
+ * null / 空串按「没填」处理 —— 有默认值的走默认(余量 100),必填的给中文错误(数量),
+ * 局部更新(PATCH / 批量)里则视为「不改这一项」。
+ */
+const missingWhenBlank = (value: unknown) => {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === "string" && value.trim() === "") return undefined;
+  return value;
+};
+
 export const itemSchema = z.object({
   name: z.string().trim().min(1, "请输入物品名称").max(80, "物品名称最多 80 个字").refine((value) => !isInvisibleName(value), INVISIBLE_NAME_MESSAGE),
   category: z.string().trim().min(1, "请选择或输入分类").max(40, "分类最多 40 个字"),
   type: z.enum(["DURABLE", "CONSUMABLE"]),
-  quantity: z.coerce.number().min(0).max(999999),
+  // 数量是必填:没填(null / 空串)按「没填」处理,回一句中文,而不是静默存成 0 件
+  // ——0 件的物品不出现在任何列表里,「保存成功却查无此物」会被当成数据丢失。
+  // 显式的 0 仍然接受:消耗到最后一瓶时应用自己会把数量写成 0(见 /api/items/[id]/consume
+  // 与补货入库那条 updateMany),那不是脏数据。
+  quantity: z.preprocess(
+    missingWhenBlank,
+    z.coerce.number({ invalid_type_error: "数量要填一个数字(至少 1)" }).min(0, "数量不能是负数").max(999999, "数量最多 999999"),
+  ),
   minQuantity: z.coerce.number().min(0).max(999999).default(0),
-  remainingPercent: z.coerce.number().min(0).max(100).default(100),
+  // 余量与单价是同一个坑:没填就不该等同于 0%(0% 会进「需补货」,并按 0 算用量)。
+  // 不传该字段时 default(100) 生效,所以「没填」也走 100 —— 两种「没填」给同一个答案。
+  // 注意 PATCH(itemSchema.partial())里的差别:不传 = 不改;显式传 null = 回到默认 100。
+  remainingPercent: z.preprocess(
+    missingWhenBlank,
+    z.coerce.number({ invalid_type_error: "剩余量要填 0 到 100 之间的数字" }).min(0, "剩余量不能小于 0").max(100, "剩余量最多 100").default(100),
+  ),
   unit: z.string().trim().min(1).max(12, "单位最多 12 个字"),
   // 「没填单价」必须存成 null。
   //
@@ -103,7 +137,7 @@ export const itemSchema = z.object({
       if (trimmed === "") return null;
       const amount = Number(trimmed.replace(",", "."));
       return Number.isFinite(amount) ? amount : value;
-    }, z.number().min(0, "单价不能是负数").max(99999999, "单价超出范围").nullable().optional())
+    }, z.number({ invalid_type_error: "单价要填一个数字,例如 19.90" }).min(0, "单价不能是负数").max(99999999, "单价超出范围").nullable().optional())
     .transform((value) => (value == null ? null : value)),
   purchaseDate: optionalDate,
   expiryDate: optionalDate,
@@ -141,10 +175,13 @@ export const bulkItemPatchSchema = z.object({
   restockPausedUntil: z.union([z.string().datetime(), z.null()]).optional().transform((value) => value ? new Date(value) : value),
   /** 撤销「批量移入回收站」:把这些物品从回收站恢复。 */
   restore: z.boolean().optional(),
-  /** 批量改数量(盘点后「这些都用掉一半」这类场景)。 */
-  quantity: z.coerce.number().min(0).max(999999).optional(),
-  /** 批量改剩余百分比(液体消耗品)。 */
-  remainingPercent: z.coerce.number().min(0).max(100).optional(),
+  /**
+   * 批量改数量(盘点后「这些都用掉一半」这类场景)。
+   * 没填(null / 空串)= 这一项不改,不再被 coerce 成 0 把选中的物品全改成 0 件(0 件在界面上看不见)。
+   */
+  quantity: z.preprocess(missingWhenBlank, z.coerce.number({ invalid_type_error: "数量要填一个数字" }).min(0, "数量不能是负数").max(999999, "数量最多 999999").optional()),
+  /** 批量改剩余百分比(液体消耗品)。没填 = 这一项不改(此前会被 coerce 成 0%,等于把选中的全标成「需补货」)。 */
+  remainingPercent: z.preprocess(missingWhenBlank, z.coerce.number({ invalid_type_error: "剩余量要填 0 到 100 之间的数字" }).min(0, "剩余量不能小于 0").max(100, "剩余量最多 100").optional()),
 }).refine((value) => Object.keys(value).some((key) => key !== "ids" && value[key as keyof typeof value] !== undefined), { message: "没有可更新的内容" });
 
 /** 采购项的局部更新:状态、常买标记,以及「已购买后补货到原物品」。 */

@@ -460,6 +460,50 @@ const baseItem = { name: "T-基础物品", category: "日用", type: "CONSUMABLE
     `status=${noPrice.status} 存下来的 price=${JSON.stringify(noPrice.body?.price)} ¥0 记录数=${zeroRows.length}`);
   if (noPriceId) await call("DELETE", `/api/items/${noPriceId}`, { permanent: true });
 
+  // 「没填」不是一个值:余量与数量上的同一个坑。
+  //
+  // 由来:z.coerce.number() 把 null / "" 全算成 0(Number(null) === 0、Number("") === 0),而这两个
+  // 字段的 0 都有后果 —— 余量 0% 会被判「需补货」并进按用量估算;数量 0 件的物品不出现在任何列表里。
+  // 实测(2026-11-28):remainingPercent=null → 存 0(界面列表显示「需补货 0%」)而不传 → 100;
+  // quantity=null / "" → 201 存 0。修后:没填的余量走默认 100,没填的数量给中文 4xx。
+  const blankPercent = await call("POST", "/api/items", { ...baseItem, name: "T-余量没填", remainingPercent: null });
+  const blankPercentId = blankPercent.body?.id ?? null;
+  if (blankPercentId) created.items.push(blankPercentId);
+  const emptyPercent = await call("POST", "/api/items", { ...baseItem, name: "T-余量空串", remainingPercent: "" });
+  const emptyPercentId = emptyPercent.body?.id ?? null;
+  if (emptyPercentId) created.items.push(emptyPercentId);
+  record("items", "没填余量(null / 空串)存默认 100,不是 0%(0% 会被当成「需补货」)",
+    blankPercent.status < 300 && blankPercent.body?.remainingPercent === 100
+    && emptyPercent.status < 300 && emptyPercent.body?.remainingPercent === 100,
+    `null→${JSON.stringify(blankPercent.body?.remainingPercent)} ""→${JSON.stringify(emptyPercent.body?.remainingPercent)}`);
+  for (const id of [blankPercentId, emptyPercentId]) if (id) await call("DELETE", `/api/items/${id}`, { permanent: true });
+
+  const zeroPercent = await call("POST", "/api/items", { ...baseItem, name: "T-余量显式零", remainingPercent: 0 });
+  const zeroPercentId = zeroPercent.body?.id ?? null;
+  if (zeroPercentId) created.items.push(zeroPercentId);
+  record("items", "显式 0% 余量仍然保留(那是用户真的选了「用完了」)",
+    zeroPercent.status < 300 && zeroPercent.body?.remainingPercent === 0,
+    `status=${zeroPercent.status} 存下来=${JSON.stringify(zeroPercent.body?.remainingPercent)}`);
+  if (zeroPercentId) await call("DELETE", `/api/items/${zeroPercentId}`, { permanent: true });
+
+  const blankQuantity = await call("POST", "/api/items", { ...baseItem, name: "T-数量没填", quantity: null });
+  const emptyQuantity = await call("POST", "/api/items", { ...baseItem, name: "T-数量空串", quantity: "" });
+  const blankMessage = String(blankQuantity.body?.error ?? "");
+  record("items", "没填数量(null / 空串)被拒且提示中文,不静默存成 0 件(0 件的物品在界面上看不见)",
+    blankQuantity.status >= 400 && blankQuantity.status < 500
+    && emptyQuantity.status >= 400 && emptyQuantity.status < 500
+    && /数量/.test(blankMessage) && !/expected|received|nan/i.test(blankMessage),
+    `null=${blankQuantity.status} ${JSON.stringify(blankMessage).slice(0, 60)} ""=${emptyQuantity.status}`);
+  for (const body of [blankQuantity.body, emptyQuantity.body]) if (body?.id) await call("DELETE", `/api/items/${body.id}`, { permanent: true });
+
+  const explicitZero = await call("POST", "/api/items", { ...baseItem, name: "T-数量显式零", quantity: 0 });
+  const explicitZeroId = explicitZero.body?.id ?? null;
+  if (explicitZeroId) created.items.push(explicitZeroId);
+  record("items", "显式 0 件仍然接受(消耗到最后一瓶就是这个状态,不是脏数据)",
+    explicitZero.status < 300 && explicitZero.body?.quantity === 0,
+    `status=${explicitZero.status} 存下来=${JSON.stringify(explicitZero.body?.quantity)}`);
+  if (explicitZeroId) await call("DELETE", `/api/items/${explicitZeroId}`, { permanent: true });
+
   const del = await call("DELETE", `/api/items/${id}`, { permanent: true });
   const pricesAfter = await call("GET", "/api/prices");
   const rowsAfter = Array.isArray(pricesAfter.body) ? pricesAfter.body : (pricesAfter.body?.items ?? []);
@@ -492,7 +536,13 @@ const baseItem = { name: "T-基础物品", category: "日用", type: "CONSUMABLE
   record("边界", "空 body 应 4xx", empty.status >= 400 && empty.status < 500, `status=${empty.status}`);
 
   const wrongType = await call("POST", "/api/items", { ...baseItem, name: "T-类型错误", quantity: "abc" });
-  record("边界", "quantity 传非数字字符串应被拒绝或忽略", wrongType.status >= 400 || typeof wrongType.body?.quantity === "number", `status=${wrongType.status} quantity=${JSON.stringify(wrongType.body?.quantity)}`);
+  const wrongTypeMessage = String(wrongType.body?.error ?? "");
+  // 这条以前是「应被拒绝或忽略」——「或忽略」是个出口,而且当时拒绝时吐的是 zod 的英文内部消息
+  // (Expected number, received nan)。现在要求:一定拒绝,并且消息里不能漏英文内部细节。
+  record("边界", "quantity 传非数字字符串被拒,且消息是中文(不漏 zod 内部字样)",
+    wrongType.status >= 400 && wrongType.status < 500
+    && /数量/.test(wrongTypeMessage) && !/expected|received|nan|invalid/i.test(wrongTypeMessage),
+    `status=${wrongType.status} message=${JSON.stringify(wrongTypeMessage).slice(0, 70)}`);
   if (wrongType.body?.id) created.items.push(wrongType.body.id);
 
   const unknown = await call("POST", "/api/items", { ...baseItem, name: "T-未知字段", unknownField: "x" });
