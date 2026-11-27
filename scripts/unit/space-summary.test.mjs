@@ -2,6 +2,7 @@
 //   npm run test:unit
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import { spaceSummary, spaceSummaryText, spaceAlert } from "../../src/lib/space-summary.ts";
 import { locationSubtreeIds } from "../../src/lib/location-tree.ts";
@@ -27,6 +28,33 @@ test("只统计该空间的物品", () => {
     item({ locationId: null }),
   ], "loc-1", NOW);
   assert.equal(summary.count, 1);
+});
+
+test("已用完(0 件)的物品不占卡片上的件数 —— 它在任何列表里都看不到", () => {
+  // 起因(2026-11-28 探针库实测):厨房里一件物品消耗到 0 件后,空间页写「厨房 3 件」,
+  // 按空间筛选点进去只有 2 件 —— 差的就是那件已从列表隐藏的(消耗提示条也这么说)。
+  const summary = spaceSummary([
+    item({ locationId: "loc-1", quantity: 2, price: 10 }),
+    item({ locationId: "loc-1", quantity: 0, price: 10, minQuantity: 1, storage: "COLD", expiryDate: days(3) }),
+  ], "loc-1", NOW);
+  assert.equal(summary.count, 1);
+  assert.equal(summary.consumables, 1);
+  assert.equal(summary.cold, 0);
+  assert.equal(summary.expiring, 0);
+  assert.equal(summary.lowStock, 0);
+  // 价值本来就是「数量 × 单价」,0 件那件不影响;剩下的仍是 2 × 10。
+  assert.equal(summary.value, 20);
+});
+
+// 源码级守卫:空间页导轨上那个数与卡片上的数、点进去看到的件数必须是同一个数。
+// 起因(2026-11-28 探针库实测):导轨与卡片都少了 `quantity > 0`,一件物品在厨房里消耗到
+// 0 件后(按设计从所有列表隐藏),两处写 3 件、按空间筛选点进去只有 2 件。
+// 数量过滤写在两个地方(lib 的统计范围、视图的 countIn),少一处就会出现两个数。
+test("导轨计数必须与卡片、点进去的件数同口径(都按 quantity > 0)", () => {
+  const source = readFileSync(new URL("../../src/components/views/locations-view.tsx", import.meta.url), "utf8");
+  const countIn = source.slice(source.indexOf("const countIn ="), source.indexOf("const countIn =") + 400);
+  assert.ok(countIn.includes("item.quantity > 0"), "countIn 里必须过滤掉已用完(0 件)的物品");
+  assert.ok(countIn.includes("locationSubtreeIds"), "countIn 仍要含下级空间(点进去是按含下级筛的)");
 });
 
 test("传一组空间 id 时把它下面所有空间的物品都算进来(卡片上的数 = 点进去看到的数)", () => {

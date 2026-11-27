@@ -20,9 +20,11 @@ export function LocationsView({ locations, items, onAdd, onOpen, onEdit, onToast
   // 导轨上的数与卡片上的数必须是同一个数,而且**要等于点进去看到的件数**:
   // 点卡片会用「含下级空间」的范围筛物品页,所以这里也含下级空间。
   // 实测(2026-11-27):此前只数直接放在这一层的,于是「厨房 1」点进去是 2 件。
+  // 实测(2026-11-28):两处都还差一条 `quantity > 0` —— 一件物品在厨房里消耗到 0 件后
+  // (按设计从所有列表隐藏),导轨与卡片写 3 件、点进去只有 2 件。现在三处同一个范围。
   const countIn = (locationId: string) => {
     const scope = locationSubtreeIds(locations, locationId);
-    return items.filter((item) => item.locationId !== null && scope.has(item.locationId)).length;
+    return items.filter((item) => item.locationId !== null && item.quantity > 0 && scope.has(item.locationId)).length;
   };
   return (
     <Screen

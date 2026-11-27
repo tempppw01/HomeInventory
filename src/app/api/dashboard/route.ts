@@ -23,7 +23,8 @@ export async function GET(request: NextRequest) {
       // 1200 件物品时那 197 字节/行里,真正被用到的只有名字。整份 location 实体在下面的
       // `locations` 里本来就有(7 条 1.6 KB),需要完整字段的界面从那里取。
       prisma.item.findMany({ where: { deletedAt: null }, include: { location: { select: { id: true, name: true } } }, orderBy: { updatedAt: "desc" } }),
-      prisma.location.findMany({ include: { parent: { select: { id: true, name: true } }, _count: { select: { items: true } } }, orderBy: { createdAt: "asc" } }),
+      // _count 也只数还在的(与空间卡的件数同口径;界面上目前没人读它,别给以后留坑)。
+      prisma.location.findMany({ include: { parent: { select: { id: true, name: true } }, _count: { select: { items: { where: { quantity: { gt: 0 } } } } } }, orderBy: { createdAt: "asc" } }),
       prisma.shoppingItem.findMany({ orderBy: [{ status: "asc" }, { priority: "desc" }, { createdAt: "desc" }] }),
       prisma.priceRecord.findMany({ where: { purchasedAt: { gte: sixMonthStart } }, orderBy: { purchasedAt: "desc" } }),
       prisma.activityLog.findMany({ where: { action: "CONSUME", undoneAt: null }, select: { itemId: true, itemName: true, createdAt: true }, orderBy: { createdAt: "desc" }, take: 500 }),

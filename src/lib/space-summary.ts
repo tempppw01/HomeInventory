@@ -58,7 +58,11 @@ export function spaceSummary(
   windowDays: number = PREFERENCE_LIMITS.expiryReminderDays.fallback,
 ): SpaceSummary {
   const ids = typeof locationIds === "string" ? new Set([locationIds]) : new Set(locationIds);
-  const scoped = items.filter((item) => item.locationId !== null && ids.has(item.locationId));
+  // 只算「还在」的东西:数量 0 件的物品在任何列表里都看不到(物品页/搜索/空间筛选都按 quantity > 0 取,
+  // 消耗到 0 件时提示条也会说「已从物品列表隐藏」)。卡片上的「N 件」若把它算进去,就会出现
+  // 「厨房卡片 3 件、点进去 2 件」—— 2026-11-28 探针库实测:厨房里一件物品消耗到 0 件后正是如此。
+  // 「快用完了」是另一条口径(用完的正是该补货的,概览与月报都特意带上它),不在这里管。
+  const scoped = items.filter((item) => item.locationId !== null && ids.has(item.locationId) && item.quantity > 0);
   let cold = 0;
   let expiring = 0;
   let expired = 0;
