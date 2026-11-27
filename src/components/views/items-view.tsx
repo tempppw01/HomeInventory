@@ -40,7 +40,7 @@ function TagBadge({ tone, children }: { tone: "warning" | "danger" | "muted"; ch
 // 一屏大约能看到 12-20 张卡片,60 是个「首屏够用、滚动不空窗」的量。
 const PAGE_SIZE = 60;
 
-export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, locations, items, shopping, search, setSearch, filter, setFilter, categoryFilter, setCategoryFilter, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onRemainingChange, onPauseRestock, onDelete, onQr, onAi, onPrint, onToast, onCopy, onToggleShopping, onFavoriteShopping, onAddShopping, onDeleteShopping, onBatchAi, onToastWithUndo, onCreate }: { allItems: Item[]; locations: Location[]; items: Item[]; shopping: ShoppingItem[]; search: string; setSearch: (s: string) => void; filter: ItemQuickFilter; setFilter: (f: ItemQuickFilter) => void; categoryFilter: string; setCategoryFilter: (f: string) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onRemainingChange: (item: Item, remainingPercent: number) => void;
+export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, usedUpItems, locations, items, shopping, search, setSearch, filter, setFilter, categoryFilter, setCategoryFilter, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onRemainingChange, onPauseRestock, onDelete, onQr, onAi, onPrint, onToast, onCopy, onToggleShopping, onFavoriteShopping, onAddShopping, onDeleteShopping, onBatchAi, onToastWithUndo, onCreate }: { allItems: Item[]; usedUpItems: Item[]; locations: Location[]; items: Item[]; shopping: ShoppingItem[]; search: string; setSearch: (s: string) => void; filter: ItemQuickFilter; setFilter: (f: ItemQuickFilter) => void; categoryFilter: string; setCategoryFilter: (f: string) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onRemainingChange: (item: Item, remainingPercent: number) => void;
   onPauseRestock?: (item: Item, days: number | null) => void | Promise<unknown>; onDelete: (i: Item) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onPrint: (items: Item[]) => void; onToast: (message: string) => void; onCopy: (i: Item) => void; onToggleShopping: (item: ShoppingItem) => void; onFavoriteShopping: (item: ShoppingItem) => void; onAddShopping: () => void; onDeleteShopping: (id: string) => void; onBatchAi: () => void; onToastWithUndo: (message: string, undo: () => Promise<void>) => void; onCreate: () => void; locationFilter?: string; onChangeLocationFilter?: (id: string) => void }) {
   const askConfirm = useConfirm();
   const readOnly = useContext(ReadOnlyContext);
@@ -72,11 +72,17 @@ export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, lo
   const queryKey = `${search}|${filter}|${categoryFilter}|${sortMode}`;
   const [page, setPage] = useState({ key: queryKey, count: PAGE_SIZE });
   const [coldOnly, setColdOnly] = useState(false);
+  const [usedUpOnly, setUsedUpOnly] = useState(false);
   if (page.key !== queryKey) setPage({ key: queryKey, count: PAGE_SIZE });
   // 「只看需冷藏」叠加在类型/分类之上,不影响原有筛选状态。
   // 先按用户选的顺序排,再叠加「只看需冷藏」,最后交给分批渲染。
   const sortedItems = sortItems(items, sortMode);
-  const shownItems = coldOnly ? sortedItems.filter((item) => item.storage === "COLD" || item.storage === "COLD_AFTER_OPEN") : sortedItems;
+  const sortedUsedUpItems = sortItems(usedUpItems, sortMode);
+  // 「已用完」是一份独立的列表:0 件的物品按设计不显示在物品页/搜索/回收站里(消耗到 0 件时提示条也这么说),
+  // 但总得有个地方能找到它们 —— 否则空间删不掉、东西也补不了货(v0.1.112 实测的那条死路)。
+  // 类型/分类/空间/搜索这几项筛选由上游用同一套条件算好,这里只切列表与「需冷藏」。
+  const baseItems = usedUpOnly ? sortedUsedUpItems : sortedItems;
+  const shownItems = coldOnly && !usedUpOnly ? baseItems.filter((item) => item.storage === "COLD" || item.storage === "COLD_AFTER_OPEN") : baseItems;
   const visibleCount = Math.min(page.count, Math.max(shownItems.length, PAGE_SIZE));
   const visibleItems = shownItems.slice(0, visibleCount);
   const loadMoreRef = useRef<HTMLButtonElement | null>(null);
@@ -133,7 +139,9 @@ export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, lo
   const typeChips = TYPE_FILTERS.map(([id, label]) => <Chip key={id} active={filter === id} onClick={() => setFilter(id)}>{label}</Chip>);
   // 一键筛出该放冰箱的物品;数量来自后台规则引擎写入的 storage。
   const coldCount = allItems.filter((item) => item.storage === "COLD" || item.storage === "COLD_AFTER_OPEN").length;
-  const coldChip = coldCount > 0 ? <Chip active={coldOnly} onClick={() => setColdOnly(!coldOnly)} ariaLabel={`需冷藏 ${coldCount},只看需冷藏的物品`}>需冷藏 {coldCount}</Chip> : null;
+  // 已用完(0 件)的物品也要有入口:它们不在物品页、搜索、回收站里,于是空间删不掉、补货也无从下手。
+  const usedUpChip = usedUpItems.length > 0 ? <Chip active={usedUpOnly} onClick={() => { setUsedUpOnly(!usedUpOnly); setColdOnly(false); }} ariaLabel={`已用完 ${usedUpItems.length} 件,只看已用完的物品`}>已用完 {usedUpItems.length}</Chip> : null;
+  const coldChip = coldCount > 0 ? <Chip active={coldOnly} onClick={() => { setColdOnly(!coldOnly); setUsedUpOnly(false); }} ariaLabel={`需冷藏 ${coldCount},只看需冷藏的物品`}>需冷藏 {coldCount}</Chip> : null;
   const categoryButtons = categoryOptions.map((category) => {
     const count = category === "ALL" ? allItems.length : category === "MEDICINE" ? allItems.filter((item) => isMedicineCategory(item.category)).length : allItems.filter((item) => item.category === category).length;
     return <button key={category} type="button" className="browse-rail-item" data-active={categoryFilter === category} onClick={() => setCategoryFilter(category)}><span>{category === "ALL" ? "全部分类" : category === "MEDICINE" ? "医药(按用途)" : isMedicineCategory(category) ? medicineCategoryLabel(category) : category}</span><span className="browse-rail-count">{count}</span></button>;
@@ -172,7 +180,7 @@ export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, lo
             {SORT_MODES.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}
           </select>
         </label>
-        <div className="hidden min-w-0 items-center gap-2 md:flex">{typeChips}{coldChip}</div>
+        <div className="hidden min-w-0 items-center gap-2 md:flex">{typeChips}{coldChip}{usedUpChip}</div>
         <span className="hidden shrink-0 text-xs tabular-nums muted md:inline">{shownItems.length} 件</span>
 {locationFilter && locationFilter !== "ALL" && (
   <button

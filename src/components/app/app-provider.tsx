@@ -8,8 +8,7 @@ import { useConfirm } from "@/components/confirm-dialog";
 import { ReadOnlyContext, View, ThemeMode, ItemQuickFilter, compressImage, returnStateKey, readReturnState, welcomeStorageKey, legacyWelcomeStorageKeys, normalizedItemName, expiryDays, request, ExpiryWindowContext } from "@/components/shared";
 import { pathForTarget, pathForView, viewForPath } from "@/components/app/routes";
 import { isCountUnit, isLiquidConsumable } from "@/lib/item-metrics";
-import { matchesSearch } from "@/lib/item-search";
-import { isMedicineCategory } from "@/lib/categories";
+import { pickVisibleItems } from "@/lib/item-visibility";
 import { localDateString } from "@/lib/local-date";
 import { isLowStock } from "@/lib/low-stock";
 import { findPendingPurchase } from "@/lib/shopping-list";
@@ -268,17 +267,14 @@ function useAppState() {
     return locationSubtreeIds(data.locations, locationFilter);
   }, [data, locationFilter]);
 
-  const filteredItems = useMemo(() => {
-    const term = search.toLowerCase().trim();
-    return (data?.items ?? []).filter((item) =>
-      item.quantity > 0 &&
-      (typeFilter === "ALL" || (typeFilter === "MEDICINE" ? isMedicineCategory(item.category) : item.type === typeFilter)) &&
-      (categoryFilter === "ALL" || (categoryFilter === "MEDICINE" ? isMedicineCategory(item.category) : item.category === categoryFilter)) &&
-      (!spaceScope || spaceScope.has(item.locationId ?? "")) &&
-      // 搜索字段只在 lib/item-search 里定义一份(此前列表过滤、下拉建议、接口 q 各一套,字段还不一样)
-      matchesSearch(item, term),
-    );
-  }, [categoryFilter, data, search, spaceScope, typeFilter]);
+  const itemFilters = useMemo(
+    () => ({ search, typeFilter, categoryFilter, spaceScope }),
+    [search, typeFilter, categoryFilter, spaceScope],
+  );
+  const filteredItems = useMemo(() => pickVisibleItems(data?.items ?? [], itemFilters, "live"), [data, itemFilters]);
+  // 已用完(0 件)的物品另有入口(物品页的「已用完」):它们按设计不在物品页、搜索、回收站里,
+  // 于是空间删不掉、补货也无从下手(v0.1.112 实测),但也不能让它们挤进「还在用」那份列表。
+  const usedUpItems = useMemo(() => pickVisibleItems(data?.items ?? [], itemFilters, "usedUp"), [data, itemFilters]);
 
   const lowStock = data?.preferences?.lowStockReminder === false ? [] : (data?.items ?? []).filter((item) => isLowStock(item, now));
   const pendingShopping = (data?.shopping ?? []).filter((item) => item.status === "PENDING");
@@ -487,7 +483,7 @@ function useAppState() {
     expiryReminderDays,
     setToastAction,
     view, pathname, openView, beginNavigation,
-    search, setSearch, typeFilter, categoryFilter, changeTypeFilter, changeCategoryFilter, filteredItems,
+    search, setSearch, typeFilter, categoryFilter, changeTypeFilter, changeCategoryFilter, filteredItems, usedUpItems,
     locationFilter, changeLocationFilter,
     readOnly, role, lowStock, pendingShopping, tasks, expiring, expired, totalValue, now,
     theme, setThemeMode, cycleTheme, density, setDensity, motionMode, setMotionMode,

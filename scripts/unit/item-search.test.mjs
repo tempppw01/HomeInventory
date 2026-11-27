@@ -64,9 +64,16 @@ test("三处调用点都用同一份定义(挡住以后又各写一套)", () => 
   ];
   for (const file of files) {
     const code = readFileSync(file, "utf8");
-    assert.match(code, /from "@\/lib\/item-search"/, `${file} 应当引用 lib/item-search`);
-    assert.match(code, /matchesSearch\(/, `${file} 应当调用 matchesSearch`);
+    // 走共用入口也算数:筛选条件抽到 lib/item-visibility 之后,provider 不再自己调 matchesSearch,
+    // 而是 pickVisibleItems → matchesItemFilters → matchesSearch —— 字段清单仍旧只有一份。
+    const viaSearch = /from "@\/lib\/item-search"/.test(code) && /matchesSearch\(/.test(code);
+    const viaVisibility = /from "@\/lib\/item-visibility"/.test(code) && /pickVisibleItems\(/.test(code);
+    assert.ok(viaSearch || viaVisibility, `${file} 应当经过共用的搜索/筛选定义(matchesSearch 或 pickVisibleItems),而不是自己再写一遍`);
   }
+
+  // 那一跳也不能丢:字段清单最终只落在 matchesSearch 一处。
+  const visibility = readFileSync("src/lib/item-visibility.ts", "utf8");
+  assert.match(visibility, /matchesSearch\(/, "lib/item-visibility 必须经过 matchesSearch(字段清单只有一份)");
 
   // 接口侧:q 的 OR 条件必须同时包含备注与编号(字段清单与服务端保持一致)
   const route = readFileSync("src/app/api/items/route.ts", "utf8");
