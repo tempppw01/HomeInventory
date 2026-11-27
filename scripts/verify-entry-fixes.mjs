@@ -22,6 +22,10 @@ const check = (name, ok, detail) => {
 };
 
 const PREFIX = "ENT2-";
+// 本次运行的起始时刻:清理价格记录时**必须**带上它 —— 只删本次造的那几条。
+// 教训:2026-11-28 我用「名字前缀」做条件清理残留,一次删掉了 30 条历史上同名(过去多次
+// 运行留下)的行,那是别人的历史数据。带时间窗就不会碰到它们。
+const RUN_START = new Date();
 const settleDialogs = async (page, attempts = 12) => {
   let calm = 0;
   for (let index = 0; index < attempts; index += 1) {
@@ -662,6 +666,29 @@ const cleanup = await page.evaluate(async (prefix) => {
   return { removed: items.length, remaining: remaining.length, names: items.map((item) => item.name) };
 }, PREFIX);
 check("探针物品已彻底清理", cleanup.removed > 0 && cleanup.remaining === 0, JSON.stringify(cleanup));
+
+// 价格记录也得清:勾了「记一笔」的那一路会在库里落下一条价格记录,物品删掉之后它变成
+// itemId 为空的名称快照继续留着(实测:每跑一次留 1 条 `ENT2-主检查 ¥39.8`)。
+// 以前没人清 —— 卫生检查的清单里根本没有「价格记录」这一类 —— 于是攒成了「本月支出」里
+// 一大块不是我买的东西。清理带时间窗,只删本次运行造的。
+{
+  let removed = 0;
+  let left = -1;
+  try {
+    const { PrismaClient } = await import("@prisma/client");
+    const prisma = new PrismaClient();
+    try {
+      const gone = await prisma.priceRecord.deleteMany({ where: { itemName: { startsWith: PREFIX }, purchasedAt: { gte: RUN_START } } });
+      removed = gone.count;
+      left = await prisma.priceRecord.count({ where: { itemName: { startsWith: PREFIX }, purchasedAt: { gte: RUN_START } } });
+    } finally {
+      await prisma.$disconnect();
+    }
+  } catch (error) {
+    console.log(`      价格记录清理失败:${String(error.message).slice(0, 120)}`);
+  }
+  check("本次运行造的价格记录已清理(不带时间窗会误删历史同名残留)", left === 0, `删除 ${removed} 条,剩余 ${left} 条`);
+}
 
 await context.close();
 await browser.close();

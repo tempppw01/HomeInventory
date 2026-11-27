@@ -78,6 +78,14 @@ const snapshot = async () => {
     "任务": list(await get("/api/tasks"), "tasks").map((row) => row.title),
     "成员": list(await get("/api/members"), "members").map((row) => row.name),
     "搜索历史": list(await get("/api/search-history"), "history").map((row) => row.query),
+    // 价格记录:用 **id** 而不是名字比 —— 套件反复造同名的夹具快照(实测库里 110 条
+    // itemId 为空、名字大量重复),按名字的多重集合比会正好把「新增一条 + 滚出一条同名」
+    // 抵消成「没有留下」。这一类此前**根本不在清单里**,于是套件每跑一次留一条,
+    // 攒成了「本月支出」里一大块不是我买的东西(2026-11-28 实测:跑一次流程套件留 1 条
+    // ENT2-主检查 ¥39.8)。
+    // 注意 /api/prices 只回最新 100 行:造一条「回溯补录的老日期」记录会落在窗口外看不见;
+    // 当前没有套件这么做,真要做时这条得改成直接读库。
+    "价格记录": list(await get("/api/prices"), "prices").map((row) => row.id),
     "活动记录": await activityTotal(),
   };
 };

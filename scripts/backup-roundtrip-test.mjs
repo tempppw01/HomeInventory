@@ -2,6 +2,21 @@
 import { sweepPrefix } from "./lib/sweep-prefix.mjs";
 
 const BASE = process.env.BASE_URL || "http://127.0.0.1:3001";
+// 开跑前先记下库里已有的价格记录 id:收尾时只删「本次造的那几条」。
+// 教训(2026-11-28):用名字前缀做条件清理残留,一次误删了 30 条历史上同名的行;
+// 而这次套件的夹具是**回溯日期**的(purchasedAt = 本月 1 日),按时间窗又会漏掉它们。
+const PRICE_IDS_BEFORE = new Set();
+try {
+  const { PrismaClient } = await import("@prisma/client");
+  const prisma = new PrismaClient();
+  try {
+    for (const row of await prisma.priceRecord.findMany({ select: { id: true } })) PRICE_IDS_BEFORE.add(row.id);
+  } finally {
+    await prisma.$disconnect();
+  }
+} catch (error) {
+  console.log(`      读开跑前的价格记录失败:${String(error.message).slice(0, 100)}`);
+}
 const results = [];
 const record = (name, ok, detail) => { results.push({ name, ok, detail }); console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok ? "" : "  → " + detail}`); };
 
@@ -139,8 +154,8 @@ record("幂等", "二次导入后物品数不翻倍", rowsAgain.filter((row) => 
 // ---- 清理 ----
 // 按前缀读最新状态再删:上面那几行删的是「这一轮开头拍下来的快照」,
 // 而 B-厨房/B-吊柜、B-洗洁精这些是后面才建的,根本不在快照里 —— 实测跑完它们还在。
-const swept = await sweepPrefix({ base: BASE, cookie, prefix: "B-" });
-console.log(`清理:任务 ${swept.tasks} / 物品 ${swept.items} / 空间 ${swept.locations} / 采购 ${swept.shopping};残留 ${swept.leftover} 条`);
+const swept = await sweepPrefix({ base: BASE, cookie, prefix: "B-", knownIds: PRICE_IDS_BEFORE });
+console.log(`清理:任务 ${swept.tasks} / 物品 ${swept.items} / 空间 ${swept.locations} / 采购 ${swept.shopping} / 价格记录 ${swept.prices};残留 ${swept.leftover} 条`);
 console.log("\n清理完成");
 
 const failed = results.filter((row) => !row.ok);
