@@ -19,6 +19,11 @@ const BASE = arg("base", "http://127.0.0.1:3000");
 const USER = arg("user", "smoke");
 const PASS = arg("pass", "Smoke#2026x");
 
+// 每次请求都要有超时:没有超时的 fetch 既不返回也不报错,整脚本会挂死并以 exit 13 收场 ——
+// 发布流程只看到「Process completed with exit code 13」,一个版本就这么被无声拦下(2026-11-28 实测)。
+// 健康检查那次用更短的超时(它在重试循环里,起得慢就该重试),其余单发请求用 SMOKE_TIMEOUT_MS。
+const SMOKE_TIMEOUT_MS = 15000;
+
 const results = [];
 const step = (name, ok, detail = "") => {
   results.push({ name, ok, detail });
@@ -33,11 +38,13 @@ const json = async (response) => {
 // ① 健康检查
 {
   let health = null;
+  const REQUEST_TIMEOUT_MS = 10000;
   for (let attempt = 0; attempt < 40; attempt += 1) {
     try {
-      const response = await fetch(`${BASE}/api/health`);
+      const response = await fetch(`${BASE}/api/health`, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
       if (response.ok) { health = await json(response); break; }
     } catch { /* 还没起来 */ }
+    if ((attempt + 1) % 10 === 0) console.log(`… 健康检查还没过:已尝试 ${attempt + 1}/40 次`);
     await new Promise((resolve) => setTimeout(resolve, 3000));
   }
   step("健康检查可用", Boolean(health), JSON.stringify(health ?? {}).slice(0, 120));
@@ -46,7 +53,7 @@ const json = async (response) => {
 
 // ② 初始化管理员(容器首次启动时没有账号;已有则跳过)
 {
-  const response = await fetch(`${BASE}/api/auth/setup`, {
+  const response = await fetch(`${BASE}/api/auth/setup`, { signal: AbortSignal.timeout(SMOKE_TIMEOUT_MS),
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ username: USER, displayName: "冒烟测试", password: PASS }),
@@ -60,7 +67,7 @@ const json = async (response) => {
 // ③ 登录
 let cookie = "";
 {
-  const response = await fetch(`${BASE}/api/auth/login`, {
+  const response = await fetch(`${BASE}/api/auth/login`, { signal: AbortSignal.timeout(SMOKE_TIMEOUT_MS),
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ username: USER, password: PASS }),
@@ -74,7 +81,7 @@ let cookie = "";
 // ④ 建一件物品,再读回来
 {
   const name = `冒烟测试物品 ${Date.now().toString().slice(-6)}`;
-  const created = await fetch(`${BASE}/api/items`, {
+  const created = await fetch(`${BASE}/api/items`, { signal: AbortSignal.timeout(SMOKE_TIMEOUT_MS),
     method: "POST",
     headers: { cookie, "content-type": "application/json" },
     body: JSON.stringify({ name, category: "日用", type: "CONSUMABLE", unit: "件", quantity: 2 }),
@@ -84,7 +91,7 @@ let cookie = "";
 
   const id = createdBody?.id;
   if (id) {
-    const list = await fetch(`${BASE}/api/items`, { headers: { cookie } });
+    const list = await fetch(`${BASE}/api/items`, { signal: AbortSignal.timeout(SMOKE_TIMEOUT_MS), headers: { cookie } });
     const listBody = await json(list);
     const rows = Array.isArray(listBody) ? listBody : (listBody.items ?? []);
     const found = rows.some((row) => row.id === id);
