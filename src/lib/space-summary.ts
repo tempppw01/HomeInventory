@@ -139,7 +139,7 @@ export function spaceAlert(summary: SpaceSummary): "danger" | "warning" | null {
  *
  * 纯函数,便于单测:返回 null 表示「根本不能删」,否则给出确认框要用的三段文案。
  */
-export function spaceDeletePrompt(locationName: string, itemCount: number, childCount: number): {
+export function spaceDeletePrompt(locationName: string, itemCount: number, childCount: number, usedUpCount: number): {
   blocked: boolean;
   title: string;
   message: string;
@@ -151,6 +151,11 @@ export function spaceDeletePrompt(locationName: string, itemCount: number, child
       blocked: true,
       title: "这个空间里还有物品",
       message: `“${locationName}”里还有 ${itemCount} 件物品,不能直接删除。先把这些物品移到别的空间(打开物品改「存放位置」),或者先处理掉它们。`
+        // 「已用完」(数量 0)的物品按设计不显示在物品页与搜索里 —— 对它们说「请先移动」是空话:
+        // 2026-11-28 探针库实测,空间里只有一件已用完的物品时,导轨与卡片都写 0 件/「还没放东西」,
+        // 删除却回「还有 1 件物品」,而那件东西在物品页、搜索、回收站里都找不到。说清楚它是什么、
+        // 为什么动不了,比让用户对着一句做不到的指示强。
+        + (usedUpCount > 0 ? `其中 ${usedUpCount} 件已经用完(库存 0 件),按设计不显示在物品页和搜索里 —— 现在界面上没有移动或删除它们的入口,所以这个空间暂时删不掉。` : "")
         + (childCount > 0 ? `下级空间里的物品不算在这 ${itemCount} 件里 —— 删掉本空间时,${childCount} 个下级空间会变成顶级空间,里面的东西不受影响。` : ""),
       confirmLabel: "知道了",
       cancelLabel: "关闭",

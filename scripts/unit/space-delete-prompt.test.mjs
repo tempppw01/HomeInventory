@@ -8,6 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
+import { readFileSync } from "node:fs";
 import { spaceDeletePrompt } from "../../src/lib/space-summary.ts";
 
 test("里面有物品:不说「确定吗」,直接说明还有几件、不能直接删", () => {
@@ -57,4 +58,28 @@ test("有下级空间 + 本级也有物品:说清挡住删除的是本级的这�
 
   // 没有下级时不该出现这段解释
   assert.doesNotMatch(spaceDeletePrompt("抽屉", 2, 0)?.message ?? "", /下级空间/);
+});
+
+test("空间里只剩「已用完」的物品时,提示语不许说「请先移动」这件做不到的事", () => {
+  // 2026-11-28 探针库实测:空间里只有一件已用完(库存 0 件)的物品时,导轨与卡片都写 0 件 /
+  // 「还没放东西」,删除却回「还有 1 件物品,请先移动」—— 而那件东西在物品页、搜索、回收站里
+  // 都找不到,界面上没有任何入口移动或删掉它。说清它是什么、为什么动不了,比给一句空指示强。
+  const onlyUsedUp = spaceDeletePrompt("书房", 1, 0, 1);
+  assert.match(onlyUsedUp.message, /其中 1 件已经用完/);
+  assert.match(onlyUsedUp.message, /不显示在物品页和搜索里/);
+  assert.match(onlyUsedUp.message, /暂时删不掉/);
+  const mixed = spaceDeletePrompt("书房", 3, 0, 2);
+  assert.match(mixed.message, /还有 3 件物品/);
+  assert.match(mixed.message, /其中 2 件已经用完/);
+  // 没有已用完的物品时,提示语与以前一样 —— 不多一句废话。
+  const plain = spaceDeletePrompt("书房", 2, 0, 0);
+  assert.match(plain.message, /还有 2 件物品/);
+  assert.doesNotMatch(plain.message, /已经用完/);
+});
+
+test("源码级守卫:删空间的调用方要把「已用完」的件数传进来", () => {
+  const source = readFileSync(new URL("../../src/components/views/locations-view.tsx", import.meta.url), "utf8");
+  const at = source.indexOf("spaceDeletePrompt(");
+  assert.ok(at > 0, "没找到 spaceDeletePrompt 的调用");
+  assert.match(source.slice(at, at + 300), /usedUpCount/, "调用时必须传已用完的件数,否则提示语又会说「请先移动」");
 });

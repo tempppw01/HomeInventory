@@ -101,7 +101,9 @@ export function LocationCard({ location, locations, items, index, onOpen, onEdit
     // 挡住删除的是**直接放在这一层**的物品(服务端就是按 locationId = 本空间 数的),
     // 而卡片上的件数现在含下级空间 —— spaceDeletePrompt 会把这句差别说出来。
     const itemCount = items.filter((item) => item.locationId === location.id).length;
-    const prompt = spaceDeletePrompt(location.name, itemCount, childSpaces);
+    // 其中有多少件是「已用完」的:它们不显示在物品列表里,提示语要如实说出来(见 space-summary)。
+    const usedUpCount = items.filter((item) => item.locationId === location.id && item.quantity <= 0).length;
+    const prompt = spaceDeletePrompt(location.name, itemCount, childSpaces, usedUpCount);
     if (prompt) {
       const agreed = await askConfirm(prompt.message, { title: prompt.title, confirmLabel: prompt.confirmLabel, cancelLabel: prompt.cancelLabel, tone: prompt.blocked ? "primary" : "danger" });
       if (prompt.blocked || !agreed) return;

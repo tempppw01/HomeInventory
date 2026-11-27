@@ -33,8 +33,13 @@ export async function DELETE(_: NextRequest, { params }: Context) {
   try {
     const user = await requireWritableUser();
     const { id } = await params;
-    const count = await prisma.item.count({ where: { locationId: id, deletedAt: null } });
-    if (count > 0) return NextResponse.json({ error: `该位置还有 ${count} 件物品，请先移动后再删除` }, { status: 409 });
+    // 「已用完」(数量 0)的物品按设计不显示在物品列表里,「请先移动」对它没有可操作的位置 ——
+    // 说清楚有一件是看不见的,别让用户对着空气找东西(2026-11-28 探针库实测)。
+    const [count, usedUp] = await Promise.all([
+      prisma.item.count({ where: { locationId: id, deletedAt: null } }),
+      prisma.item.count({ where: { locationId: id, deletedAt: null, quantity: { lte: 0 } } }),
+    ]);
+    if (count > 0) return NextResponse.json({ error: `该位置还有 ${count} 件物品，请先移动后再删除${usedUp > 0 ? "(其中 " + usedUp + " 件已经用完、不在物品列表里)" : ""}` }, { status: 409 });
     const location = await prisma.location.findUnique({ where: { id } });
     if (!location) return NextResponse.json({ error: "位置不存在" }, { status: 404 });
     await prisma.$transaction(async (tx) => {
