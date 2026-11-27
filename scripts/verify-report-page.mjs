@@ -317,6 +317,37 @@ check("用完的消耗品在概览的「快用完了」里(不能只在月报出
 check("暂停补货的物品不进月报的「快用完了」", !reportList.includes(PAUSED), `月报=${reportList.slice(0, 160)}`);
 check("暂停补货的物品不进概览的「快用完了」", !dashboardList.includes(PAUSED), `概览=${dashboardList.slice(0, 160)}`);
 
+// ---------- 冰箱清单:月报与概览必须是同一份名单 ----------
+// 实测(2026-11-27)两处口径不同:
+//   · 月报会念一件「已经喝完的鲜奶」还没放好 —— 一件吃完的东西没法再放回冰箱;
+//   · 概览的「该冷藏 N 件」把「开封后冷藏」的算进去了,却从来没渲染过它们(实测 4 件 vs 3 行)。
+const readFridgeSection = async (url, opener, pattern) => {
+  await page.goto(url, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(1800);
+  if (opener) {
+    await page.evaluate((label) => {
+      const details = [...document.querySelectorAll("details")].find((el) => (el.innerText || "").includes(label));
+      if (details && !details.open) details.querySelector("summary")?.click();
+    }, opener);
+    await page.waitForTimeout(900);
+  }
+  return page.evaluate((source) => {
+    const section = [...document.querySelectorAll("section")].find((el) => new RegExp(source).test(el.innerText || ""));
+    return section ? (section.innerText || "").replace(/\s+/g, " ").trim() : "";
+  }, pattern);
+};
+
+const USED_UP_COLD = "界面检查·已经喝完的鲜奶";
+const AFTER_OPEN = "界面检查·开封后冷藏的果酱";
+const reportFridge = await readFridgeSection(`${BASE}/report`, null, "该放冰箱的|该冷藏的都放好了");
+const dashboardFridge = await readFridgeSection(`${BASE}/`, "更多待处理事项", "冰箱清单");
+check("月报的冰箱小节读到了(否则下面两条是空跑)", reportFridge.length > 0, `月报=${reportFridge.slice(0, 80) || "(空)"}`);
+check("概览的冰箱小节读到了(否则下面两条是空跑)", dashboardFridge.length > 0, `概览=${dashboardFridge.slice(0, 80) || "(空)"}`);
+check("已经喝完的冷藏品不再被念「还没放好」", !reportFridge.includes(USED_UP_COLD), `月报=${reportFridge.slice(0, 160)}`);
+check("开封后冷藏的那件在概览的冰箱清单里出现(它曾被算进件数却从不显示)", dashboardFridge.includes(AFTER_OPEN), `概览=${dashboardFridge.slice(0, 160)}`);
+const missingNames = [...reportFridge.matchAll(/界面检查·[^\s·]+/g)].map((match) => match[0]).filter((name) => !dashboardFridge.includes(name));
+check("月报列的每一件「还没放好」在概览的冰箱清单里都找得到", missingNames.length === 0, `概览缺:${missingNames.join(" / ")}`);
+
 // 外部字体/CDN 拉取失败不算应用错误:字体是第三方 OSS 托管,
 // 网络受限或离线时必然失败,但界面已用 font-display: swap 回退到系统字体,功能不受影响。
 const externalResourceFailure = (text) => text.includes("Failed to load resource") || /font at|ERR_(FAILED|CONNECTION|BLOCKED)/.test(text);

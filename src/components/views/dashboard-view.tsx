@@ -3,7 +3,7 @@
 import {
   AlertTriangle, Bot, Boxes, ChevronDown, ChevronRight, CircleAlert, LayoutGrid, List, QrCode, ShoppingBasket, Sparkles, WalletCards, Zap,
   Package,
-  CalendarDays, Warehouse } from "lucide-react";
+  CalendarDays, Snowflake, Warehouse } from "lucide-react";
 import { useContext, useEffect, useState } from "react";
 import type { DashboardData, Item, ShoppingItem } from "@/types";
 import { isLiquidConsumable } from "@/lib/item-metrics";
@@ -225,6 +225,10 @@ export function DashboardView({ data, forecastItems, now, lowStock, expiring, ex
                   trailing={!readOnly ? <button type="button" onClick={() => { const target = data.items.find((entry) => entry.id === row.id); if (target) onEdit(target); }} className="btn-ghost min-h-11 shrink-0 px-3 text-xs sm:min-h-10" style={{ color: "var(--primary)" }}>设位置</button> : undefined}
                 />)}
                 {fridge.placed.slice(0, 3).map((row) => <ListRow key={row.id} icon={Warehouse} title={row.name} meta={`${row.quantity} ${row.unit} · ${row.locationName ?? '冰箱'}`} />)}
+                {/* 「开封后冷藏」的那几件:摘要里的「该冷藏 N 件」一直把它算进去了,
+                    却从来没在任何一行里出现过 —— 实测「该冷藏 4 件」而页面上只有 3 行。
+                    它们确实和「放错地方」不同(还没开封时常温放着也行),所以单独一行轻描淡写地说。 */}
+                {fridge.afterOpen.slice(0, 3).map((row) => <ListRow key={row.id} icon={Snowflake} title={row.name} meta={`${row.quantity} ${row.unit} · 开封后冷藏,常温放着也行`} />)}
               </div>
             </section>}
 

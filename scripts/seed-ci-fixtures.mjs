@@ -179,6 +179,30 @@ try {
     },
   });
 
+  // 冰箱清单的两个边界:
+  //   · 已经喝完的冷藏品(数量 0):月报此前会念它「还没放好」,而一件吃完的东西没法再放回冰箱
+  //   · 开封后冷藏的:摘要里的「该冷藏 N 件」把它算进去了,界面却从来没显示过它
+  await prisma.item.create({
+    data: {
+      name: "界面检查·已经喝完的鲜奶",
+      category: "饮品",
+      type: "CONSUMABLE",
+      unit: "盒",
+      quantity: 0,
+      storage: "COLD",
+    },
+  });
+  await prisma.item.create({
+    data: {
+      name: "界面检查·开封后冷藏的果酱",
+      category: "食品",
+      type: "CONSUMABLE",
+      unit: "瓶",
+      quantity: 1,
+      storage: "COLD_AFTER_OPEN",
+    },
+  });
+
   // 回收站里放一件,让「回收站」弹窗有内容可渲染
   const discarded = new Date();
   discarded.setDate(discarded.getDate() - 1);

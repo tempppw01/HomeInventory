@@ -31,8 +31,12 @@ export type FridgePlan = {
 };
 
 export function fridgePlan(items: readonly FridgeInput[]): FridgePlan {
-  const cold = items.filter((item) => item.storage === "COLD");
-  const afterOpen = items.filter((item) => item.storage === "COLD_AFTER_OPEN");
+  // 「已经用完」的不再提醒放回去(2026-11-27 实测):月报此前会念一件数量为 0 的冷藏品
+  // 「还没放好」,而概览与物品列表都按「用完即退出提醒」处理 —— 一件已经吃完的东西没法再放回冰箱。
+  // 判定放在这里而不是各调用点:概览恰好因为物品列表的过滤看不到它们、月报看得到,两处于是说法不一。
+  const usable = items.filter((item) => item.quantity > 0);
+  const cold = usable.filter((item) => item.storage === "COLD");
+  const afterOpen = usable.filter((item) => item.storage === "COLD_AFTER_OPEN");
   const placed = cold.filter((item) => looksLikeFridge(item.locationName));
   const unplaced = cold.filter((item) => !looksLikeFridge(item.locationName));
   return { total: cold.length + afterOpen.length, placed, unplaced, afterOpen };

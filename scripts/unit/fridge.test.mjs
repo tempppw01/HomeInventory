@@ -61,6 +61,31 @@ test("摘要文案随状态变化", () => {
   assert.equal(fridgeSummary(allPlaced), "1 件已放好");
 });
 
+test("已经用完的冷藏品不再提醒放回去", () => {
+  // 起因(2026-11-27 实测):月报会念一件数量为 0 的冷藏品「还没放好」,
+  // 而概览与物品列表都按「用完即退出提醒」处理 —— 一件吃完的东西没法再放回冰箱。
+  const plan = fridgePlan([
+    item({ id: "a", name: "喝完的鲜奶", storage: "COLD", quantity: 0 }),
+    item({ id: "b", name: "鸡蛋", storage: "COLD", locationName: "冷藏层" }),
+    item({ id: "c", name: "开封后冷藏的果酱", storage: "COLD_AFTER_OPEN", quantity: 0 }),
+  ]);
+  assert.deepEqual(plan.unplaced, []);
+  assert.equal(plan.total, 1);
+  assert.equal(fridgeSummary(plan), "1 件已放好");
+});
+
+test("开封后冷藏既算进摘要件数,也由 afterOpen 交出来给界面显示", () => {
+  // 摘要里的「该冷藏 N 件」把 afterOpen 算进去了,而界面此前只渲染 unplaced 与 placed,
+  // 于是实测出现「该冷藏 4 件」但页面上只有 3 行 —— 契约:afterOpen 必须交出去。
+  const plan = fridgePlan([
+    item({ id: "a", name: "鲜奶", storage: "COLD" }),
+    item({ id: "b", name: "酱油", storage: "COLD_AFTER_OPEN" }),
+  ]);
+  assert.equal(plan.total, 2);
+  assert.deepEqual(plan.afterOpen.map((row) => row.id), ["b"]);
+  assert.match(fridgeSummary(plan), /该冷藏 2 件,1 件还没放好/);
+});
+
 test("空库不报错", () => {
   const plan = fridgePlan([]);
   assert.deepEqual({ total: plan.total, unplaced: plan.unplaced.length, placed: plan.placed.length }, { total: 0, unplaced: 0, placed: 0 });
