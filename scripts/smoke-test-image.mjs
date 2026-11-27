@@ -98,7 +98,7 @@ let cookie = "";
     step("刚建的物品能读回来(读写链路都通)", found, `列表条数=${rows.length} 命中=${found}`);
 
     // 清理:不要让冒烟数据留在发布验证里
-    await fetch(`${BASE}/api/items/${id}`, { method: "DELETE", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ permanent: true }) });
+    await fetch(`${BASE}/api/items/${id}`, { signal: AbortSignal.timeout(SMOKE_TIMEOUT_MS), method: "DELETE", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ permanent: true }) });
   }
 }
 
