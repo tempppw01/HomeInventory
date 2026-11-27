@@ -247,9 +247,11 @@ if (!itemId) {
   const hasConfigureAction = chatUi.buttons.some((label) => /去设置/.test(label));
   if (aiAvailable === false) {
     check("未配置 AI 时,助手在发问前就说清楚并给出入口", chatUi.open && chatUi.mentionsConfigure && hasConfigureAction, `提示=${chatUi.mentionsConfigure} 按钮=${JSON.stringify(chatUi.buttons.slice(0, 4))}`);
-    check("未配置 AI 时,助手输入框不可用(不让人白打一段再报错)", chatUi.inputDisabled === true, `inputDisabled=${chatUi.inputDisabled}`);
+    // 输入框仍然可用:用户可以在别人配置 AI 的同时先把问题写好;而且「长文本不横向裁切」那条布局检查
+    // 就是靠往这个框里打字来验的 —— 禁用它等于把那条检查废掉(CI 上真红了)。
+    check("未配置 AI 时,助手输入框仍可用(只是发送前会提示去配置)", chatUi.open && chatUi.inputDisabled === false, `inputDisabled=${chatUi.inputDisabled}`);
   } else {
-    // 已配置时反过来:输入框要能用,也不该出现「去设置配置」
+    // 已配置时同理:输入框可用,且不该出现「去设置配置」
     check("已配置 AI 时,助手输入框可用", chatUi.open && chatUi.inputDisabled === false, `open=${chatUi.open} inputDisabled=${chatUi.inputDisabled}`);
     check("已配置 AI 时,助手不显示「去设置配置」", !hasConfigureAction, `按钮=${JSON.stringify(chatUi.buttons.slice(0, 4))}`);
   }
