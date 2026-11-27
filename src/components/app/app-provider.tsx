@@ -13,6 +13,7 @@ import { isMedicineCategory } from "@/lib/categories";
 import { localDateString } from "@/lib/local-date";
 import { isLowStock } from "@/lib/low-stock";
 import { isExpiredDays, isExpiringSoonDays } from "@/lib/expiry-status";
+import { PREFERENCE_LIMITS } from "@/lib/preference-limits";
 
 export type ModalKind = "item" | "shopping" | "location" | "task" | "notifications" | "recycle" | "batch-ai" | null;
 export type Role = "ADMIN" | "MEMBER" | "VIEWER" | null;
@@ -293,7 +294,8 @@ function useAppState() {
   const lowStock = data?.preferences?.lowStockReminder === false ? [] : (data?.items ?? []).filter((item) => isLowStock(item, now));
   const pendingShopping = (data?.shopping ?? []).filter((item) => item.status === "PENDING");
   const tasks = data?.tasks ?? [];
-  const expiryReminderDays = data?.preferences?.expiryReminderDays ?? 14;
+  // 兜底值取与「家庭偏好」同一份默认(此前这里写 14、设置里默认 7、判定函数默认 30 —— 三个默认值)
+  const expiryReminderDays = data?.preferences?.expiryReminderDays ?? PREFERENCE_LIMITS.expiryReminderDays.fallback;
   const expiring = (data?.items ?? []).filter((item) => item.quantity > 0 && item.type === "CONSUMABLE" && item.expiryDate && isExpiringSoonDays(expiryDays(item, now), expiryReminderDays));
   const expired = (data?.items ?? []).filter((item) => item.quantity > 0 && item.type === "CONSUMABLE" && item.expiryDate && isExpiredDays(expiryDays(item, now)));
 

@@ -2,6 +2,7 @@
 import { isLowStock } from "@/lib/low-stock";
 import { inDaysPhrase } from "@/lib/expiry-status";
 import { isWithinExpiryWindowDays } from "@/lib/expiry-status";
+import { PREFERENCE_LIMITS } from "@/lib/preference-limits";
 //
 // 盘点结果、支出预测、冰箱清单、AI 建议平时分散在不同面板里,
 // 想给家人看一眼「这个家现在什么状况」时没有现成的出口。
@@ -28,6 +29,8 @@ export type ReportInput = {
     restockPausedUntil?: Date | string | null;
   }>;
   locationCount: number;
+  /** 临期窗口(天)= 用户设置里的「保质期提前 N 天」;不传只用于单测 */
+  expiryWindowDays?: number;
   /** 每一项:{ 名称, 还有几天到期(负数=已过期) } —— 由页面按有效期算好 */
   expiring: ReadonlyArray<{ name: string; days: number }>;
   /** 按用量快用完的 —— 由 item-forecast 算好 */
@@ -51,6 +54,15 @@ export type HouseholdReport = {
    * 结论句必须说真数,列表只管显示。
    */
   expiringTotals: { all: number; expired: number; soon: number };
+  /**
+   * 这份月报用的临期窗口(天)= 用户设置的「保质期提前 N 天」。
+   *
+   * 起因(2026-11-27 修):这里此前用固定 30 天(判定函数的默认参数),
+   * 而概览/提醒中心/物品卡都跟用户设置走 —— 用户设 14 天时,
+   * 提醒中心说 9 件要到期、月报说 12 件。窗口现在跟着设置走,
+   * 结论句也把真实天数说出来(不再写死「30 天内」)。
+   */
+  expiryWindowDays: number;
   runningOut: Array<{ name: string; days: number; unit: string }>;
   fridgeMissing: string[];
   lowStock: string[];
@@ -80,8 +92,10 @@ export function buildHouseholdReport(input: ReportInput): HouseholdReport {
   }
 
   // 先按窗口过滤出**全部**要到期 / 已过期的,数清楚再决定列表里放哪几条。
+  // 窗口 = 用户设置(不传时用默认值 7,只出现在单测里)。
+  const expiryWindowDays = input.expiryWindowDays ?? PREFERENCE_LIMITS.expiryReminderDays.fallback;
   const withinWindow = input.expiring
-    .filter((row) => isWithinExpiryWindowDays(row.days))
+    .filter((row) => isWithinExpiryWindowDays(row.days, expiryWindowDays))
     .sort((left, right) => left.days - right.days);
   const expiringTotals = {
     all: withinWindow.length,
@@ -100,6 +114,7 @@ export function buildHouseholdReport(input: ReportInput): HouseholdReport {
     monthlySpend: Number(monthlySpend.toFixed(2)),
     expiring,
     expiringTotals,
+    expiryWindowDays,
     runningOut: [...input.runningOut].sort((left, right) => left.days - right.days).slice(0, 5),
     fridgeMissing: input.fridgeMissing.slice(0, 6),
     lowStock: lowStock.slice(0, 6),
@@ -110,7 +125,7 @@ export function buildHouseholdReport(input: ReportInput): HouseholdReport {
 export function reportHeadline(report: HouseholdReport) {
   const { expired, soon } = report.expiringTotals;
   if (expired) return `有 ${expired} 件已经过期,建议先处理掉`;
-  if (soon) return `${soon} 件在 30 天内到期,注意先用`;
+  if (soon) return `${soon} 件在 ${report.expiryWindowDays} 天内到期,注意先用`;
   if (report.runningOut.length) return `最急的是「${report.runningOut[0].name}」,${inDaysPhrase(report.runningOut[0].days, "用完", true)}`;
   if (report.fridgeMissing.length) return `有 ${report.fridgeMissing.length} 件该冷藏的物品还没放好`;
   return "库存状态良好,暂时没有需要特别处理的事";

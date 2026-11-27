@@ -9,7 +9,7 @@ import type { Item, Location } from "@/types";
 import { ContextMenu, useContextMenu, ContextMenuItem } from "@/components/context-menu";
 import { useConfirm } from "@/components/confirm-dialog";
 import { Empty, Panel, Screen, Toolbar } from "@/components/ui-kit";
-import { ReadOnlyContext, iconMap, locationPath } from "../shared";
+import { ReadOnlyContext, ExpiryWindowContext, iconMap, locationPath } from "../shared";
 import { spaceSummary, spaceSummaryText, spaceAlert, spaceDeletePrompt } from "@/lib/space-summary";
 
 export function LocationsView({ locations, items, onAdd, onOpen, onEdit, onToast, onRefresh }: { locations: Location[]; items: Item[]; onAdd: () => void; onOpen: (name: string, id: string) => void; onEdit: (location: Location) => void; onToast: (message: string) => void; onRefresh: () => Promise<void> }) {
@@ -66,6 +66,9 @@ export function LocationsView({ locations, items, onAdd, onOpen, onEdit, onToast
 export function LocationCard({ location, locations, items, index, onOpen, onEdit, onToast, onRefresh }: { location: Location; locations: Location[]; items: Item[]; index: number; onOpen: (name: string, id: string) => void; onEdit: (location: Location) => void; onToast: (message: string) => void; onRefresh: () => Promise<void> }) {
   const askConfirm = useConfirm();
   const Icon = iconMap[location.icon as keyof typeof iconMap] || Package;
+  // 临期窗口跟用户设置走(与概览/提醒中心/物品卡同一个数):此前空间卡写死 7 天,
+  // 用户把「保质期提前」设成 30 天,卡片上的「N 件临期」也不变。
+  const expiryWindowDays = useContext(ExpiryWindowContext);
   // 状态角标的数据属性,便于测试与读屏以外的视觉提示
   const parent = location.parentId ? locations.find((entry) => entry.id === location.parentId) : null;
   // 这个空间的状态:件数、需冷藏、临期、价值、该补货 —— 一眼看出要不要去整理。
@@ -74,7 +77,7 @@ export function LocationCard({ location, locations, items, index, onOpen, onEdit
     expiryDate: item.expiryDate, storage: item.storage ?? null, minQuantity: item.minQuantity,
     name: item.name, category: item.category, unit: item.unit,
     remainingPercent: item.remainingPercent, restockPausedUntil: item.restockPausedUntil ?? null,
-  })), location.id);
+  })), location.id, undefined, expiryWindowDays);
   const summaryText = spaceSummaryText(summary);
   const alert = spaceAlert(summary);
   const context = useContextMenu();

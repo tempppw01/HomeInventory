@@ -7,6 +7,7 @@ import { currentUser } from "@/lib/account-auth";
 import { getAiConfig } from "@/lib/ai";
 import { dailyUsageCost, estimatedUseDays, isLiquidConsumable } from "@/lib/item-metrics";
 import { LIQUID_LOW_PERCENT } from "@/lib/restock-limits";
+import { PREFERENCE_LIMITS } from "@/lib/preference-limits";
 import { itemAiHighlights, aiHighlightsAddNewInfo } from "@/lib/item-ai";
 import { STORAGE_LABEL } from "@/lib/item-insight";
 import { Panel } from "@/components/ui-kit";
@@ -39,9 +40,10 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
     include: { location: true },
   });
   if (!item) notFound();
-  // 临期窗口与物品卡片保持同一口径(用户设置的「保质期提前 N 天」)
+  // 临期窗口与物品卡片保持同一口径(用户设置的「保质期提前 N 天」);
+  // 兜底值取家庭偏好那份默认,不再各处写一个数
   const preferences = await prisma.householdPreference.findUnique({ where: { id: "default" } });
-  const expiryWindowDays = preferences?.expiryReminderDays ?? 14;
+  const expiryWindowDays = preferences?.expiryReminderDays ?? PREFERENCE_LIMITS.expiryReminderDays.fallback;
   const dailyCost = dailyUsageCost(item);
   const useDays = estimatedUseDays(item);
   const showRemaining = isLiquidConsumable(item);

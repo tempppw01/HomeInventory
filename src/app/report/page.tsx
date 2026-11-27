@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { currentUser } from "@/lib/account-auth";
 import { restockForecast } from "@/lib/item-forecast";
 import { fridgePlan } from "@/lib/fridge";
+import { PREFERENCE_LIMITS } from "@/lib/preference-limits";
 import { buildHouseholdReport, reportHeadline } from "@/lib/household-report";
 import { MonthlyBars, ShareBar } from "@/components/charts";
 import { monthlyBuckets } from "@/lib/chart";
@@ -25,7 +26,7 @@ export default async function ReportPage() {
   const user = await currentUser();
   if (!user) redirect("/");
 
-  const [items, locations, priceRecords] = await Promise.all([
+  const [items, locations, priceRecords, preferences] = await Promise.all([
     prisma.item.findMany({
       // 与概览页同一个口径:非删除即算(此前这里多了 `quantity: { gt: 0 }`,于是
       // 用完但还留着等补货的物品在月报里"消失"了 —— 实测同一份数据概览说 4 件、月报说 3 件。
@@ -44,7 +45,12 @@ export default async function ReportPage() {
       where: { purchasedAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth() - 5, 1) } },
       select: { category: true, totalPrice: true, purchasedAt: true },
     }),
+    // 临期窗口与概览/提醒中心/物品卡同一个来源:用户设置的「保质期提前 N 天」。
+    // 此前月报用固定 30 天,用户设 14 天时月报会比提醒中心多算一批东西。
+    prisma.householdPreference.findUnique({ where: { id: "default" } }),
   ]);
+
+  const expiryWindowDays = preferences?.expiryReminderDays ?? PREFERENCE_LIMITS.expiryReminderDays.fallback;
 
   const now = new Date();
   const todayUtc = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
@@ -89,6 +95,7 @@ export default async function ReportPage() {
       category: item.category, remainingPercent: item.remainingPercent, restockPausedUntil: item.restockPausedUntil ?? null,
     })),
     locationCount: locations.length,
+    expiryWindowDays,
     expiring,
     runningOut,
     fridgeMissing: fridge.unplaced.map((row) => row.name),
@@ -153,7 +160,7 @@ export default async function ReportPage() {
             ? `要到期了(共 ${report.expiringTotals.all} 件,先列最急的 ${report.expiring.length} 件)`
             : "要到期了", report.expiring.length
             ? <ul className="m-0 list-none space-y-1 p-0 text-sm">{report.expiring.map((row) => <li key={row.name}>{row.name} · {inDaysPhrase(row.days, "到期")}</li>)}</ul>
-            : <p className="m-0 text-sm muted">30 天内没有到期的东西</p>)}
+            : <p className="m-0 text-sm muted">{report.expiryWindowDays} 天内没有到期的东西</p>)}
 
           {section(<ShoppingBasket size={14} />, "快用完了", report.runningOut.length
             ? <ul className="m-0 list-none space-y-1 p-0 text-sm">{report.runningOut.map((row) => <li key={row.name}>{row.name} · {inDaysPhrase(row.days, "用完", true)}</li>)}</ul>

@@ -56,23 +56,28 @@ test("月支出只算「有消耗速度 + 有单价」的消耗品", () => {
   assert.equal(Math.round(report.monthlySpend), 840);
 });
 
-test("临期只保留 30 天内、按天数升序、标记已过期", () => {
-  const report = buildHouseholdReport({
-    now: NOW,
-    items: [],
-    locationCount: 0,
-    expiring: [
-      { name: "远的", days: 40 },
-      { name: "明天", days: 1 },
-      { name: "过期", days: -3 },
-      { name: "下周", days: 7 },
-    ],
-    runningOut: [],
-    fridgeMissing: [],
-  });
+test("临期窗口跟用户设置走,并按天数升序、标记已过期", () => {
+  // 起因:这里此前用固定 30 天,而概览/提醒中心/物品卡跟用户设置走 ——
+  // 用户设 14 天时提醒中心数 9 件、月报数 12 件。
+  const expiring = [
+    { name: "远的", days: 40 },
+    { name: "明天", days: 1 },
+    { name: "过期", days: -3 },
+    { name: "下周", days: 7 },
+    { name: "十五天后", days: 15 },
+  ];
+  const report = buildHouseholdReport({ ...EMPTY, expiring, expiryWindowDays: 7 });
   assert.deepEqual(report.expiring.map((row) => row.name), ["过期", "明天", "下周"]);
   assert.equal(report.expiring[0].expired, true);
   assert.equal(report.expiring[1].expired, false);
+  assert.deepEqual(report.expiringTotals, { all: 3, expired: 1, soon: 2 }, "窗口 7 天:+15 天的不该进来");
+
+  const wide = buildHouseholdReport({ ...EMPTY, expiring, expiryWindowDays: 30 });
+  assert.deepEqual(wide.expiringTotals, { all: 4, expired: 1, soon: 3 });
+  assert.equal(wide.expiryWindowDays, 30);
+
+  // 窗口写在结论句里,不能说「30 天」而实际按别的窗口数
+  assert.match(reportHeadline(buildHouseholdReport({ ...EMPTY, expiring: [{ name: "x", days: 5 }], expiryWindowDays: 14 })), /1 件在 14 天内到期/);
 });
 
 test("低库存与冰箱缺失各自最多列 6 条", () => {
@@ -113,7 +118,7 @@ const EMPTY = {
 
 test("一句话结论按严重程度挑选", () => {
   assert.match(reportHeadline(buildHouseholdReport({ ...EMPTY, expiring: [{ name: "x", days: -1 }] })), /已经过期/);
-  assert.match(reportHeadline(buildHouseholdReport({ ...EMPTY, expiring: [{ name: "x", days: 5 }] })), /30 天内到期/);
+  assert.match(reportHeadline(buildHouseholdReport({ ...EMPTY, expiring: [{ name: "x", days: 5 }], expiryWindowDays: 30 })), /1 件在 30 天内到期/);
   assert.match(reportHeadline(buildHouseholdReport({ ...EMPTY, runningOut: [{ name: "抽纸", days: 2, unit: "包" }] })), /最急的是「抽纸」/);
   assert.match(reportHeadline(buildHouseholdReport({ ...EMPTY, fridgeMissing: ["酸奶"] })), /该冷藏/);
   assert.equal(reportHeadline(buildHouseholdReport({ ...EMPTY })), "库存状态良好,暂时没有需要特别处理的事");
@@ -140,7 +145,7 @@ test("结论句说的是真实件数,不是列表截断后的条数", () => {
     // 临期的都落在 30 天窗口内(窗口是 days <= 30)
     ...Array.from({ length: 206 }, (_, index) => ({ name: `临期${index}`, days: (index % 30) + 1 })),
   ];
-  const report = buildHouseholdReport({ ...EMPTY, expiring });
+  const report = buildHouseholdReport({ ...EMPTY, expiring, expiryWindowDays: 30 });
 
   assert.equal(report.expiring.length, 8, "列表仍然只放最急的 8 条");
   assert.deepEqual(report.expiringTotals, { all: 517, expired: 311, soon: 206 });
@@ -148,11 +153,11 @@ test("结论句说的是真实件数,不是列表截断后的条数", () => {
   assert.doesNotMatch(reportHeadline(report), /有 8 件/, "不能把截断后的条数当总数说");
 
   // 只有临期、没有过期时也要说真数
-  const soonOnly = buildHouseholdReport({ ...EMPTY, expiring: Array.from({ length: 40 }, (_, index) => ({ name: `临期${index}`, days: (index % 30) + 1 })) });
+  const soonOnly = buildHouseholdReport({ ...EMPTY, expiring: Array.from({ length: 40 }, (_, index) => ({ name: `临期${index}`, days: (index % 30) + 1 })), expiryWindowDays: 30 });
   assert.equal(soonOnly.expiringTotals.expired, 0);
   assert.match(reportHeadline(soonOnly), /40 件在 30 天内到期/);
 
   // 窗口外的不算数:200 天以后才到期的东西不该被算进来
-  const outside = buildHouseholdReport({ ...EMPTY, expiring: [{ name: "很远", days: 200 }, { name: "边界内", days: 30 }] });
+  const outside = buildHouseholdReport({ ...EMPTY, expiring: [{ name: "很远", days: 200 }, { name: "边界内", days: 30 }], expiryWindowDays: 30 });
   assert.deepEqual(outside.expiringTotals, { all: 1, expired: 0, soon: 1 });
 });

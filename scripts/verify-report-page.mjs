@@ -122,6 +122,168 @@ check("月报页有打印按钮", state.printButton, `printButton=${state.printB
 // (这条是全站统一的重灾区:概览卡片、月报、支出预测以前都各自用 Math.max(0, days) 拼天数)
 check("月报里没有「0 天后」这类说法", !/0\s*天后|还有\s*0\s*天/.test(state.text), (state.text.match(/.{0,12}0\s*天后.{0,12}/) ?? [""])[0]);
 check("临期条目用的是「今天到期 / N 天后到期 / 已过期 N 天」的说法", /今天到期|天后到期|已过期/.test(state.text), state.text.slice(0, 100));
+// ---------- 临期窗口:月报与空间卡都必须跟用户设置走 ----------
+//
+// 起因(2026-11-27 修):月报用固定 30 天(判定函数的默认参数)、空间卡写死 7 天
+// 且把**已过期**的算进「临期」,而概览/提醒中心/物品卡都用用户设置的「保质期提前 N 天」。
+// 同一份数据实测:提醒中心说 9 件要到期,月报说 12 件、空间卡说 6 件。
+//
+// 这一节自己造一件空间+五件物品,把窗口改成 7 与 30 各量一遍,期望值由本脚本
+// 用同一份 /api/dashboard 数据独立重算(不写死数字),跑完把偏好与数据都还回去。
+const PROBE_SPACE = "月报窗口探针台";
+{
+  const api = (method, path, body) => page.evaluate(async (request) => {
+    const response = await fetch(request.path, {
+      method: request.method,
+      cache: "no-store",
+      headers: request.body ? { "content-type": "application/json" } : undefined,
+      body: request.body ? JSON.stringify(request.body) : undefined,
+    });
+    let parsed = null;
+    try { parsed = await response.json(); } catch { parsed = null; }
+    return { status: response.status, body: parsed };
+  }, { method, path, body });
+
+  /** 与 lib/expiry-status 的 daysUntilLocalDay 同一个口径:两侧都归到本地那天的 00:00 */
+  const expiryState = () => page.evaluate(async () => {
+    const data = await fetch("/api/dashboard", { cache: "no-store" }).then((r) => r.json());
+    const today = new Date();
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    const days = (item) => {
+      // 注意:new Date(null) 是 1970-01-01(不是 Invalid Date)—— 没有有效期的物品
+      // 必须先挡掉,否则会被当成「已过期 两万年」,重算的数字永远比页面对不上。
+      if (!item.expiryDate) return null;
+      const target = new Date(item.expiryDate);
+      if (Number.isNaN(target.getTime())) return null;
+      return Math.round((new Date(target.getFullYear(), target.getMonth(), target.getDate()).getTime() - startOfToday) / 86400000);
+    };
+    const rows = (data.items ?? []).map((item) => ({ name: item.name, locationId: item.locationId, days: days(item) })).filter((row) => row.days !== null);
+    return {
+      preference: data.preferences?.expiryReminderDays ?? null,
+      all: rows,
+      totals: { expired: rows.filter((row) => row.days < 0).length },
+    };
+  });
+
+  const localDay = (offset) => page.evaluate((step) => {
+    const now = new Date();
+    const target = new Date(now.getFullYear(), now.getMonth(), now.getDate() + step);
+    const pad = (value) => String(value).padStart(2, "0");
+    return `${target.getFullYear()}-${pad(target.getMonth() + 1)}-${pad(target.getDate())}`;
+  }, offset);
+
+  const removeProbeData = async () => {
+    const items = await api("GET", "/api/items");
+    for (const row of (Array.isArray(items.body) ? items.body : []).filter((entry) => entry.name.startsWith("窗口探针·"))) {
+      await api("DELETE", `/api/items/${row.id}`);
+      await api("DELETE", `/api/items/${row.id}`, { permanent: true });
+    }
+    const locations = await api("GET", "/api/dashboard");
+    for (const row of (locations.body?.locations ?? []).filter((entry) => entry.name === PROBE_SPACE)) {
+      await api("DELETE", `/api/locations/${row.id}`);
+    }
+  };
+
+  const original = (await api("GET", "/api/settings/preferences")).body ?? {};
+  await removeProbeData();
+
+  const space = await api("POST", "/api/locations", { name: PROBE_SPACE, icon: "Package", color: "#0ea5e9" });
+  const spaceId = space.body?.id;
+  check(
+    "探针空间已建好(否则下面两条卡片断言是空跑)",
+    Boolean(spaceId),
+    `status=${space.status} body=${JSON.stringify(space.body).slice(0, 160)}`,
+  );
+  const offsets = [-1, 3, 8, 20, 40];
+  let itemsCreated = 0;
+  for (const offset of offsets) {
+    const created = await api("POST", "/api/items", {
+      name: `窗口探针·T${offset >= 0 ? "+" : ""}${offset}`, type: "CONSUMABLE", unit: "盒", category: "食品",
+      quantity: 2, minQuantity: 0, remainingPercent: 100, expiryDate: await localDay(offset), locationId: spaceId, price: 3,
+    });
+    if (created.status === 200 || created.status === 201) itemsCreated += 1;
+  }
+  check("五件探针物品都建好了", itemsCreated === offsets.length, `成功 ${itemsCreated}/${offsets.length}`);
+
+  const setWindow = async (windowDays) => {
+    const written = await api("PATCH", "/api/settings/preferences", { ...original, expiryReminderDays: windowDays });
+    const readBack = await api("GET", "/api/settings/preferences");
+    return { status: written.status, effective: readBack.body?.expiryReminderDays ?? null };
+  };
+
+  const measured = {};
+  for (const windowDays of [7, 30]) {
+    const applied = await setWindow(windowDays);
+    check(
+      `「保质期提前」能改成 ${windowDays} 天(后面两条断言才不是空跑)`,
+      applied.effective === windowDays,
+      `PATCH status=${applied.status} 写回后读到=${applied.effective}`,
+    );
+    const state = await expiryState();
+    const expectedSoon = state.all.filter((row) => row.days >= 0 && row.days <= windowDays).length;
+    measured[windowDays] = {
+      expectedMonthly: state.all.filter((row) => row.days <= windowDays).length,
+      expectedExpired: state.totals.expired,
+      expectedSoon,
+      expectedSoonInSpace: state.all.filter((row) => row.locationId === spaceId && row.days >= 0 && row.days <= windowDays).length,
+      expectedExpiredInSpace: state.all.filter((row) => row.locationId === spaceId && row.days < 0).length,
+    };
+
+    // 月报:标题会写「要到期了(共 N 件…)」;没截断时列表长度就是总数
+    await page.goto(`${BASE}/report`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(800);
+    const report = await page.evaluate(() => {
+      const text = document.body.innerText || "";
+      const matched = /要到期了\(共\s*(\d+)\s*件/.exec(text);
+      const section = text.slice(text.indexOf("要到期了")).split("快用完了")[0];
+      // 列表每行的形状是「名字 · 今天到期 / N 天后到期 / 已过期 N 天」
+      const listed = (section.match(/·\s*(?:已过期\s*\d+\s*天|今天到期|明天到期|\d+\s*天后到期)/g) ?? []).length;
+      return { total: matched ? Number(matched[1]) : null, listed };
+    });
+    const shown = report.total ?? report.listed;
+    check(
+      `月报的到期窗口跟用户设置走(${windowDays} 天)`,
+      shown === measured[windowDays].expectedMonthly,
+      `月报=${shown}(总数或列表条数) 按 ${windowDays} 天手算=${measured[windowDays].expectedMonthly}`,
+    );
+
+    // 空间卡:临期与已过期分开说,窗口也跟设置走
+    await page.goto(`${BASE}/locations`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(1200);
+    const card = await page.evaluate((name) => {
+      const nodes = [...document.querySelectorAll("button")].filter((entry) => (entry.innerText || "").includes(name));
+      // 同一个名字会匹配到多个元素(空间筛选胶囊等);真正的卡片是带「N 件 · …」摘要的那个
+      const target = nodes.find((entry) => /件\s*·/.test(entry.innerText || "")) ?? nodes[nodes.length - 1];
+      return target ? (target.innerText || "").replace(/\n+/g, " ") : "";
+    }, PROBE_SPACE);
+    const soonOnCard = Number((/·\s*(\d+)\s*件临期/.exec(card) ?? [])[1] ?? NaN);
+    const expiredOnCard = Number((/·\s*(\d+)\s*件已过期/.exec(card) ?? [])[1] ?? NaN);
+    check(
+      `空间卡的「N 件临期」按用户窗口数,不含已过期(${windowDays} 天)`,
+      soonOnCard === measured[windowDays].expectedSoonInSpace,
+      `卡片=${Number.isNaN(soonOnCard) ? "(没有这一项)" : soonOnCard} 手算=${measured[windowDays].expectedSoonInSpace} 卡片原文=${card}`,
+    );
+    check(
+      `空间卡把已过期单独说(${windowDays} 天)`,
+      expiredOnCard === measured[windowDays].expectedExpiredInSpace,
+      `卡片=${Number.isNaN(expiredOnCard) ? "(没有这一项)" : expiredOnCard} 手算=${measured[windowDays].expectedExpiredInSpace}`,
+    );
+  }
+
+  check(
+    "换了窗口之后月报的数字确实跟着变(不是量到同一堆数据)",
+    measured[7].expectedMonthly !== measured[30].expectedMonthly,
+    `7 天=${measured[7].expectedMonthly} 30 天=${measured[30].expectedMonthly}`,
+  );
+
+  // 还原:偏好与探针数据都还回去
+  await setWindow(original.expiryReminderDays ?? 7);
+  await removeProbeData();
+  const leftover = await api("GET", "/api/items");
+  const remaining = (Array.isArray(leftover.body) ? leftover.body : []).filter((entry) => entry.name.startsWith("窗口探针·")).length;
+  check("探针数据已清理干净", remaining === 0, `还剩 ${remaining} 件`);
+}
+
 // 外部字体/CDN 拉取失败不算应用错误:字体是第三方 OSS 托管,
 // 网络受限或离线时必然失败,但界面已用 font-display: swap 回退到系统字体,功能不受影响。
 const externalResourceFailure = (text) => text.includes("Failed to load resource") || /font at|ERR_(FAILED|CONNECTION|BLOCKED)/.test(text);

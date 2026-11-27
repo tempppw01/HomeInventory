@@ -37,14 +37,15 @@ test("统计需冷藏(含开封后冷藏)", () => {
   assert.equal(summary.cold, 2);
 });
 
-test("临期只算 7 天内(含已过期)", () => {
+test("临期按本地自然日算,窗口外的与没有有效期的都不算", () => {
   const summary = spaceSummary([
     item({ expiryDate: days(-3) }),
     item({ expiryDate: days(2) }),
     item({ expiryDate: days(30) }),
     item({ expiryDate: null }),
   ], "loc-1", NOW);
-  assert.equal(summary.expiring, 2);
+  assert.equal(summary.expiring, 1, "只有 +2 天那件落在默认窗口(7 天)内");
+  assert.equal(summary.expired, 1, "-3 天那件是已过期,不算临期");
 });
 
 test("估算价值按数量乘单价", () => {
@@ -90,6 +91,31 @@ test("暂停补货中的物品不算「该补货」——空间卡与概览必�
   const paused = spaceSummary([pausedItem(new Date(NOW + 86400000))], "loc-1", NOW);
   assert.doesNotMatch(spaceSummaryText(paused), /该补货/);
   assert.equal(spaceAlert(spaceSummary([pausedItem(new Date(NOW + 86400000))], "loc-1", NOW)), null, "暂停期内也不该给空间挂黄点");
+});
+
+test("临期窗口跟调用方走,已过期单独算", () => {
+  // 起因:这里此前写死 7 天(且把已过期也算成「临期」),而概览/提醒中心/物品卡
+  // 都用用户设置的「保质期提前 N 天」。实测同一屏:提醒中心 8 件临期、空间卡 6 件。
+  const at = (offset) => ({ ...item({ expiryDate: days(offset) }), name: "酸奶", category: "食品", unit: "盒", remainingPercent: 100 });
+
+  // 默认窗口 7 天:0..7 算临期
+  assert.equal(spaceSummary([at(0), at(7), at(8)], "loc-1", NOW).expiring, 2);
+  // 窗口跟参数走:14 天时 +14 也算
+  assert.equal(spaceSummary([at(0), at(7), at(8), at(14), at(15)], "loc-1", NOW, 14).expiring, 4);
+  assert.equal(spaceSummary([at(0), at(7), at(8), at(14), at(15)], "loc-1", NOW, 30).expiring, 5);
+  // 已过期不进「临期」,单独数(不限窗口)
+  const summary = spaceSummary([at(-1), at(-40), at(3), at(40)], "loc-1", NOW, 7);
+  assert.equal(summary.expired, 2);
+  assert.equal(summary.expiring, 1);
+});
+
+test("摘要文案把已过期与临期分开说,不再混成一句", () => {
+  const at = (offset) => ({ ...item({ expiryDate: days(offset) }), name: "酸奶", category: "食品", unit: "盒", remainingPercent: 100 });
+  const text = spaceSummaryText(spaceSummary([at(-2), at(1), at(2)], "loc-1", NOW));
+  assert.match(text, /1 件已过期/);
+  assert.match(text, /2 件临期/);
+  assert.equal(spaceAlert(spaceSummary([at(-2)], "loc-1", NOW)), "danger", "已过期也要挂危险点");
+  assert.equal(spaceAlert(spaceSummary([at(40)], "loc-1", NOW)), null);
 });
 
 test("空空间给明确提示,而不是一串 0", () => {
