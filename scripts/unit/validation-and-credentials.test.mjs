@@ -122,6 +122,36 @@ test("物品:单位不能为空", () => {
   assert.equal(itemSchema.safeParse({ ...baseItem, unit: "" }).success, false);
 });
 
+// ---------- 「没填单价」必须存成 null,不能变成 0 ----------
+//
+// 由来:price 曾是 z.union([z.coerce.number().min(0), z.literal(""), z.null()])。union 取第一个
+// 通过的支,而 coerce.number 排在前面 —— Number(null) === 0、Number("") === 0,于是 null 与 ""
+// 都被吞成 0,末尾那句 transform 永远看不到它们(实测:price=null → 存成 0,price="" → 存成 0)。
+// 两层后果:「没填」与「0 元」在库里/界面上/财务里成了同一个东西;创建路径的
+// `recordPurchase && price != null` 恒真,于是每录一件不填价格的物品都会写一条 ¥0 采购记录。
+test("物品:没填单价(null / 空串 / 不传)存成 null,不是 0", () => {
+  const of = (patch) => itemSchema.parse({ ...baseItem, ...patch }).price;
+  assert.equal(of({ price: null }), null, "price=null 应存 null");
+  assert.equal(of({ price: "" }), null, "price=\"\" 应存 null");
+  assert.equal(of({ price: "   " }), null, "price 全是空格也应存 null");
+  assert.equal(of({}), null, "完全不传 price 应存 null");
+});
+
+test("物品:显式 0 元仍然保留(赠品也是 0 元,不能被当成没填)", () => {
+  const of = (patch) => itemSchema.parse({ ...baseItem, ...patch }).price;
+  assert.equal(of({ price: 0 }), 0, "price=0 应保持 0");
+  assert.equal(of({ price: "0" }), 0, "price=\"0\" 应保持 0");
+  assert.equal(of({ price: "0.00" }), 0, "price=\"0.00\" 应保持 0");
+});
+
+test("物品:金额字符串能解析,负数与非数字仍然拒绝", () => {
+  const of = (patch) => itemSchema.parse({ ...baseItem, ...patch }).price;
+  assert.equal(of({ price: "19.90" }), 19.9);
+  assert.equal(of({ price: "19,90" }), 19.9, "逗号小数点也要认");
+  assert.equal(itemSchema.safeParse({ ...baseItem, price: "abc" }).success, false);
+  assert.equal(itemSchema.safeParse({ ...baseItem, price: -1 }).success, false);
+});
+
 // ---------- 物品编号 ----------
 
 test("物品编号:形如 INV-YYYYMMDD-XXXXXX", () => {

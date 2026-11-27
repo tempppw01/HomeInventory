@@ -83,7 +83,28 @@ export const itemSchema = z.object({
   minQuantity: z.coerce.number().min(0).max(999999).default(0),
   remainingPercent: z.coerce.number().min(0).max(100).default(100),
   unit: z.string().trim().min(1).max(12, "单位最多 12 个字"),
-  price: z.union([z.coerce.number().min(0), z.literal(""), z.null()]).optional().transform((value) => value === "" || value == null ? null : value),
+  // 「没填单价」必须存成 null。
+  //
+  // 此前写的是 z.union([z.coerce.number().min(0), z.literal(""), z.null()]):union 取**第一个通过**的支,
+  // 而 z.coerce.number() 排在前面 —— Number(null) === 0、Number("") === 0,于是 null 和 "" 都被它
+  // 吞成 0,永远走不到后面的 z.literal("") / z.null(),末尾那句 transform 也就看不到它们。
+  // 实测(2026-11-27,对着真实接口打):price=null → 存成 0;price="" → 存成 0;price="19.90" → 19.9;
+  // price="abc" → 400;显式 price=0 → 0。
+  //
+  // 两层后果:①「没填」与「0 元」在库里、界面上、财务里变成同一个东西;
+  // ②创建路径的 recordPurchase && price != null 从此恒真 —— 每录一件不填价格的物品,
+  //   就会写一条 ¥0 采购记录,概览的「最近记录」里看得到(家用库那行字曾是「双击检查-… · ¥0.00」)。
+  // 所以先归一化再校验:空 → null,其余交给 z.number()(非数字字符串仍然 400)。
+  price: z
+    .preprocess((value) => {
+      if (value === null || value === undefined) return null;
+      if (typeof value !== "string") return value;
+      const trimmed = value.trim();
+      if (trimmed === "") return null;
+      const amount = Number(trimmed.replace(",", "."));
+      return Number.isFinite(amount) ? amount : value;
+    }, z.number().min(0, "单价不能是负数").max(99999999, "单价超出范围").nullable().optional())
+    .transform((value) => (value == null ? null : value)),
   purchaseDate: optionalDate,
   expiryDate: optionalDate,
   imageUrl: z.union([imageUrlSchema, z.literal(""), z.null()]).optional().transform((value) => value || null),

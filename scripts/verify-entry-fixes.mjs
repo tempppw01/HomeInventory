@@ -186,6 +186,26 @@ const closed = (await dialog().count()) === 0;
 check("非法单价不会把提交锁死在 true", blocked === 0, `非法单价阶段 POST = ${blocked}`);
 check("改对价格后能正常保存并关闭弹窗", afterFix === 1 && closed, `POST = ${afterFix} closed=${closed}`);
 
+// ------------------------------------------------------------ 空单价不许被写成 0 元
+// 由来:moneyValue("") 曾经回 0(Number("") === 0),而单价框的 onBlur 是「不是 null 就写回」。
+// 于是「点一下单价框又离开」会把空框写成 0.00(实测 valueBefore="" → valueAfterBlur="0.00"):
+// 用户没填价格,却存下一件 0 元的物品,并因此多出一条 ¥0 采购记录(概览「最近记录」里看得到)。
+await openCreate();
+await page.fill("#item-name", `${PREFIX}空单价`);
+await page.locator('[role="dialog"] button:has-text("更多信息")').click();
+await page.waitForTimeout(400);
+const blankPrice = page.locator('[role="dialog"] input[placeholder="¥ 0.00"]');
+const blankBefore = await blankPrice.inputValue();
+await blankPrice.focus();
+await page.keyboard.press("Tab"); // 用真实键盘离开输入框,触发 onBlur
+await page.waitForTimeout(300);
+const blankAfter = await blankPrice.inputValue();
+check("空单价离开输入框后不会被写成 0.00", blankBefore === "" && blankAfter === "", `离开前="${blankBefore}" 离开后="${blankAfter}"`);
+await page.keyboard.press("Escape");
+await page.waitForTimeout(700);
+const discardBlank = page.locator('[role="dialog"] button:has-text("放弃并关闭")');
+if (await discardBlank.count()) { await discardBlank.click(); await page.waitForTimeout(600); }
+
 // ------------------------------------------------------------------------ P1-2
 await openCreate();
 await page.fill("#item-name", `${PREFIX}双击检查`);

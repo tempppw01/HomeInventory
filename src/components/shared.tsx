@@ -163,9 +163,17 @@ export function isMoneyInput(value: string) {
   return /^(?:\d+)?(?:[.,]\d{0,2})?$/.test(value);
 }
 
+/**
+ * 金额输入框的值 → 数字。
+ *
+ * 空串必须回 null:Number("") === 0,而调用点写的是「不是 null 就写回」的写法
+ * (item-modal 的 onBlur),于是「点一下单价框又离开」会把空框写成 0.00 —— 用户没填价格,
+ * 却存下一件 0 元的东西,并因此多出一条 ¥0 采购记录。实测:valueBefore="" → valueAfterBlur="0.00"。
+ */
 export function moneyValue(value: string) {
-  const normalized = value.replace(",", ".");
-  const amount = Number(normalized);
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  const amount = Number(trimmed.replace(",", "."));
   return Number.isFinite(amount) ? amount : null;
 }
 

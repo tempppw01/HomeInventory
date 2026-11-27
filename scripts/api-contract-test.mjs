@@ -442,6 +442,24 @@ const baseItem = { name: "T-基础物品", category: "日用", type: "CONSUMABLE
   const priceRecordId = mine[0]?.id ?? null;
   if (priceRecordId) created.prices.push(priceRecordId);
 
+  // 「没填单价」不能变成「0 元」。此前 price 的 zod 是
+  //   z.union([z.coerce.number().min(0), z.literal(""), z.null()])
+  // —— union 取第一个通过的支,而 coerce.number 排在最前,Number(null)/Number("") 都是 0,
+  // 于是 null 与 "" 被吞成 0,末尾那句「空 → null」的 transform 永远看不到它们。
+  // 后果:创建路径的 recordPurchase && price != null 恒真,每录一件不填价格的物品就写一条
+  // ¥0 采购记录(概览「最近记录」里看得到),而且「没填」与「0 元」再也分不开。
+  // 这一条同时量住两件事:存下来的 price 必须是 null,且不许有 ¥0 价格记录。
+  const noPrice = await call("POST", "/api/items", { ...baseItem, name: "T-没填价格", price: null, expiryDate: null, recordPurchase: true });
+  const noPriceId = noPrice.body?.id ?? null;
+  if (noPriceId) created.items.push(noPriceId);
+  const pricesForNoPrice = await call("GET", "/api/prices");
+  const noPriceRows = Array.isArray(pricesForNoPrice.body) ? pricesForNoPrice.body : (pricesForNoPrice.body?.items ?? []);
+  const zeroRows = noPriceId ? noPriceRows.filter((row) => row.itemId === noPriceId) : [];
+  record("prices", "没填单价的物品:price 存 null(不是 0),也不产生 ¥0 采购记录",
+    noPrice.status < 300 && noPrice.body?.price === null && zeroRows.length === 0,
+    `status=${noPrice.status} 存下来的 price=${JSON.stringify(noPrice.body?.price)} ¥0 记录数=${zeroRows.length}`);
+  if (noPriceId) await call("DELETE", `/api/items/${noPriceId}`, { permanent: true });
+
   const del = await call("DELETE", `/api/items/${id}`, { permanent: true });
   const pricesAfter = await call("GET", "/api/prices");
   const rowsAfter = Array.isArray(pricesAfter.body) ? pricesAfter.body : (pricesAfter.body?.items ?? []);
