@@ -284,6 +284,39 @@ const PROBE_SPACE = "月报窗口探针台";
   check("探针数据已清理干净", remaining === 0, `还剩 ${remaining} 件`);
 }
 
+// ---------- 用完的消耗品:月报与概览必须都列出来 ----------
+// 项目自己的口径(CHANGELOG v0.1.94):「用完的物品会出现在月报的『快用完了』里(正是该补货的
+// 东西),而不是凭空消失」。实测(2026-11-27)月报列 5 件、概览只列 4 件 —— 概览那份清单被
+// 物品列表的 `quantity > 0` 过滤顺手带走了,于是「已经用完了」这一行在概览上永远不出现。
+// 数据来自 seed-ci-fixtures 里的两件:一件用完的(要出现)、一件暂停补货的(不该出现)。
+const USED_UP = "界面检查·已经用完的挂面";
+const PAUSED = "界面检查·暂停补货的牙膏";
+
+const readForecastList = async (url, opener) => {
+  await page.goto(url, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(1800);
+  if (opener) {
+    await page.evaluate((label) => {
+      const details = [...document.querySelectorAll("details")].find((el) => (el.innerText || "").includes(label));
+      if (details && !details.open) details.querySelector("summary")?.click();
+    }, opener);
+    await page.waitForTimeout(900);
+  }
+  return page.evaluate(() => {
+    const section = [...document.querySelectorAll("section")].find((el) => /快用完了/.test(el.innerText || ""));
+    return section ? (section.innerText || "").replace(/\s+/g, " ").trim() : "";
+  });
+};
+
+const reportList = await readForecastList(`${BASE}/report`);
+const dashboardList = await readForecastList(`${BASE}/`, "更多待处理事项");
+check("月报的「快用完了」有内容(否则下面两条是空跑)", reportList.length > 0, `月报小节=${reportList.slice(0, 60) || "(空)"}`);
+check("概览的「快用完了」有内容(否则下面两条是空跑)", dashboardList.length > 0, `概览小节=${dashboardList.slice(0, 60) || "(空)"}`);
+check("用完的消耗品在月报的「快用完了」里(正是该补货的那件)", reportList.includes(USED_UP), `月报=${reportList.slice(0, 160)}`);
+check("用完的消耗品在概览的「快用完了」里(不能只在月报出现)", dashboardList.includes(USED_UP), `概览=${dashboardList.slice(0, 160)}`);
+check("暂停补货的物品不进月报的「快用完了」", !reportList.includes(PAUSED), `月报=${reportList.slice(0, 160)}`);
+check("暂停补货的物品不进概览的「快用完了」", !dashboardList.includes(PAUSED), `概览=${dashboardList.slice(0, 160)}`);
+
 // 外部字体/CDN 拉取失败不算应用错误:字体是第三方 OSS 托管,
 // 网络受限或离线时必然失败,但界面已用 font-display: swap 回退到系统字体,功能不受影响。
 const externalResourceFailure = (text) => text.includes("Failed to load resource") || /font at|ERR_(FAILED|CONNECTION|BLOCKED)/.test(text);

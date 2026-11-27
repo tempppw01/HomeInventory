@@ -3,6 +3,7 @@
 // 这两个能力都是「后台自动跑」的:不需要点击,也不依赖 AI Key。
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import { daysLeftFor, restockForecast, normalizeItemName, duplicateGroups, learnConsumeRate, FORECAST_LABEL } from "../../src/lib/item-forecast.ts";
 
@@ -132,4 +133,24 @@ test("空名单不报错", () => {
   assert.deepEqual(duplicateGroups([]), []);
   assert.deepEqual(restockForecast([]), []);
   assert.ok(FORECAST_LABEL.urgent.length > 0);
+});
+
+test("每个调 restockForecast 的地方都传了「暂停补货」(源码级守卫)", () => {
+  // 起因(2026-11-27 实测):这个字段原先是可选的,「传了才跳过暂停」——
+  // 三个调用点里 AI 洞察那一个漏了,喂给模型的清单里于是出现用户明确暂停过的物品
+  // ({名称:预测·暂停补货中,还能用几天:3}),而概览与月报都不列它。
+  // 类型现在必填,这条守卫再兜住「写了字段但值恒为 undefined」这类漏法。
+  const callers = [
+    "src/components/views/dashboard-view.tsx",
+    "src/app/report/page.tsx",
+    "src/app/api/ai/insights/route.ts",
+  ];
+  for (const file of callers) {
+    const source = readFileSync(new URL(`../../${file}`, import.meta.url), "utf8");
+    const index = source.indexOf("restockForecast(");
+    assert.notEqual(index, -1, `${file} 里应该有一个 restockForecast 调用`);
+    // 入参可能是一个对象字面量、也可能是一段 .map(...):取调用点之后的一段代码看有没有这个字段
+    const call = source.slice(index, index + 900);
+    assert.match(call, /restockPausedUntil/, `${file} 的 restockForecast 入参里没有 restockPausedUntil`);
+  }
 });

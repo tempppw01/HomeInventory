@@ -72,9 +72,12 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const force = querySchema.parse({ force: searchParams.get("force") ?? undefined }).force;
 
+    // 这里此前多了 `quantity: { gt: 0 }`:于是「已经用完」的消耗品既不进「按用量快用完」,
+    // 也不进模型的上下文 —— 而月报的「快用完了」会列它(项目自己的口径:用完的正是该补货的东西,
+    // 不该凭空消失)。用完的那件不再参与「即将到期」提醒,那条过滤在下面单独加。
     const items = await prisma.item.findMany({
-      where: { deletedAt: null, quantity: { gt: 0 } },
-      select: { id: true, name: true, category: true, type: true, unit: true, quantity: true, remainingPercent: true, expiryDate: true, updatedAt: true, consumeRate: true, minQuantity: true },
+      where: { deletedAt: null },
+      select: { id: true, name: true, category: true, type: true, unit: true, quantity: true, remainingPercent: true, expiryDate: true, updatedAt: true, consumeRate: true, minQuantity: true, restockPausedUntil: true },
       orderBy: { updatedAt: "desc" },
       take: 60,
     });
@@ -101,14 +104,18 @@ export async function GET(request: Request) {
     }
     const daysLeft = (item: { expiryDate: Date | null }) => (item.expiryDate ? daysUntilLocalDay(item.expiryDate, now) : Number.NaN);
     // 筛选与上报用**同一个**天数:此前上报那份是拿原始时间戳相减的,今天到期的东西在中午之后会报成 -1
-    const expiring = items.filter((item) => item.expiryDate && isExpiringSoonDays(daysLeft(item), EXPIRING_URGENT_DAYS)).map((item) => ({ name: item.name, days: daysLeft(item) }));
+    // 「已经用完」的东西不再提醒过期(与提醒中心同一个口径),所以这一条自己带上 quantity > 0。
+    const expiring = items.filter((item) => item.quantity > 0 && item.expiryDate && isExpiringSoonDays(daysLeft(item), EXPIRING_URGENT_DAYS)).map((item) => ({ name: item.name, days: daysLeft(item) }));
     const forecast = restockForecast(items.map((item) => ({
       id: item.id, name: item.name, category: item.category, type: item.type, unit: item.unit,
       quantity: item.quantity, remainingPercent: item.remainingPercent, consumeRate: item.consumeRate ?? null, expiryDate: item.expiryDate?.toISOString() ?? null,
+      // 这一项漏过一次(2026-11-27 实测):不传就等于「暂停补货」不生效,用户点名暂停的物品会进模型的清单
+      restockPausedUntil: item.restockPausedUntil?.toISOString() ?? null,
     })));
     const lowStock = items.filter((item) => item.type === "CONSUMABLE" && item.minQuantity > 0 && item.quantity <= item.minQuantity).map((item) => item.name);
 
     const snapshot = {
+      // 与月报的「物品」同一口径:非删除即算(用完但还留着等补货的也算一件)
       物品总数: items.length,
       即将到期: expiring.slice(0, 6),
       按用量快用完: forecast.slice(0, 6).map((row) => ({ 名称: row.name, 还能用几天: row.daysLeft })),

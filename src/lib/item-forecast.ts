@@ -70,8 +70,18 @@ export function daysLeftFor(item: ForecastInput): number | null {
   return Math.max(1, Math.ceil(item.quantity / rate));
 }
 
+/**
+ * `restockForecast` 的入参:**必须**带上「暂停补货」这个字段。
+ *
+ * 起因(2026-11-27 修):它原先在 ForecastInput 里是可选的,于是「传了才跳过暂停」——
+ * 三个调用点里有一个(AI 洞察)漏了,实测喂给模型的那份清单里出现了用户明确暂停过的物品
+ * (`{"名称":"预测·暂停补货中","还能用几天":3}`),而概览与月报都不列它。
+ * 让入参必填,新调用点就没法静默漏掉;另有一条源码级检查兜住措辞式的漏传。
+ */
+export type RestockInput = ForecastInput & { restockPausedUntil: string | null };
+
 /** 挑出「快用完」的消耗品,按紧迫度排序。默认 7 天。 */
-export function restockForecast(items: readonly ForecastInput[], withinDays = 7, now = Date.now()): RestockForecast[] {
+export function restockForecast(items: readonly RestockInput[], withinDays = 7, now = Date.now()): RestockForecast[] {
   const rows: RestockForecast[] = [];
   for (const item of items) {
     if (item.restockPausedUntil && new Date(item.restockPausedUntil).getTime() > now) continue;

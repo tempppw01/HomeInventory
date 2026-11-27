@@ -150,6 +150,35 @@ try {
     },
   });
 
+  // 已经用完的消耗品 + 日均消耗:让「快用完了」的边界(用完的正是该补货的)可以被量到。
+  // 日均消耗只能由真实的消耗事件学出来(至少 2 次),套件里现造不出来,所以直接写进种子。
+  // 注意用「包」而不是「瓶」:瓶装会被当成液体,这里要的就是按数量估算的那条路径。
+  await prisma.item.create({
+    data: {
+      name: "界面检查·已经用完的挂面",
+      category: "食品",
+      type: "CONSUMABLE",
+      unit: "包",
+      quantity: 0,
+      consumeRate: 1,
+    },
+  });
+
+  // 暂停补货 + 日均消耗:用来核对「用户点名暂停的东西,不该出现在任何『快用完了』清单里」。
+  const pausedUntil = new Date();
+  pausedUntil.setDate(pausedUntil.getDate() + 7);
+  await prisma.item.create({
+    data: {
+      name: "界面检查·暂停补货的牙膏",
+      category: "日用",
+      type: "CONSUMABLE",
+      unit: "支",
+      quantity: 2,
+      consumeRate: 1,
+      restockPausedUntil: pausedUntil,
+    },
+  });
+
   // 回收站里放一件,让「回收站」弹窗有内容可渲染
   const discarded = new Date();
   discarded.setDate(discarded.getDate() - 1);

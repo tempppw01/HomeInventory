@@ -24,7 +24,15 @@ import { copyToClipboard } from "@/lib/clipboard";
 import { ItemCard } from "./items-view";
 import { localDateString, localDateOf } from "@/lib/local-date";
 import { inDaysPhrase, isExpiringUrgentDays } from "@/lib/expiry-status";
-export function DashboardView({ data, now, lowStock, expiring, expired, pending, totalValue, onNavigate, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onDelete, onAddRestock, onQr, onAi, onAlerts, onCreate, onMerge, aiAvailable = false, onOpenCategory }: { data: DashboardData; now: number; lowStock: Item[]; expiring: Item[]; expired: Item[]; pending: ShoppingItem[]; totalValue: number; onNavigate: (v: View) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onDelete: (i: Item) => void; onAddRestock: (i: Item) => void; onMerge: (keepId: string, mergeIds: string[]) => Promise<unknown> | void; aiAvailable?: boolean; /** 点分类图表后跳到物品页并按该分类筛选 */ onOpenCategory?: (category: string) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onAlerts: () => void; onCreate: () => void }) {
+export function DashboardView({ data, forecastItems, now, lowStock, expiring, expired, pending, totalValue, onNavigate, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onDelete, onAddRestock, onQr, onAi, onAlerts, onCreate, onMerge, aiAvailable = false, onOpenCategory }: { data: DashboardData; /**
+   * 「快用完了」用哪份清单 —— 必须包含**已经用完**的物品。
+   *
+   * 起因(2026-11-27 实测):概览此前拿的是被 `quantity > 0` 过滤过的物品(那个过滤是给
+   * 物品列表用的:用完的从列表里隐藏),于是「已经用完了」这一行在概览上永远不会出现,
+   * 而同一份数据在月报的「快用完了」里是列出来的(项目自己的口径:用完的正是该补货的东西)。
+   * 实测同一批探针物品:月报 5 件、概览 4 件。
+   */
+  forecastItems?: Item[]; now: number; lowStock: Item[]; expiring: Item[]; expired: Item[]; pending: ShoppingItem[]; totalValue: number; onNavigate: (v: View) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onDelete: (i: Item) => void; onAddRestock: (i: Item) => void; onMerge: (keepId: string, mergeIds: string[]) => Promise<unknown> | void; aiAvailable?: boolean; /** 点分类图表后跳到物品页并按该分类筛选 */ onOpenCategory?: (category: string) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onAlerts: () => void; onCreate: () => void }) {
 
   // 后台自动预测:按近期消耗速度算「还能用几天」,并找出可能重复录入的物品。
   // 全部是纯函数计算,不需要用户点按钮,也不需要额外的网络请求。
@@ -36,7 +44,8 @@ export function DashboardView({ data, now, lowStock, expiring, expired, pending,
   })));
   const fridgeText = fridgeSummary(fridge);
 
-  const forecast = restockForecast(data.items.map((item) => ({
+  // 「快用完了」按**全部**物品算(含已经用完的);其余小节继续用它拿到的那份列表。
+  const forecast = restockForecast((forecastItems ?? data.items).map((item) => ({
     id: item.id, name: item.name, category: item.category, type: item.type, unit: item.unit,
     quantity: item.quantity, remainingPercent: item.remainingPercent,
     consumeRate: item.consumeRate ?? null, expiryDate: item.expiryDate, restockPausedUntil: item.restockPausedUntil,
