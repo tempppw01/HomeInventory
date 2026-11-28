@@ -105,8 +105,32 @@ const offlinePage = await context.newPage();
 let offline = null;
 try {
   await offlinePage.goto(`${BASE}/items`, { waitUntil: "domcontentloaded", timeout: 15000 });
-  await offlinePage.waitForTimeout(1500);
-  offline = await offlinePage.evaluate(() => ({
+  // 等数据渲染出来,而不是固定等 1.5 秒:断网时页面先出外壳,客户端再拿缓存快照渲染。
+  // CI 的机器明显更慢(本机 13/13 通过、CI 却抓不到那件物品),固定等待会把「还没渲染完」判成「看不见数据」。
+  // 这里等的是同一件事完成 —— 10 秒后仍没有,下面的断言照旧失败。
+  await offlinePage
+    .waitForFunction(
+      (name) => {
+        const text = document.querySelector("main")?.innerText || "";
+        return name ? text.includes(name) : text.includes("快照");
+      },
+      itemName,
+      { timeout: 10000 },
+    )
+    .catch(() => undefined);
+  offline = await offlinePage.evaluate(async () => ({
+    // 失败时自报家底:别让下一个人再靠猜(CI 那两次红就是这么猜出来的)。
+    online: navigator.onLine,
+    cachedItems: await (async () => {
+      try {
+        for (const name of await caches.keys()) {
+          const cache = await caches.open(name);
+          const hit = await cache.match("/api/dashboard");
+          if (hit) { const body = await hit.json(); return Array.isArray(body?.items) ? body.items.length : -1; }
+        }
+      } catch { return -2; }
+      return -3;
+    })(),
     url: location.pathname,
     text: (document.body.innerText || "").replace(/\n+/g, " | ").slice(0, 300),
     hasReload: Boolean(Array.from(document.querySelectorAll("button, a")).find((node) => (node.textContent || "").includes("重新加载"))),
@@ -130,7 +154,7 @@ check("横幅说明了恢复网络后会自动刷新", Boolean(offline?.text && 
 // 这条断言因此反过来了 —— 但它守的东西没变:不许让人**不知道**自己看的是旧数字。
 if (itemName) {
   const showsItems = Boolean(offline?.text && offline.text.includes(itemName));
-  check("离线时看得见缓存的数据(这是本版有意改掉的行为)", showsItems, `离线页里没有出现「${itemName}」`);
+  check("离线时看得见缓存的数据(这是本版有意改掉的行为)", showsItems, `离线页里没有出现「${itemName}」 · online=${offline?.online} · 缓存快照件数=${offline?.cachedItems} · 页面=${(offline?.text ?? "").slice(0, 200)}`);
 } else {
   console.log("      跳过「离线不显示库存数据」:在线时没抓到物品名,无法比对");
 }
