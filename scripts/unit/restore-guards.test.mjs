@@ -9,7 +9,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { usableAmount, usablePercent } from "../../src/lib/restore-guards.ts";
+import { restorableDeletedAt, usableAmount, usablePercent } from "../../src/lib/restore-guards.ts";
 
 test("余量标记:0..100 之间的有限数才可用", () => {
   assert.equal(usablePercent(0), 0);
@@ -33,4 +33,27 @@ test("金额与数量:非负有限数才可用(负价在任何界面里都录不
   assert.equal(usableAmount(Number.POSITIVE_INFINITY), false);
   assert.equal(usableAmount("12"), false);
   assert.equal(usableAmount(null), false);
+});
+
+// 2026-11-28:把一份「14 件物品、其中 2 件已删除」的备份恢复到空库,得到 14 件、0 件已删除 ——
+// 回收站里的东西全活了。恢复路径的 itemSchema 里没有 deletedAt,zod 默认把它丢掉。
+test("删除标记:备份里能解析成日期的字符串才恢复成「在回收站」", () => {
+  const stamp = "2026-01-02T03:04:05.000Z";
+  assert.equal(restorableDeletedAt(stamp)?.toISOString(), stamp);
+  assert.equal(restorableDeletedAt("2026-01-02")?.getTime(), new Date("2026-01-02").getTime());
+  assert.equal(restorableDeletedAt(new Date(stamp))?.toISOString(), stamp);
+});
+
+test("删除标记:坏值一律当作「没删除」,不能把活物品拖进回收站", () => {
+  assert.equal(restorableDeletedAt("昨天下午"), null);
+  assert.equal(restorableDeletedAt("2026-13-45T99:99:99Z"), null);
+  assert.equal(restorableDeletedAt(""), null);
+  assert.equal(restorableDeletedAt("   "), null);
+  assert.equal(restorableDeletedAt(20260102), null);
+  assert.equal(restorableDeletedAt(null), null);
+  assert.equal(restorableDeletedAt(undefined), null);
+  assert.equal(restorableDeletedAt(new Date("bad")), null);
+  assert.equal(restorableDeletedAt({}), null);
+  assert.equal(restorableDeletedAt([]), null);
+  assert.equal(restorableDeletedAt(true), null);
 });

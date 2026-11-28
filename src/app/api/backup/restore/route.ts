@@ -7,7 +7,7 @@ import { apiError, requireAdminUser } from "@/lib/api";
 import { backupDir, isBackupFileName } from "@/lib/backup-files";
 import { MAX_BACKUP_BYTES, backupTooLargeMessage } from "@/lib/backup-limits";
 import { auditCountRangeMessage, clampAuditConfirmed, isAuditCount } from "@/lib/audit-limits";
-import { usableAmount, usablePercent } from "@/lib/restore-guards";
+import { restorableDeletedAt, usableAmount, usablePercent } from "@/lib/restore-guards";
 import { PREFERENCE_LIMITS, clampPreferenceInt } from "@/lib/preference-limits";
 import { createItemCode } from "@/lib/item-code";
 import { normalizeItemQuantity } from "@/lib/item-metrics";
@@ -127,15 +127,24 @@ export async function POST(request: NextRequest) {
         const parsed = itemSchema.omit({ recordPurchase: true, purchaseStore: true }).safeParse({ ...source, purchaseDate: typeof source.purchaseDate === "string" ? localDateOf(source.purchaseDate) : source.purchaseDate, expiryDate: typeof source.expiryDate === "string" ? localDateOf(source.expiryDate) : source.expiryDate, locationId: typeof source.locationId === "string" ? locationIdMap.get(source.locationId) || null : null });
         if (!parsed.success) { noteSkipped("items", (body.items || []).indexOf(row), source.name, describeIssue(parsed.error.issues[0] ?? {})); continue; }
         const data = parsed.data;
+        // 「已删除」也要从备份里读回来:itemSchema 里没有 deletedAt,zod 会把它丢掉,
+        // 于是回收站里的东西一恢复就活了(2026-11-28 在空库上实测:14 件、其中 2 件已删除
+        // 的备份恢复后是 14 件、0 件已删除)。坏日期按「没删除」处理。
+        const deletedAt = restorableDeletedAt(source.deletedAt);
         // 优先按 itemCode 判重:它唯一且备里就有 —— 换机到空库时同名物品不会被误判成「重复」。
         // 只有老备份(没有 itemCode)才退回按名称+位置判重。
         const sourceCode = typeof source.itemCode === "string" && source.itemCode.trim() ? source.itemCode.trim() : null;
         const duplicate = sourceCode
           ? await tx.item.findFirst({ where: { itemCode: sourceCode } })
-          : await tx.item.findFirst({ where: { name: data.name, locationId: data.locationId, deletedAt: null } });
+          // 老备份这条分支要**连删除状态一起**比:备份里那件已删除、库里同名同位置那件也在回收站,
+          // 就算「已有」—— 否则每导一次,回收站里就多出一行(实测 12 → 13 件);
+          // 反过来,备份里那件是活的、库里同名那件在回收站,则不算重复,照旧新建一条活物品,
+          // 用户的东西不会因为「回收站里有一件同名的」而恢复不回来。
+          : await tx.item.findFirst({ where: { name: data.name, locationId: data.locationId, deletedAt: deletedAt ? { not: null } : null } });
         // 保留备份里的编号(用户可能已经把编号贴成标签);没有编号的老备份才新生成。
-        // 编号被占用的情况在去重那一步已经排除了(按编号判重)。
-        const restored = duplicate || await tx.item.create({ data: { ...data, quantity: normalizeItemQuantity(data.quantity, data.unit), itemCode: sourceCode ?? createItemCode() } });
+        // 编号被占用的情况在去重那一步已经排除了(按编号判重,且 itemCode 有唯一索引 ——
+        // 所以这条分支不能再去比删除状态:否则同名同编号的行会被 create 撞唯一索引)。
+        const restored = duplicate || await tx.item.create({ data: { ...data, quantity: normalizeItemQuantity(data.quantity, data.unit), deletedAt, itemCode: sourceCode ?? createItemCode() } });
         if (typeof source.id === "string") itemIdMap.set(source.id, restored.id);
         if (duplicate) { noteDuplicated("items", data.name); continue; }
         items += 1;

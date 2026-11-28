@@ -618,6 +618,54 @@ const baseItem = { name: "T-基础物品", category: "日用", type: "CONSUMABLE
   if (big.body?.id) created.items.push(big.body.id);
 }
 
+// ============ 10. 恢复备份:回收站里的物品还是回收站里的 ============
+// 起因(2026-11-28,在**空库**上实测):把一份「14 件物品,其中 2 件已删除」的备份恢复到空库,
+// 结果库里 14 件、**0 件已删除** —— 回收站里的东西全部活过来,还进了正常物品列表。
+// 根因:恢复逐行走 itemSchema,而那个 schema 没有 deletedAt,zod 直接把它丢掉。
+// 「恢复备份」本来就是为换机/灾难准备的,这种走样正好发生在它唯一的使用场景里。
+{
+  const listOf = (body) => (Array.isArray(body) ? body : body?.items ?? []);
+  const payload = (row) => ({ version: 2, items: [row] });
+
+  // 老备份(没有 itemCode)走「名字 + 位置」判重 —— 这条分支就是当初多出一件的那条。
+  const legacyName = "T-回收站往返-老备份";
+  const legacyRow = { name: legacyName, category: "日用", type: "CONSUMABLE", quantity: 1, unit: "件", deletedAt: "2026-01-02T03:04:05.000Z" };
+  const legacyFirst = await call("POST", "/api/backup/restore", payload(legacyRow));
+  const activeList = listOf((await call("GET", "/api/items")).body);
+  const trashList = listOf((await call("GET", "/api/items?deleted=1")).body);
+  const legacyActive = activeList.some((row) => row?.name === legacyName);
+  const legacyTrashed = trashList.some((row) => row?.name === legacyName);
+  record("恢复", "备份里已删除的物品,恢复后留在回收站(不进活物品列表)",
+    legacyFirst.status < 400 && legacyTrashed && !legacyActive,
+    `status=${legacyFirst.status} 在回收站=${legacyTrashed} 在活列表=${legacyActive}`);
+
+  // 再导一次:判重要认回收站里的那一行,否则每导一次就多一条(而它还在回收站里,平时看不见)。
+  const legacyAgain = await call("POST", "/api/backup/restore", payload(legacyRow));
+  const legacyRows = listOf((await call("GET", "/api/items?deleted=1")).body).filter((row) => row?.name === legacyName);
+  record("恢复", "同一份老备份再导一次,不会在回收站里多出一行",
+    legacyAgain.status < 400 && legacyAgain.body?.duplicated?.total === 1 && legacyRows.length === 1,
+    `status=${legacyAgain.status} duplicated=${legacyAgain.body?.duplicated?.total} 库中同名行=${legacyRows.length}`);
+
+  // 带编号的新备份走 itemCode 判重:恢复一次进回收站,再恢复一次算重复。
+  const codedName = "T-回收站往返-带编号";
+  const codedCode = "T-RESTORE-CODE-1";
+  const codedRow = { name: codedName, itemCode: codedCode, category: "日用", type: "CONSUMABLE", quantity: 1, unit: "件", deletedAt: "2026-01-02T03:04:05.000Z" };
+  const codedFirst = await call("POST", "/api/backup/restore", payload(codedRow));
+  const codedAgain = await call("POST", "/api/backup/restore", payload(codedRow));
+  const codedRows = listOf((await call("GET", "/api/items?deleted=1")).body).filter((row) => row?.itemCode === codedCode);
+  record("恢复", "带编号的已删除物品:恢复一次留在回收站,再恢复一次算重复(不新建)",
+    codedFirst.body?.items === 1 && codedAgain.body?.duplicated?.total === 1 && codedRows.length === 1,
+    `首次 items=${codedFirst.body?.items}(期望 1)再次 duplicated=${codedAgain.body?.duplicated?.total}(期望 1)库中同编号行=${codedRows.length}(期望 1)`);
+
+  // 坏日期不能把物品拖进回收站(备份文件是外部输入,可以是手改的)。
+  const badName = "T-回收站往返-坏日期";
+  const badFirst = await call("POST", "/api/backup/restore", payload({ name: badName, category: "日用", type: "CONSUMABLE", quantity: 1, unit: "件", deletedAt: "昨天下午" }));
+  const badActive = listOf((await call("GET", "/api/items")).body).some((row) => row?.name === badName);
+  record("恢复", "deletedAt 不是合法日期时,按「没删除」处理(不把活物品塞进回收站)",
+    badFirst.status < 400 && badActive,
+    `status=${badFirst.status} 出现在活列表=${badActive}`);
+}
+
 // ============ 清理 ============
 if (!process.argv.includes("--keep")) {
   for (const id of created.items) await call("DELETE", `/api/items/${id}`);

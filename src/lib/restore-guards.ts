@@ -20,3 +20,20 @@ export function usablePercent(value: unknown): number | null {
 export function usableAmount(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
+
+/**
+ * 备份里的「已删除」标记:只有能解析成合法日期才算数,其它一律当「没删除」。
+ *
+ * 由来(2026-11-28 在**空库**上实测):把一份「14 件物品,其中 2 件已删除」的备份恢复进空库,
+ * 结果是 14 件物品、**0 件已删除** —— 恢复时逐行走 itemSchema,而那个 schema 里没有 deletedAt,
+ * zod 默认把未知字段丢掉,于是回收站里的东西全部活过来,还进了正常物品列表。
+ * 「恢复备份」本来就是为换机/灾难准备的,这个走样正好落在它唯一的使用场景里。
+ *
+ * 坏值不能反过来把活物品拖进回收站 —— 备份文件是外部输入(老版本导的、手改的、下载截断的)。
+ */
+export function restorableDeletedAt(value: unknown): Date | null {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value !== "string" || !value.trim()) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
