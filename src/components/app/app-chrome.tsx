@@ -40,7 +40,7 @@ export function AppChrome({ children }: { children?: React.ReactNode }) {
   const app = useApp();
   const {
     data, loading, setLoading, refresh, loadError, view, openView, beginNavigation, search, setSearch, locationFilter, changeLocationFilter,
-    typeFilter, categoryFilter, changeTypeFilter, changeCategoryFilter, filteredItems, usedUpItems, itemsIgnoringCategory, offline, lastSyncedAt,
+    typeFilter, categoryFilter, changeTypeFilter, changeCategoryFilter, filteredItems, usedUpItems, itemsIgnoringCategory, offline, lastSyncedAt, pending,
     readOnly, role, aiAvailable, lowStock, pendingShopping, tasks, expiring, expired, totalValue, now,
     theme, cycleTheme, setThemeMode, density, motionMode, setDensity, setMotionMode,
     sidebarCollapsed, toggleSidebar, modal, setModal, editing, editingLocation, setEditingLocation, closeModal,
@@ -140,6 +140,7 @@ export function AppChrome({ children }: { children?: React.ReactNode }) {
         <AnimatePresence mode="wait">
           <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: .22 }}>
             {children}
+            {pending > 0 && <div className="mb-4 rounded-2xl px-3 py-2 text-sm font-bold" style={{ background: "var(--surface-soft)", color: "var(--muted)" }} role="status">有 {pending} 条改动还没同步 · 联网后会自动发送</div>}
             {offline && <OfflineBanner lastSyncedAt={lastSyncedAt} now={now} />}
             {readOnly && <div className="mb-4 rounded-2xl px-3 py-2 text-xs font-bold" style={{ background: "var(--surface-soft)", color: "var(--muted)" }}>只读账号:可以查看和搜索,不能新增或修改数据。</div>}
             {loading ? <LoadingView /> : !data ? (

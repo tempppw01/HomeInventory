@@ -9,6 +9,8 @@ import { ReadOnlyContext, View, ThemeMode, ItemQuickFilter, compressImage, retur
 import { pathForTarget, pathForView, viewForPath } from "@/components/app/routes";
 import { isCountUnit, isLiquidConsumable } from "@/lib/item-metrics";
 import { pickVisibleItems } from "@/lib/item-visibility";
+import { isRetryable, makeOperation, oldest, type OutboxOperation } from "@/lib/outbox-core";
+import { deleteOperation, listOperations, putOperation } from "@/lib/outbox-idb";
 import { localDateString } from "@/lib/local-date";
 import { isLowStock } from "@/lib/low-stock";
 import { findPendingPurchase } from "@/lib/shopping-list";
@@ -103,6 +105,8 @@ function useAppState() {
   // 时间戳在**每次成功拉到数据时**写:它代表用户手里这份数据什么时候从服务器来的,
   // 不是「我们什么时候联过网」—— 有网却一直没刷新时,两者能差很远。
   const [offline, setOffline] = useState(false);
+  /** 待同步的离线操作条数(徽章上显示的就是它)。 */
+  const [pending, setPending] = useState(0);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const pendingLoad = useRef<Promise<void> | null>(null);
 
@@ -385,6 +389,58 @@ function useAppState() {
     } catch (error) { setToast(error instanceof Error ? error.message : "删除采购项失败"); }
   };
 
+  const refreshQueue = useCallback(async () => {
+    const rows = await listOperations().catch(() => [] as OutboxOperation[]);
+    setPending(rows.length);
+  }, []);
+
+  /**
+   * 把待发队列里的操作按顺序发出去。
+   *
+   * 「队列优先」:用户点一下就先入队(离线也一样),能发就顺手发掉 —— 于是**离线与在线走同一条路**,
+   * 界面不需要去分辨「这是网络错还是服务端拒绝」。判断交给 outbox-core 的纯函数:
+   * 可重试的留在队列里等下一次,不可重试的**立刻出队并说清原因**(否则一条 400 会把队列永远卡在第一格)。
+   * 每条都带自己的 opId,服务端见过就回上次的结果 —— 重放不会多扣一件。
+   */
+  const flushQueue = useCallback(async () => {
+    const queue = await listOperations().catch(() => [] as OutboxOperation[]);
+    if (queue.length === 0) { setPending(0); return; }
+    setPending(queue.length);
+    let row = oldest(queue);
+    while (row) {
+      try {
+        await request(row.url, { method: row.method, body: row.body === null ? undefined : JSON.stringify(row.body), headers: { "x-guiwu-op-id": row.opId } });
+        await deleteOperation(row.opId);
+      } catch (error) {
+        const status = typeof (error as { status?: number })?.status === "number" ? (error as { status: number }).status : null;
+        if (isRetryable(status)) {
+          // 留在队列里,等 online 事件或下一个周期再试;记下最后一次的错,便于界面说明
+          await putOperation({ ...row, attempts: row.attempts + 1, lastError: error instanceof Error ? error.message : "发送失败" });
+          break;
+        }
+        // 服务端明确拒绝:出队并说清楚,免得它把后面的操作全堵住
+        await deleteOperation(row.opId);
+        setToast(`${row.label} 没做成:${error instanceof Error ? error.message : "被服务端拒绝"}`);
+      }
+      const rest = await listOperations().catch(() => [] as OutboxOperation[]);
+      setPending(rest.length);
+      row = oldest(rest);
+    }
+    setPending((await listOperations().catch(() => [] as OutboxOperation[])).length);
+    await refresh();
+  }, [refresh]);
+
+  // 进入页面、恢复联网、以及每 30 秒各试一次(离线时这些尝试都会安静地留在队列里)
+  useEffect(() => {
+    // 首次读队列**延后一个 tick**:effect 里同步 setState 会触发级联渲染(lint 直接拦下了这一条),
+    // 而且队列是 I/O,本来也不该卡着首帧。
+    const initial = window.setTimeout(() => { void refreshQueue(); }, 0);
+    const onOnline = () => { void flushQueue(); };
+    const timer = window.setInterval(() => { void flushQueue(); }, 30_000);
+    window.addEventListener("online", onOnline);
+    return () => { window.clearTimeout(initial); window.removeEventListener("online", onOnline); window.clearInterval(timer); };
+  }, [flushQueue, refreshQueue]);
+
   const closeModal = () => { setModal(null); setEditing(null); setEditingLocation(null); };
 
   const consume = async (item: Item) => {
@@ -393,13 +449,16 @@ function useAppState() {
       return;
     }
     if (item.quantity <= 0) return;
-    try {
-      const result = await request<{ item: Item; activityId: string }>(`/api/items/${item.id}/consume`, { method: "POST" });
-      setData((current) => current ? { ...current, items: current.items.map((entry) => entry.id === item.id ? result.item : entry) } : current);
-      setToast(`${item.name} 已使用 1 ${item.unit}${result.item.quantity === 0 ? ",已从物品列表隐藏" : ""}`);
-      setToastAction({ label: "撤销消耗", onClick: async () => { try { await request(`/api/activity/${result.activityId}/undo`, { method: "POST" }); setToastAction(null); setToast(`${item.name} 已恢复`); await refresh(); } catch (error) { setToast(error instanceof Error ? error.message : "撤销失败"); } } });
-    } catch (error) { setToast(error instanceof Error ? error.message : "操作失败"); }
+    const operation = makeOperation({ method: "POST", url: `/api/items/${item.id}/consume`, label: `消耗 1 ${item.unit} · ${item.name}` });
+    // 队列优先:先记下来(离线不丢),再立刻试着发。界面先乐观减一,用户马上看到反馈。
+    await putOperation(operation);
+    setData((current) => current ? { ...current, items: current.items.map((entry) => entry.id === item.id ? { ...entry, quantity: Math.max(0, entry.quantity - 1) } : entry) } : current);
+    setToast(`${item.name} 已记下,联网后自动同步`);
+    setToastAction(null);
+    await refreshQueue();
+    await flushQueue();
   };
+
 
   const updateRemaining = async (item: Item, remainingPercent: number) => {
     const next = Math.min(100, Math.max(0, Math.round(remainingPercent)));
@@ -534,7 +593,7 @@ function useAppState() {
     qrItem, setQrItem, aiItem, setAiItem, printItems, setPrintItems,
     chatOpen, setChatOpen, chatSeed, setChatSeed, openChatWith, showWelcome, dismissWelcome,
     toast, toastAction, setToast,
-    openEdit, openDetail, uploadItemImage, duplicateItem, copyText, removeShopping, consume,
+    openEdit, openDetail, uploadItemImage, duplicateItem, copyText, removeShopping, consume, pending,
     updateRemaining, removeItem, mergeItems, pauseRestock, addRestockSuggestion, toggleShopping, toggleFavoriteShopping,
     toggleTask, deleteTask,
   };
