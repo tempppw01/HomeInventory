@@ -107,6 +107,23 @@ test("源码级守卫:芯片上的数必须等于点下去看到的件数", () =
   assert.ok(usedAt > 0, "没找到 usedUpChip");
   assert.match(source.slice(usedAt, usedAt + 300), /usedUpItems\.length/, "「已用完 N」按当前筛选的已用完那份数");
 });
+test("源码级守卫:分类轨道上的数必须等于点它之后看到的件数", () => {
+  // 2026-11-28 真机实测:点空间「厨房」后屏幕 2 件,而轨道仍写「饮品 4」,点它只出 2 件。
+  // 轨道要逐类计数,而且计数必须**排除分类本身**这一个条件 —— 否则选中某类之后,
+  // 列表里只剩这一类,其他分类会变成 0 甚至从轨道上消失,用户就切不回去了。
+  const view = readFileSync(new URL("../../src/components/views/items-view.tsx", import.meta.url), "utf8");
+  const catAt = view.indexOf("const presentCategories = ");
+  assert.ok(catAt > 0, "没找到 presentCategories");
+  assert.match(view.slice(catAt, catAt + 200), /itemsIgnoringCategory/, "轨道的分类清单要按「排除分类条件」那份算");
+  const countAt = view.indexOf("const count = category ===");
+  assert.ok(countAt > 0, "没找到每类计数");
+  const countLine = view.slice(countAt, view.indexOf("\n", countAt));
+  assert.match(countLine, /itemsIgnoringCategory/, "每类的数要按「排除分类条件」那份算");
+  assert.doesNotMatch(countLine, /allItems/, "不要再从 allItems 数 —— 那是全屋那份,与点下去的结果不一致");
+  const provider = readFileSync(new URL("../../src/components/app/app-provider.tsx", import.meta.url), "utf8");
+  assert.match(provider, /categoryFilter: "ALL" \}/, "那份列表必须把分类条件置成 ALL(排除分类本身)");
+});
+
 test("源码级守卫:「导出当前筛选」导的必须是屏幕上那一份", () => {
   // 2026-11-28 探针库实测:点「已用完 1」后屏幕写「1 件」,导出提示条却说「已导出 9 件物品」——
   // 因为 exportCsv 用的是 items(还在用那份),而两个芯片只作用于 shownItems。

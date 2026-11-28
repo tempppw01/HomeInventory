@@ -40,7 +40,7 @@ function TagBadge({ tone, children }: { tone: "warning" | "danger" | "muted"; ch
 // 一屏大约能看到 12-20 张卡片,60 是个「首屏够用、滚动不空窗」的量。
 const PAGE_SIZE = 60;
 
-export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, usedUpItems, locations, items, shopping, search, setSearch, filter, setFilter, categoryFilter, setCategoryFilter, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onRemainingChange, onPauseRestock, onDelete, onQr, onAi, onPrint, onToast, onCopy, onToggleShopping, onFavoriteShopping, onAddShopping, onDeleteShopping, onBatchAi, onToastWithUndo, onCreate }: { allItems: Item[]; usedUpItems: Item[]; locations: Location[]; items: Item[]; shopping: ShoppingItem[]; search: string; setSearch: (s: string) => void; filter: ItemQuickFilter; setFilter: (f: ItemQuickFilter) => void; categoryFilter: string; setCategoryFilter: (f: string) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onRemainingChange: (item: Item, remainingPercent: number) => void;
+export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, usedUpItems, itemsIgnoringCategory, locations, items, shopping, search, setSearch, filter, setFilter, categoryFilter, setCategoryFilter, onEdit, onOpenDetail, onImageUpload, onDuplicate, onConsume, onRemainingChange, onPauseRestock, onDelete, onQr, onAi, onPrint, onToast, onCopy, onToggleShopping, onFavoriteShopping, onAddShopping, onDeleteShopping, onBatchAi, onToastWithUndo, onCreate }: { allItems: Item[]; usedUpItems: Item[]; itemsIgnoringCategory: Item[]; locations: Location[]; items: Item[]; shopping: ShoppingItem[]; search: string; setSearch: (s: string) => void; filter: ItemQuickFilter; setFilter: (f: ItemQuickFilter) => void; categoryFilter: string; setCategoryFilter: (f: string) => void; onEdit: (i: Item) => void; onOpenDetail: (i: Item) => void; onImageUpload: (i: Item, file?: File) => void; onDuplicate: (i: Item) => void; onConsume: (i: Item) => void; onRemainingChange: (item: Item, remainingPercent: number) => void;
   onPauseRestock?: (item: Item, days: number | null) => void | Promise<unknown>; onDelete: (i: Item) => void; onQr: (i: Item) => void; onAi: (i: Item) => void; onPrint: (items: Item[]) => void; onToast: (message: string) => void; onCopy: (i: Item) => void; onToggleShopping: (item: ShoppingItem) => void; onFavoriteShopping: (item: ShoppingItem) => void; onAddShopping: () => void; onDeleteShopping: (id: string) => void; onBatchAi: () => void; onToastWithUndo: (message: string, undo: () => Promise<void>) => void; onCreate: () => void; locationFilter?: string; onChangeLocationFilter?: (id: string) => void }) {
   const askConfirm = useConfirm();
   const readOnly = useContext(ReadOnlyContext);
@@ -102,7 +102,7 @@ export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, us
   // ★ 常买:提示语说「已加入常买清单」,这一栏就得真的存在。采购项一标成「已购买」就离开上面那份
   // 待购列表(实测 3 项 → 2 项),常买标记从此看不到也点不到 —— 买过的常买项留在这里,点勾就回待购。
   const boughtFavorites = boughtFavoritePurchases(shopping);
-  const presentCategories = Array.from(new Set(allItems.map((item) => item.category).filter(Boolean)));
+  const presentCategories = Array.from(new Set(itemsIgnoringCategory.map((item) => item.category).filter(Boolean)));
   const medicineCategories = presentCategories.filter(isMedicineCategory);
   const categoryOptions = filter === "MEDICINE"
     ? ["MEDICINE", ...medicineCategories]
@@ -143,7 +143,7 @@ export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, us
   const usedUpChip = usedUpItems.length > 0 ? <Chip active={usedUpOnly} onClick={() => { setUsedUpOnly(!usedUpOnly); setColdOnly(false); }} ariaLabel={`已用完 ${usedUpItems.length} 件,只看已用完的物品`}>已用完 {usedUpItems.length}</Chip> : null;
   const coldChip = coldCount > 0 ? <Chip active={coldOnly} onClick={() => { setColdOnly(!coldOnly); setUsedUpOnly(false); }} ariaLabel={`需冷藏 ${coldCount},只看需冷藏的物品`}>需冷藏 {coldCount}</Chip> : null;
   const categoryButtons = categoryOptions.map((category) => {
-    const count = category === "ALL" ? allItems.length : category === "MEDICINE" ? allItems.filter((item) => isMedicineCategory(item.category)).length : allItems.filter((item) => item.category === category).length;
+    const count = category === "ALL" ? itemsIgnoringCategory.length : category === "MEDICINE" ? itemsIgnoringCategory.filter((item) => isMedicineCategory(item.category)).length : itemsIgnoringCategory.filter((item) => item.category === category).length;
     return <button key={category} type="button" className="browse-rail-item" data-active={categoryFilter === category} onClick={() => setCategoryFilter(category)}><span>{category === "ALL" ? "全部分类" : category === "MEDICINE" ? "医药(按用途)" : isMedicineCategory(category) ? medicineCategoryLabel(category) : category}</span><span className="browse-rail-count">{count}</span></button>;
   });
   return <>

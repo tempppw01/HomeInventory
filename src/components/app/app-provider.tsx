@@ -272,6 +272,13 @@ function useAppState() {
     [search, typeFilter, categoryFilter, spaceScope],
   );
   const filteredItems = useMemo(() => pickVisibleItems(data?.items ?? [], itemFilters, "live"), [data, itemFilters]);
+  // 分类轨道上每个分类的「N 件」必须等于点它之后屏幕上的件数 —— 所以计数要**排除分类本身**这一个条件
+  // (空间/类型/搜索照算):直接用 filteredItems 的话,选中某分类后其他分类会因为列表里只剩这一类而变成 0 甚至消失,
+  // 用户就再也切不回去了(2026-11-28 真机实测:厨房里「饮品 4」点下去只给 2 件)。
+  const itemsIgnoringCategory = useMemo(
+    () => pickVisibleItems(data?.items ?? [], { ...itemFilters, categoryFilter: "ALL" }, "live"),
+    [data, itemFilters],
+  );
   // 已用完(0 件)的物品另有入口(物品页的「已用完」):它们按设计不在物品页、搜索、回收站里,
   // 于是空间删不掉、补货也无从下手(v0.1.112 实测),但也不能让它们挤进「还在用」那份列表。
   const usedUpItems = useMemo(() => pickVisibleItems(data?.items ?? [], itemFilters, "usedUp"), [data, itemFilters]);
@@ -483,7 +490,7 @@ function useAppState() {
     expiryReminderDays,
     setToastAction,
     view, pathname, openView, beginNavigation,
-    search, setSearch, typeFilter, categoryFilter, changeTypeFilter, changeCategoryFilter, filteredItems, usedUpItems,
+    search, setSearch, typeFilter, categoryFilter, changeTypeFilter, changeCategoryFilter, filteredItems, usedUpItems, itemsIgnoringCategory,
     locationFilter, changeLocationFilter,
     readOnly, role, lowStock, pendingShopping, tasks, expiring, expired, totalValue, now,
     theme, setThemeMode, cycleTheme, density, setDensity, motionMode, setMotionMode,
