@@ -39,6 +39,7 @@ export async function POST(request: Request, { params }: Context) {
       // 重放:上次已经做过。有结果就把上次的结果原样回给他(多一个 deduplicated 标记);
       // 结果还没写回来(上一次还在处理,或进程中途死掉)就说清楚 —— **绝不重复扣减**。
       if (outcome.result) return NextResponse.json({ ...outcome.result, deduplicated: true });
+      if (outcome.stale) return NextResponse.json({ error: "这次操作没能确认结果,请再操作一次(系统没有自动重做,免得重复建一条)", deduplicated: true }, { status: 409 });
       return NextResponse.json({ error: "这次操作已经在处理了,请稍后刷新", deduplicated: true }, { status: 503 });
     }
     const result = outcome.result;

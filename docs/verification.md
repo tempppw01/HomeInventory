@@ -81,7 +81,7 @@
 | `verify-account-self-service` | 自助改密码与自助恢复码:401/400 矩阵、旧密码失效、其它设备会话被吊销、只读也能改自己的凭据但改家庭数据仍 403、恢复码端到端重置 | 26 |
 | `verify-search-history-and-backup` | 搜索历史去重与上限、自动备份真的写文件(含「这个文件是刚写的」) | 14 |
 | `verify-backup-dates` | 备份里的日期格式 | 12 |
-| `verify-schema-sync` | SQLite 与 MySQL 两份 schema 没有漂开 | 4 |
+| `verify-schema-sync` | SQLite 与 MySQL 两份 schema 没有漂开;**存 JSON 的字段在 MySQL 上必须声明足够大的类型**(默认 VARCHAR(191) 存不下长 JSON —— v0.1.129 CI 就是这么红的) | 5 |
 | `verify-config-docs` | 环境变量与文档一致:代码里用到的都在文档或白名单里 | 4 |
 | `verify-coverage-map` | 覆盖地图不许说假话:套件都在表里、没有幽灵行、单测条数与实际一致 | 8 |
 | `verify-ci-workflow` | CI 工作流自检:作业/步骤/引用的脚本都还在、关键检查没被删 | 12 |

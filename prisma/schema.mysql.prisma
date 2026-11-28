@@ -309,7 +309,10 @@ model SyncOperation {
   id         String   @id @default(cuid())
   opId       String   @unique
   action     String
-  resultJson String?
+  // MySQL 的 String 默认是 VARCHAR(191),而这里存的是**整条结果 JSON**(一个物品/采购项全字段)。
+  // 实测(v0.1.129 CI,MySQL 作业):超长写入被拒,而调用方把那句 .catch 吞了 —— 于是标记在、
+  // 结果不在,重放只能回 503「已经在处理了」。SQLite 没有长度限制,所以本地一直看不出来。
+  resultJson String?  @db.Text
   createdAt  DateTime @default(now())
 
   @@index([createdAt])

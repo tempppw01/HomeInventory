@@ -67,6 +67,25 @@ for (const name of sqliteModels) {
 }
 check("同名字段的清单一致", fieldDiffs.length === 0, fieldDiffs.join(" | "));
 
+// ---------- 存 JSON 的字段:MySQL 必须显式 @db.Text ----------
+// 起因(v0.1.129 CI,MySQL 作业):SyncOperation.resultJson 在 SQLite 上是无长度限制的字符串,
+// 到了 MySQL 默认变成 VARCHAR(191) —— 一条物品/采购项的结果 JSON 存不下,写入被拒,
+// 而调用方那处 .catch 把它吞了:标记在、结果不在,重放永远只能回「已经在处理了」。
+// SQLite 没有长度限制,本地套件一路全绿 —— 这条只有真的在 MySQL 上跑才看得见,
+// 所以在这里做静态守卫:名字里带 Json 的字段,MySQL 上必须声明清楚它能装多长。
+const mysqlText = readFileSync(MYSQL, "utf8");
+const jsonFields = [];
+for (const line of mysqlText.split("\n")) {
+  const match = line.match(/^\s+(\w*Json\w*)\s+String(\?|\[\])?\s*(.*)$/i);
+  if (!match) continue;
+  jsonFields.push({ name: match[1], declared: (match[3] || "").trim(), ok: /@db\.(Text|MediumText|LongText|VarChar\(\d{4,}\))/.test(match[3] || "") });
+}
+check(
+  "存 JSON 的字段在 MySQL 上声明了足够大的类型(默认 VARCHAR(191) 存不下)",
+  jsonFields.length > 0 && jsonFields.every((field) => field.ok),
+  jsonFields.map((field) => `${field.name}: ${field.declared || "(没有声明 -> 默认 VARCHAR(191))"}`).join(" | ") || "(一个都没扫到 —— 字段是不是改名字了?)",
+);
+
 console.log(`      对照:${sqliteModels.length} 个模型 / ${sqliteModels.reduce((sum, name) => sum + sqlite[name].length, 0)} 个字段`);
 
 const failed = results.filter((entry) => !entry.ok);

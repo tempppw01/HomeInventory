@@ -18,7 +18,7 @@ export function normalizeOpId(raw: string | null | undefined): string | null {
   return /^[A-Za-z0-9._:-]+$/.test(value) ? value : null;
 }
 
-type OnceOutcome<T> = { replay: false; result: T } | { replay: true; result: T | null };
+type OnceOutcome<T> = { replay: false; result: T } | { replay: true; result: T | null; stale?: boolean };
 
 function isUniqueViolation(error: unknown): boolean {
   return typeof error === "object" && error !== null && (error as { code?: string }).code === "P2002";
@@ -55,8 +55,14 @@ export async function runOnce<T>(
       }
     }
     if (seen && Date.now() - seen.createdAt.getTime() > staleMs) {
-      await prisma.syncOperation.delete({ where: { opId } }).catch(() => undefined);
-      return runOnce(opId, action, run, options);
+      // 宽限期过了,还是"标记在、结果不在":上一次多半死在半路。
+      //
+      // 这里**不自动重做**(v0.1.130 之前是删掉标记再跑一遍)。原因:
+      // 对"加一件物品 / 加一条采购项"这种动作,重做一次就是**重复建一个**,
+      // 而用户看到的是家里凭空多了一件、清单里多了一条 —— 静默的数据错误,比"没做成"更糟。
+      // 交回调用方(见各写接口的 replay 分支):它回 409 说清"没确认结果,请再操作一次",
+      // 客户端把这条从队列里去掉并显示原因 —— 由用户决定,不替他做危险的重试。
+      return { replay: true, result: null, stale: true };
     }
     return { replay: true, result: null };
   }
