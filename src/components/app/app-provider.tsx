@@ -12,6 +12,7 @@ import { pickVisibleItems } from "@/lib/item-visibility";
 import { isRetryable, makeOperation, oldest, shouldQueue, type OutboxOperation } from "@/lib/outbox-core";
 import { deleteOperation, listOperations, putOperation } from "@/lib/outbox-idb";
 import { localDateString } from "@/lib/local-date";
+import { parseAutoBackupMarker, serializeAutoBackupMarker, shouldAttemptAutoBackup } from "@/lib/auto-backup-schedule";
 import { isLowStock } from "@/lib/low-stock";
 import { findPendingPurchase } from "@/lib/shopping-list";
 import { locationSubtreeIds } from "@/lib/location-tree";
@@ -200,11 +201,23 @@ function useAppState() {
   useEffect(() => {
     const key = "home-inventory-auto-backup-check";
     if (role !== "ADMIN") return;
-    if (localStorage.getItem(key) === localDateString()) return;
+    const today = localDateString();
+    const marker = parseAutoBackupMarker(localStorage.getItem(key));
+    // 判断交给纯函数(lib/auto-backup-schedule):今天成功过就不再发;今天刚失败过则过半小时再试。
+    if (!shouldAttemptAutoBackup(marker, today, Date.now())) return;
     fetch("/api/backup/auto", { method: "POST" })
-      .then((response) => { localStorage.setItem(key, localDateString()); if (!response.ok) throw new Error("自动备份失败"); })
+      .then((response) => {
+        // 只有**成功**才记「今天已完成」。此前标记写在判断 response.ok 之前 ——
+        // 一次 500 或会话过期就会把今天标成已备份,这天再也不会重试(家里当天就没有自动备份)。
+        if (!response.ok) throw new Error(`服务器返回 ${response.status}`);
+        localStorage.setItem(key, serializeAutoBackupMarker({ lastSuccessDate: today, lastFailureDate: null, lastFailureAt: null }));
+      })
       // 失败要说出来:以前这里是 .catch(() => undefined),连续几天没备份用户也看不出来。
-      .catch((error) => setToast(`自动备份没做成:${error instanceof Error ? error.message : "未知原因"} —— 可在「设置 · 数据安全」里手动导出一份`));
+      .catch((error) => {
+        // 记下「失败」而不是「已完成」—— 半小时后的下一次打开还会再试。
+        localStorage.setItem(key, serializeAutoBackupMarker({ lastSuccessDate: marker.lastSuccessDate, lastFailureDate: today, lastFailureAt: Date.now() }));
+        setToast(`自动备份没做成:${error instanceof Error ? error.message : "未知原因"} —— 稍后会自动再试;也可以现在到「设置 · 数据安全」手动导出一份`);
+      });
   }, [role]);
 
   // Real navigation now happens through the URL. The shell still fires the same

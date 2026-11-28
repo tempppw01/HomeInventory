@@ -5,6 +5,39 @@
 
 ---
 
+## [v0.1.140] - 2026-11-29
+
+**每日自动备份失败一次,这一天就再也不会重试 —— 客户端把「今天已备份」的标记写在了判断服务器是否成功之前。**
+
+### 现场(读代码 + 真浏览器拦截实测)
+`src/components/app/app-provider.tsx` 原文:
+```ts
+if (localStorage.getItem(key) === localDateString()) return;
+fetch("/api/backup/auto", { method: "POST" })
+  .then((response) => { localStorage.setItem(key, localDateString()); if (!response.ok) throw new Error("自动备份失败"); })
+```
+`setItem` 在 `if (!response.ok)` **之前**执行 —— 任何 HTTP 失败都算「今天做完了」:
+- 服务端 500、数据库临时不可用;
+- 会话过期(401)/无权限(403);
+- 反代偶发错误页。
+
+实测(隔离上下文里拦 `POST /api/backup/auto` 返回 500 后刷新页面):标记变成裸日期 `2026-11-29`(即「今天已完成」),**再打开页面一次 POST 都不会再发**(POST 次数 1 → 1)。提示是弹出的(「自动备份没做成」),但**这一天家里没有自动备份** —— 而备份正是出事时唯一能救回来的东西。
+
+### 改法
+- 新增 `src/lib/auto-backup-schedule.ts`(纯函数,零依赖):
+  - `parseAutoBackupMarker` / `serializeAutoBackupMarker`:标记升级成 `{ lastSuccessDate, lastFailureDate, lastFailureAt }`,并**兼容旧版**(旧值就是一个日期字符串,按「当天已成功」处理);认不出的坏数据一律当没有记录 —— 宁可多试一次,也不要因为一段坏数据今天就再也不备份。
+  - `shouldAttemptAutoBackup(marker, today, now, retryAfterMs = 30 分钟)`:今天成功过 → 不发;今天失败过且还在冷却 → 先等(不每次翻页都弹提示);否则发。
+  - 两个边界也钉住:**失败发生在昨天**不该把新的一天拖住;**失败时刻在「未来」**(时钟被改过)不许把今天永久卡死。
+- `app-provider.tsx`:只有**成功**才记「今天已完成」;失败记「今天这个时刻失败过」,提示语改成「稍后会自动再试」。
+
+### 验证
+- `scripts/unit/auto-backup-schedule.test.mjs` 新增 **10** 条(单测总数 498 → 508)。
+- `scripts/verify-p2-features.mjs` 24 → **29**,在隔离上下文里拦 POST 造 500,断言:标记记的是失败而**不是**今天已完成、提示说了、把冷却推到 31 分钟前再打开**真的会再发一次**、成功之后标记变回「今天已完成」。
+  - **红→绿**:同一条命令、同一个探针库 —— 旧构建 **26/29**(标记=`2026-11-29`、POST 1→1、重试那条永远不再发),新构建 **29/29**。
+  - 如实说明:这 4 条里「备份失败时明确说出来」在旧构建上也通过(旧代码本来就会弹提示),它不是这一版的判别项,留着是为了守住「失败必须说出来」不被以后改掉。
+
+---
+
 ## [v0.1.139] - 2026-11-29
 
 **物品详情页的「AI 说」不写自己是何时算的 —— 变更记录一多,那句时间直接消失;于是一条「现有 3 盒」(实际已 6 盒)的旧结论看起来像刚算的。**

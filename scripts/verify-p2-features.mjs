@@ -296,6 +296,89 @@ console.log("已清理");
   );
 }
 
+// ---------- 自动备份:失败了今天还得能再试 ----------
+// 由来(2026-11-29 实测代码):客户端把「今天已经备份过」的标记写在判断 response.ok **之前**,
+// 于是任何 HTTP 失败(500 / 会话过期 401)都会把今天标成已完成 —— 这天再打开页面也不重试,
+// 家里当天就没有自动备份。提示是说了,但这一天的事实没了。
+// 这里在隔离上下文里拦 POST 造一次 500,断言:标记记的是「失败」、提示说了、而且过了冷却真的会再发一次。
+{
+  const adminCookies = await context.cookies();
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: "block" });
+  await ctx.addCookies(adminCookies);
+  const probe = await ctx.newPage();
+  let posts = 0;
+  let failFirst = true;
+  await probe.route("**/api/backup/auto", (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    posts += 1;
+    if (failFirst) return route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "boom" }) });
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ saved: true, file: "probe.json" }) });
+  });
+
+  const markerNow = () => probe.evaluate(() => localStorage.getItem("home-inventory-auto-backup-check"));
+  // toast 会自动消失(无操作按钮时 2600ms),所以要在页面里**轮询抓住**它,
+  // 不能在固定 wait 之后再看 —— 第一版等 3500ms,抓到的是空的。
+  const waitForToast = () => probe.evaluate(async () => {
+    const pick = () => [...document.querySelectorAll('[role="status"]')].map((node) => (node.textContent || "").trim()).filter(Boolean).join(" | ");
+    const started = Date.now();
+    while (Date.now() - started < 8000) {
+      const text = pick();
+      if (text) return text;
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    }
+    return "";
+  });
+  await probe.goto(BASE, { waitUntil: "domcontentloaded" });
+  const toastText = await waitForToast();
+  const afterFailure = await markerNow();
+  const todayLocal = await probe.evaluate(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  });
+
+  record("(前置)管理员进首页时确实发起了自动备份", posts === 1, `POST 次数=${posts}`);
+  record(
+    "备份失败时明确说出来",
+    /自动备份没做成/.test(toastText),
+    toastText.slice(0, 160),
+  );
+  // 这条是本轮的核心:失败**不能**被记成「今天已完成」
+  record(
+    "失败之后不许把今天标成「已备份」(否则这一天再也不会重试)",
+    afterFailure !== todayLocal && /失败|lastFailureAt/.test(String(afterFailure)),
+    `标记=${afterFailure} 今天=${todayLocal}`,
+  );
+
+  // 把冷却时间推到过去(30 分钟前),模拟「过一会儿再打开」——必须真的再发一次
+  await probe.evaluate(() => {
+    const raw = localStorage.getItem("home-inventory-auto-backup-check");
+    try {
+      const marker = JSON.parse(String(raw));
+      marker.lastFailureAt = Date.now() - 31 * 60 * 1000;
+      localStorage.setItem("home-inventory-auto-backup-check", JSON.stringify(marker));
+    } catch { /* 标记格式不对就让下面的断言去说 */ }
+  });
+  failFirst = false;
+  const before = posts;
+  await probe.goto(BASE, { waitUntil: "domcontentloaded" });
+  await probe.waitForTimeout(3500);
+  record(
+    "过了冷却后再打开会重试(失败不放弃这一天)",
+    posts > before,
+    `重试前 POST=${before} 重试后=${posts}`,
+  );
+  // 标记是新格式的 JSON(`{"lastSuccessDate":...}`),别拿它跟裸日期比 —— 第一版就这么写错了一次
+  const retriedSuccessDate = await probe.evaluate(() => {
+    try { return JSON.parse(String(localStorage.getItem("home-inventory-auto-backup-check"))).lastSuccessDate ?? null; } catch { return null; }
+  });
+  record(
+    "重试成功后标记变回「今天已完成」",
+    retriedSuccessDate === todayLocal,
+    `标记里=${retriedSuccessDate} 今天=${todayLocal}`,
+  );
+  await ctx.close();
+}
+
 await browser.close();
 
 const failed = results.filter((row) => !row.ok);
