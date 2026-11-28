@@ -482,6 +482,10 @@ jobs:
     env:
       DATABASE_PROVIDER: mysql
       DATABASE_URL: mysql://root:rootpw@127.0.0.1:3306/homeinventory
+      # 这个测试库的库名(homeinventory)看不出是探针库,而建号脚本现在**默认只认探针库**
+      # (2026-11-28 实测:家庭库里躺着三个口令写在仓库里的账号,其中一个是管理员)。
+      # 这里是一次性测试库,显式写下同意。
+      ALLOW_PROBE_ACCOUNTS: 1
       PROBE_USER: leadcheck
       PROBE_PASS: Lead#2026
       BASE_URL: http://127.0.0.1:3001

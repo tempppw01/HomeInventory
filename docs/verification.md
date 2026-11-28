@@ -47,13 +47,14 @@
 | `local-date` / `weekly-review` / `relative-time` | 本地日历日、每周盘点设定日、相对时间文案 |
 | `interactive-nesting` | 「行里的 trailing 是不是控件」的判定(判断错了就会渲染出 `<button>` 套 `<button>`) |
 | `ai-error` | 上游 AI 报错的解读:各状态码与两种「图片链接被拒」措辞、HTML 去标签、超长截断;外加一条源码级守卫 —— 四个 AI 路由里不许再自己拼失败文案 |
+| `script-probe-account-guard` | **建探针账号的闸门:默认只认探针库**。2026-11-28 只读实测:家庭库 `data/home-inventory.db` 里躺着 `leadcheck`(ADMIN)/`viewcheck`/`rcvlead` 三个账号(2026-11-20 19:01 建的,用户从没建过),用 scrypt 对着库里的 `passwordHash` 复核 —— **三个口令都能登录**,而口令就明文写在 `scripts/make-probe-accounts.mjs` 里:谁读到这个仓库、又能连上家里那台机器,就能以管理员身份进这个家。脚本原先对 `DATABASE_URL` 指向谁毫无判断,指到哪个库就 upsert 到哪个库。现在默认只认探针库(`probe` / `ci` / `empty` / `test` / `hygiene`),别的一律拒绝;CI 的 MySQL 作业(库名 `homeinventory` 看不出是探针库)显式写 `ALLOW_PROBE_ACCOUNTS=1` —— 那是一个看得见的动作,而不是一次疏忽。拒绝信息里还会先把连接串的**口令抹掉**再打印(它会进 CI 日志) |
 | 一致性 | 服务端写入的动作都有中文标签;代码引用的 `/api` 路径都有对应路由 |
 | 写接口守卫 | 每个非 GET 处理器必须有权限校验,或在「设计上公开 / 自带细粒度校验」清单里(清单同时校验不过期) |
 | 配置文档一致性 | 代码用到的用户可配置环境变量都必须在 README / compose 里出现;开发专用白名单同时校验不过期 |
 | CI 工作流自检 | 每个步骤有 run/uses、引用的脚本存在、关键作业与检查仍在(工作流无效时 CI 根本不会跑,所以这条放在本地 test:unit 最前) |
 | 两份 schema 同步 | MySQL 用的 `schema.mysql.prisma` 必须与 `schema.prisma` 的表/字段完全一致(容器启动时会用它覆盖正式 schema) |
 
-**476 条**(最近一次全绿)。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
+**483 条**(最近一次全绿)。`npm run test:unit` 会通过 `scripts/lib/register-alias.mjs` 注册 `@/` 别名解析,
 以便直接测引用了其他模块的文件。
 
 下面几张表的**条数**一栏,记的是**本机家用库(数据齐)跑出来的**数 —— 有些套件会按页面上的行数 /

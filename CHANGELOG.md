@@ -5,6 +5,68 @@
 
 ---
 
+## [v0.1.134] - 2026-11-28
+
+**建探针账号的脚本原先不认库: `DATABASE_URL` 指到哪个库,就把账号 upsert 到哪个库 —— 而那几个口令是明文写在仓库里的。**
+
+家里那台机器的正式库 `data/home-inventory.db` 里,现在躺着 3 个这样的账号。
+
+### 现场(只读盘点,一个字节都没改)
+
+`leadcheck`(ADMIN)/ `viewcheck`(VIEWER)/ `rcvlead`(MEMBER),创建于 2026-11-20T19:01,
+`lastLoginAt` 全是「从未」。这不是用户建的 —— 库里唯一的正常账号是 `bgs`。
+
+拿 scrypt 对着库里的 `passwordHash` 在本地复核:**三个口令都能登录**,而它们就明写在
+`scripts/make-probe-accounts.mjs:20-22`(`Lead#2026` / `View#2026` / `Rcv#2026x`)。
+
+意思是:谁读到这个仓库、又能连上这台机器,就能用 `leadcheck` 以**管理员**身份进这个家。
+「验收脚本顺手在正式库上建了几个测试账号」这种小事,后果是这样落地的。
+
+### 改法:默认只认探针库
+
+新增 `scripts/lib/probe-account-guard.mjs`(纯 `.mjs`,因为该脚本在 Node 22 的多个 CI 作业里
+直接 `node scripts/...mjs` 运行,不能依赖类型剥离):
+
+```
+probeAccountTargetDecision(databaseUrl, override)
+  override === "1"                    → 放行(已显式设置 ALLOW_PROBE_ACCOUNTS=1)
+  file:../data/ci.db / probe0132.db … → 放行(库名看着是探针库)
+  file:../data/home-inventory.db      → 拒绝
+  mysql://…/homeinventory             → 拒绝
+```
+
+`PROBE_DB_PATTERN = /(?:^|[^a-z])(probe|ci|empty|test|hygiene)(?:[^a-z]|$)/i` —— 按**词**匹配,
+所以 `latest.db`、`mytest.db` 不算探针库(`test` 后面跟着字母,不是词尾)。
+
+`scripts/make-probe-accounts.mjs` 在 `new PrismaClient()` **之前**就判断:拒绝时打印三行中文说明并
+`process.exit(1)`(连库都不连);放行时先打印 `目标库:<抹掉口令的 URL>(原因)`,让每次运行都留下
+「我建到哪个库上了」的记录。拒绝信息里的连接串会先抹掉口令 —— 它会进 CI 日志。
+
+CI 的 `mysql-runtime` 作业库名是 `homeinventory`,看不出是探针库,所以显式写上
+`ALLOW_PROBE_ACCOUNTS: 1`(带注释说明为什么)。其余 6 处调用点(`ci.db` / `hygiene.db` / …)
+库名都命中规则,不用动 —— **需要显式同意的只有这一处,而且是一个看得见的动作,不是一次疏忽**。
+
+### 怎么验的
+
+- 新增 `scripts/unit/script-probe-account-guard.test.mjs`(7 条):探针库放行(6 种库名)、
+  家庭库拦住、MySQL 正式库拦住且开关能放行、`latest.db`/`mytest.db` 不算探针库、没设
+  `DATABASE_URL` 拦住、开关只认 `"1"`(`0`/`true`/`yes`/空 都不算)、拒绝信息里没有口令。
+- **先红后绿**(全在家庭库的**副本**上做,本体未动,副本事后已删):
+  - 把家庭库复制成 `data/family-copy.db`、删掉那 3 个账号(只剩 `bgs`);用 `git stash` 换回**旧**脚本 →
+    旧脚本照建 3 个账号、`exit=0`(红:`users now: 4`);换回新脚本 → `exit=1`,信息为
+    「拒绝在这里建探针账号:这个库看着不是探针库(file:../data/family-copy.db)…」。
+  - `data/probe-guard-check.db`(探针名)→ 放行并建号,`exit=0`;非探针名 + `ALLOW_PROBE_ACCOUNTS=1`
+    → 放行并打印「已显式设置 ALLOW_PROBE_ACCOUNTS=1」。
+- 单测 476 → **483**(coverage-map 实测「地图写的单测条数(483)与实际声明数(483)一致」);
+  `npm run test:unit` 整条 exit 0。顺带被自己的守卫红过一次:`ALLOW_PROBE_ACCOUNTS` 没进
+  `verify-config-docs.mjs` 的开发专用白名单 → `FAIL 用户可配置的环境变量都在文档里`,补上后 4/4。
+- `docs/verification.md` 单测表新增 `script-probe-account-guard` 一行。
+
+**家庭库里那 3 个账号还在**(删账号是对正式库的不可逆写操作,等用户拍板);本轮只保证
+「同样的疏忽不会再发生一次」。
+
+---
+
 ## [v0.1.133] - 2026-11-28
 
 **月报把「本月」的分类占比塞在「近 6 个月支出」下面,却一个字都没写** —— 打印出来会被读成 6 个月的数。

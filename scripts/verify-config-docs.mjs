@@ -37,6 +37,7 @@ const DEV_ONLY = new Map([
   ["SHOT_TAG", "截图脚本用"],
   ["SNAP_TAG", "截图脚本用"],
   ["TAG", "发布脚本用"],
+  ["ALLOW_PROBE_ACCOUNTS", "建探针账号的显式开关:非探针库(如 CI 的 MySQL 作业)必须写明才允许建,防止把口令写在仓库里的账号建进家庭库"],
   ["PROBE_USER", "验收脚本用"],
   ["PROBE_PASS", "验收脚本用"],
   ["PROBE_VIEWER_USER", "验收脚本用"],
