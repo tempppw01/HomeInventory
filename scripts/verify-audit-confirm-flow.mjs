@@ -182,6 +182,75 @@ check(
   }
 }
 
+// ---------- 6 本机留下的盘点历史,必须与服务端记录分得清 ----------
+// 由来(2026-11-28 实测):同一个账号、同一个服务端(0 条盘点记录),两个浏览器上下文给出两种答案 ——
+// 有本机历史的那个显示「最近盘点:11/20 · 1/9 件」还画了趋势图,干净的那个显示
+// 「第一次盘点?先扫一个二维码试试」。两边都像在陈述事实,谁也没说自己的历史是从哪来的。
+//
+// 这里用路由拦截构造三种情形,不改真实数据:
+//   · 服务端 0 条 + 本机有历史   → 必须写明「只在本机」「服务器上没有」
+//   · 服务端有记录               → 照旧是「最近盘点」,不许挂那句提示(不能过度声明)
+//   · 这次没读到(离线)          → 也要说明没跟服务端核对过
+{
+  const localEntry = { at: new Date().toISOString(), total: 9, confirmed: 1, locationName: "全部空间" };
+  // 复用已登录的会话 cookie 开隔离上下文:**只要** localStorage 是干净的。
+  // 不重新登录:登录接口限速 12 次/分钟/IP,这一套里再登录 3 次很容易撞上(其它套件也在跑)。
+  const sessionCookies = await context.cookies();
+  /** mode: "empty" | "server" | "unreadable" —— 在隔离上下文里跑,不碰本套件当前页面的状态 */
+  const auditPageText = async (mode) => {
+    // `serviceWorkers: "block"` 是必须的:Service Worker 自己发的请求**不经过** Playwright 的路由拦截
+    // (第一版没写这条,route.fulfill/abort 全都没生效,三次断言红得毫无意义 —— 它其实一直在读真实响应)。
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 }, serviceWorkers: "block" });
+    await ctx.addCookies(sessionCookies);
+    const probe = await ctx.newPage();
+    await probe.goto(`${BASE}/audit`, { waitUntil: "domcontentloaded" });
+    await probe.waitForTimeout(1200);
+    // 装上一份「本机历史」—— 模拟「这台设备以前盘点过,而服务端那份已经不在」
+    await probe.evaluate((entry) => {
+      localStorage.setItem("home-inventory-audit-history-v1", JSON.stringify([entry]));
+      localStorage.setItem("home-inventory-audit-confirmed-v1", "[]");
+    }, localEntry);
+    await probe.route("**/api/audits", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      if (mode === "empty") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ audits: [] }) });
+      if (mode === "unreadable") return route.abort();
+      return route.continue();
+    });
+    await probe.goto(`${BASE}/audit`, { waitUntil: "domcontentloaded" });
+    await probe.waitForTimeout(3000);
+    const text = await probe.evaluate(() => (document.querySelector("main")?.innerText || "").replace(/\s+/g, " "));
+    await ctx.close();
+    return text;
+  };
+
+  const onlyOnDevice = "只在这台设备的浏览器里";
+  const emptyText = await auditPageText("empty");
+  check(
+    "服务端没有记录、本机还留着旧历史时,不把它当成「最近盘点」直说",
+    emptyText.includes("本机记录的最近一次盘点") && !/最近盘点:/.test(emptyText),
+    emptyText.slice(0, 200),
+  );
+  check(
+    "并说清它在服务器上没有对应记录(换台设备看不到)",
+    emptyText.includes(onlyOnDevice) && emptyText.includes("服务器上没有对应的盘点记录"),
+    emptyText.slice(0, 260),
+  );
+
+  const serverText = await auditPageText("server");
+  check(
+    "服务端有记录时照旧是「最近盘点」,不挂那句「只在本机」(不能过度声明)",
+    /最近盘点:/.test(serverText) && !serverText.includes(onlyOnDevice),
+    serverText.slice(0, 200),
+  );
+
+  const offlineText = await auditPageText("unreadable");
+  check(
+    "这次没从服务器读到本机历史时,也说明它没跟服务端核对过",
+    offlineText.includes(onlyOnDevice) && offlineText.includes("这次没从服务器读到"),
+    offlineText.slice(0, 260),
+  );
+}
+
 await context.close();
 await browser.close();
 

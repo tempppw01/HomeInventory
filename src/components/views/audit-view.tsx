@@ -60,6 +60,14 @@ export function AuditView({ items, locations, onRefresh, onToast }: { items: Ite
     try { return JSON.parse(localStorage.getItem(historyKey) || "[]"); } catch { return []; }
   });
   // 盘点历史优先读服务端:此前只存 localStorage,换设备或清缓存就丢。
+  //
+  // 但「服务端没有记录」时保留本机历史这件事必须**说出来**(实测 2026-11-28):
+  // 同一个账号、同一个服务端(0 条盘点记录),一个浏览器里有本机历史、另一个是干净的 ——
+  // 前者显示「最近盘点:11/20 · 1/9 件」还画了趋势图,后者显示「第一次盘点?先扫一个二维码试试」。
+  // 两边都像在陈述事实,谁也没说自己的历史是从哪来的。
+  // 所以这里额外记住「服务端到底几条」,渲染时把「仅本机」的那份如实标出来。
+  const [serverAudits, setServerAudits] = useState<number | null>(null);
+  const [historyChecked, setHistoryChecked] = useState(false);
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -68,14 +76,26 @@ export function AuditView({ items, locations, onRefresh, onToast }: { items: Ite
         if (!response.ok) return;
         const body = await response.json();
         if (cancelled || !Array.isArray(body.audits)) return;
-        if (!body.audits.length) return; // 服务端还没有记录时,保留本地历史
+        setServerAudits(body.audits.length);
+        if (!body.audits.length) return; // 服务端还没有记录时,保留本地历史(下面会标明它只在本机)
         setHistory(body.audits.slice(0, 20));
       } catch {
-        // 网络不可用时保持本地历史,不影响盘点流程
+        // 网络不可用时保持本地历史,不影响盘点流程(下面同样会标明它没跟服务端核对过)
+      } finally {
+        if (!cancelled) setHistoryChecked(true);
       }
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // 这份历史只在本机(服务端没有,或这次没读到)—— 文案必须与「服务端有记录」区分开。
+  // 读之前(historyChecked=false)先不下结论,免得首帧闪一句「仅本机」再变回正常。
+  const historyOnDeviceOnly = historyChecked && history.length > 0 && (serverAudits === null || serverAudits === 0);
+  const historyNote = !historyOnDeviceOnly
+    ? null
+    : serverAudits === null
+      ? "这些盘点记录目前只在这台设备的浏览器里 —— 这次没从服务器读到,换台设备可能看不到。"
+      : "这些盘点记录目前只在这台设备的浏览器里 —— 服务器上没有对应的盘点记录,换台设备看不到。";
 
   // 历史盘点趋势:只在有两次以上记录时画,一个点看不出走势。
   const trend = auditTrend(history);
@@ -154,7 +174,12 @@ export function AuditView({ items, locations, onRefresh, onToast }: { items: Ite
     // 失败不阻塞流程(本地仍留记录),但**必须说出来**:否则这条记录只在这台设备上,
     // 换设备或清缓存后就没了,而用户毫不知情(实测拦掉这个请求时界面一声不响)。
     void fetch("/api/audits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(entry) })
-      .then((response) => { if (!response.ok) throw new Error(`服务器返回 ${response.status}`); })
+      .then((response) => {
+        if (!response.ok) throw new Error(`服务器返回 ${response.status}`);
+        // 服务端确实收下了:这一条不再是「只在本机」的,把计数抬上去,
+        // 免得上面那句「只在这台设备的浏览器里」一直挂着(它现在是服务端也有的记录)。
+        setServerAudits((count) => (typeof count === "number" ? count + 1 : count));
+      })
       .catch((error) => onToast(`本次盘点只在本机留了记录:同步到服务端失败(${error instanceof Error ? error.message : "网络问题"})。换设备或清缓存后就看不到它了。`));
     setFinished(true);
     if (!unconfirmed.length) localStorage.removeItem(storageKey);
@@ -191,7 +216,7 @@ export function AuditView({ items, locations, onRefresh, onToast }: { items: Ite
     >
       <Panel
         title="盘点总览"
-        description={history[0] ? `最近盘点:${new Date(history[0].at).toLocaleDateString("zh-CN")} · ${history[0].confirmed}/${history[0].total} 件 · ${history[0].locationName}` : "第一次盘点?先扫一个二维码试试。"}
+        description={history[0] ? `${historyOnDeviceOnly ? "本机记录的最近一次盘点" : "最近盘点"}:${new Date(history[0].at).toLocaleDateString("zh-CN")} · ${history[0].confirmed}/${history[0].total} 件 · ${history[0].locationName}` : "第一次盘点?先扫一个二维码试试。"}
         actions={<><button onClick={exportAudit} className="inline-flex min-h-11 items-center px-2 text-xs font-bold" style={{ color: "var(--primary)" }}>导出结果</button><button onClick={restart} className="inline-flex min-h-11 items-center px-2 text-xs font-bold muted transition-colors hover:text-[var(--foreground)] sm:min-h-10">重新开始</button></>}
       >
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
@@ -206,6 +231,9 @@ export function AuditView({ items, locations, onRefresh, onToast }: { items: Ite
           <Metric label="未确认" value={unconfirmed.length} tone={unconfirmed.length ? "warning" : "success"} hint={unconfirmed.length ? "继续核对或统一处理" : "没有遗漏"} />
           <Metric label="当前范围" value={scopeName} hint={locationId === "ALL" ? undefined : "仅当前空间"} />
         </div>
+        {historyNote && (
+          <p className="mb-0 mt-3 text-xs leading-5" style={{ color: "var(--warning, #b45309)" }} role="note">{historyNote}</p>
+        )}
         {trend.length >= 2 && (
           <div className="mt-4 border-t pt-3" style={{ borderColor: "var(--hairline)" }}>
             <div className="mb-2 flex items-baseline justify-between gap-2">
