@@ -190,6 +190,42 @@ console.log("已清理");
     autoBackupCopy ?? "(没找到这一行)",
   );
 
+  // 「从服务器上的备份恢复」下拉里的每一条,都要看得出是不是本库的备份。
+  // 只列文件名时,同一台机器上另一份实例的备份看着就是个随机后缀(实测家庭库那份当日备份
+  // 被探针实例顶掉过,当时界面上完全看不出哪份是谁写的)。先真跑一次自动备份再重载页面,
+  // 保证下拉一定渲染出来 —— 否则这条断言会因为「还没备份过」而空过。
+  await page.evaluate(async () => { try { await fetch("/api/backup/auto", { method: "POST" }); } catch { /* 让下面的断言去说 */ } });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2500);
+  await dismissBlockingDialogs(page);
+  {
+    const group = page.locator('summary:has-text("数据安全"), summary:has-text("数据与部署")').first();
+    if (await group.count()) { await group.click().catch(() => {}); await page.waitForTimeout(1500); }
+  }
+  const backupOptions = await page.evaluate(() => {
+    const select = [...document.querySelectorAll("select")].find((node) => [...node.options].some((option) => /^home-inventory-/.test(option.value)));
+    return select ? [...select.options].map((option) => ({ value: option.value, label: option.textContent })) : null;
+  });
+  const labelsOk = Array.isArray(backupOptions) && backupOptions.length > 0
+    && backupOptions.every((option) => /^\d{4}-\d{2}-\d{2} · (本机|另一份库\([0-9a-f]{6}\)|未标明来源)$/.test(option.label ?? ""))
+    // 刚 POST 过的那份就是本库写的,所以至少有一条必须认成「本机」
+    && backupOptions.some((option) => / · 本机$/.test(option.label ?? ""));
+  record(
+    "「从服务器上的备份恢复」每一条都写清是本机、另一份库还是未标明来源",
+    labelsOk,
+    JSON.stringify(backupOptions ?? "(没找到这个下拉)").slice(0, 240),
+  );
+  const backupHint = await page.evaluate(() => {
+    const text = (document.body.innerText || "").replace(/\s+/g, " ");
+    const index = text.indexOf("写这份备份的那个库");
+    return index >= 0 ? text.slice(Math.max(0, index - 40), index + 100) : null;
+  });
+  record(
+    "下拉旁边说明了那 6 位十六进制是什么(不是丢给人一个看不懂的后缀)",
+    Boolean(backupHint) && /指纹/.test(backupHint),
+    backupHint ?? "(没找到这句说明)",
+  );
+
   record(
     "数据页「最近操作」带上真实总数并说明只列最近 5 条",
     Boolean(recentCopy) && /共 \d+ 条/.test(recentCopy) && /只列最近 5 条/.test(recentCopy),

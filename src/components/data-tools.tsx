@@ -2,6 +2,7 @@
 /* eslint-disable @next/next/no-html-link-for-pages */
 import { useEffect, useState } from "react";
 import { MAX_BACKUP_BYTES, backupTooLargeMessage } from "@/lib/backup-limits";
+import { backupFileOptionLabel, backupFileSourceFingerprint } from "@/lib/backup-label";
 import { DatabaseBackup, X, Download, Upload, Users, UserPlus, History, ShieldCheck } from "lucide-react";
 import { ScanActivityPanel } from "@/components/scan-activity-panel";
 import { activityLabel } from "@/lib/activity-label";
@@ -20,7 +21,8 @@ export function DataTools({ role, onToast }: { role: "ADMIN" | "MEMBER" | "VIEWE
   // 从服务器上那份备份恢复用的选择项(见 restoreFromServerFile)。
   const [serverFile, setServerFile] = useState("");
   // 自动备份状态:界面上要能看出它有没有在跑(此前完全没有显示)。
-  const [autoBackup, setAutoBackup] = useState<{ lastAutoBackupAt: string | null; keep: number; files: number; fileNames?: string[]; stale: boolean } | null>(null);
+  // `database` 是**本库指纹**:文件名里的 6 位十六进制就是它,界面据此把「本机 / 另一份库」标清楚。
+  const [autoBackup, setAutoBackup] = useState<{ lastAutoBackupAt: string | null; keep: number; files: number; fileNames?: string[]; database?: string | null; fileOrigins?: Record<string, string | null>; stale: boolean } | null>(null);
   const load = () => { fetch("/api/members").then((r) => r.json()).then(setMembers).catch(() => undefined);
     if (role === "ADMIN") fetch("/api/backup/auto").then((r) => (r.ok ? r.json() : null)).then((data) => data && setAutoBackup(data)).catch(() => undefined); fetch("/api/activity").then((r) => {
   const header = r.headers.get("x-total-count");
@@ -197,19 +199,29 @@ export function DataTools({ role, onToast }: { role: "ADMIN" | "MEMBER" | "VIEWE
       {/* 备份超过上传上限(64 MB)时,「合并恢复备份」那条路走不通 ——
           服务器本来就每天写一份到磁盘,直接让它自己读那份文件即可。 */}
       {isAdmin && (autoBackup?.fileNames?.length ?? 0) > 0 && (
-        <div className="flex flex-wrap items-center gap-2 px-1 pb-3">
+        <div className="flex flex-wrap items-center gap-2 px-1">
           <span className="text-xs muted">从服务器上的备份恢复:</span>
           {/* 用共享的 SettingsSelect(设置页有一条约定检查:下拉必须来自它),
-              控件高度也必须是 40px(可达性检查)。 */}
+              控件高度也必须是 40px(可达性检查)。
+              选项文字走 backupFileOptionLabel:只列文件名的话,同一台机器上另一份库的备份
+              看起来只是个随机后缀(实测家庭库那份被探针库顶掉过,当时看不出是谁写的)。 */}
           <SettingsSelect
             ariaLabel="从服务器上的备份恢复"
             value={serverFile || (autoBackup?.fileNames?.at(-1) ?? "")}
             onChange={(value) => setServerFile(value)}
-            options={(autoBackup?.fileNames ?? []).map((name) => [name, name] as const)}
+            options={(autoBackup?.fileNames ?? []).map((name) => [
+              name,
+              backupFileOptionLabel(name, backupFileSourceFingerprint(name, autoBackup?.fileOrigins), autoBackup?.database ?? ""),
+            ] as const)}
             className="min-h-10"
           />
           <button type="button" className="btn-ghost h-10 min-h-10 px-3 text-xs" onClick={() => restoreFromServerFile(serverFile || autoBackup?.fileNames?.at(-1) || "")}>恢复这一份</button>
         </div>
+      )}
+      {isAdmin && (autoBackup?.fileNames?.length ?? 0) > 0 && (
+        <p className="mb-0 px-1 pb-3 text-xs muted">
+          文件名末尾那 6 位十六进制,是<strong>写这份备份的那个库</strong>的指纹:同一台机器上跑的别的实例会把自己的那份另存成带指纹的名字,不会覆盖本机的备份。升级前写的老备份没有这一段,标为「未标明来源」。
+        </p>
       )}
 
           <SettingsRow

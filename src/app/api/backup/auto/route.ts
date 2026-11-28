@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { apiError, requireAdminUser } from "@/lib/api";
 import { localDateString } from "@/lib/local-date";
 import { BACKUP_KEEP, buildBackupPayload } from "@/lib/backup-payload";
-import { autoBackupFileName, BACKUP_FILE_PATTERN, backupDir, backupFileGroup, databaseFingerprint, listBackupFiles, readBackupOrigin } from "@/lib/backup-files";
+import { autoBackupFileName, BACKUP_FILE_PATTERN, backupDir, backupFileGroup, collectFileOrigins, databaseFingerprint, listBackupFiles, readBackupOrigin } from "@/lib/backup-files";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +22,11 @@ export async function GET() {
       // 完整清单:界面上的「从服务器上的备份恢复」要按它列出来
       fileNames: files,
       latestFile: files.at(-1) ?? null,
+      // 本库指纹:界面据此把「本机 / 另一份库」标在每一条上(文件名里的 6 位就是它)
+      database: databaseFingerprint(),
+      // 名字里**没写**来源的那几份(占着朴素名的、升级前的老备份),去内容里认一下是谁写的:
+      // 只读每份文件末尾 256 字节。认不出来(老备份)就是 null,界面标「未标明来源」。
+      fileOrigins: await collectFileOrigins(files, backupDir()),
     });
   } catch (error) { return apiError(error); }
 }

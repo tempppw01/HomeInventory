@@ -70,6 +70,28 @@ check(
   JSON.stringify(status.json),
 );
 check("保留份数是正整数(默认 14)", Number(status.json?.keep) >= 1, `keep=${status.json?.keep}`);
+check(
+  "状态接口给出了本库指纹(界面据此把每条备份标成「本机 / 另一份库」)",
+  status.json?.database === expectedFingerprint,
+  `接口=${status.json?.database ?? "(没有这个字段)"} 本库=${expectedFingerprint}`,
+);
+check(
+  "状态接口列出的文件名都是恢复入口认的名字(否则界面上选了也恢复不了)",
+  Array.isArray(status.json?.fileNames) && status.json.fileNames.every((name) => BACKUP_NAME.test(String(name))),
+  JSON.stringify(status.json?.fileNames ?? null).slice(0, 160),
+);
+// 名字里没写来源的那几份(占着朴素名的、升级前的老备份),接口要去内容里认一下是谁写的 ——
+// 只读每份文件末尾 256 字节。实测踩到过:先写的那份占着朴素名,名字上什么都没写,
+// 内容里却是**另一个库**的指纹,只看名字会把它标成「本机」。
+{
+  const origins = status.json?.fileOrigins ?? null;
+  const bare = (status.json?.fileNames ?? []).filter((name) => !/-[0-9a-f]{6}\.json$/.test(name));
+  check(
+    "名字里没写来源的备份,接口都去内容里认过了(fileOrigins 不缺项)",
+    origins !== null && bare.every((name) => Object.prototype.hasOwnProperty.call(origins, name)),
+    `朴素名=${bare.join(",") || "(没有)"} fileOrigins=${JSON.stringify(origins ?? null).slice(0, 140)}`,
+  );
+}
 
 // ---------- 2 真的跑一次 ----------
 const prisma = new PrismaClient();
@@ -129,6 +151,15 @@ if (writtenFile) {
       "同一天再备份一次仍写同一个名字(自己的文件覆盖自己的,不生出副本)",
       again.json?.file === writtenName,
       `第一次=${writtenName ?? "(没说)"} 第二次=${again.json?.file ?? "(没说)"}`,
+    );
+    // 这一份是**本库**刚写的:文件名里带指纹就从名字认,占着朴素名就从内容认 —— 两条路都得认成「本库的」
+    const statusNow = await call("/api/backup/auto");
+    const fromContent = statusNow.json?.fileOrigins?.[String(writtenName)] ?? null;
+    const resolved = /-[0-9a-f]{6}\.json$/.test(String(writtenName)) ? /-([0-9a-f]{6})\.json$/.exec(String(writtenName))?.[1] ?? null : fromContent;
+    check(
+      "接口自己刚写的那份备份,能被认成「本库的」(界面才敢标「本机」)",
+      resolved === expectedFingerprint,
+      `名字=${writtenName ?? "(没说)"} 内容里=${fromContent} 期望=${expectedFingerprint}`,
     );
   }
 }

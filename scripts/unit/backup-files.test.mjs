@@ -18,10 +18,14 @@ import {
   autoBackupFileName,
   backupFileGroup,
   BACKUP_FILE_PATTERN,
+  collectFileOrigins,
   databaseFingerprint,
   isBackupFileName,
   readBackupOrigin,
+  readBackupTailOrigin,
+  resolveBackupFingerprint,
 } from "../../src/lib/backup-files.ts";
+import { backupFileDate, backupFileFingerprint, backupFileOptionLabel, backupFileSourceFingerprint } from "../../src/lib/backup-label.ts";
 
 test("库指纹:6 位小写十六进制,同一份库稳定、不同库不同", () => {
   const home = databaseFingerprint("file:../data/home-inventory.db");
@@ -78,6 +82,64 @@ test("分组:朴素名/老文件一组,带指纹的按指纹分组(各自的保�
   assert.equal(backupFileGroup("home-inventory-2026-11-28.json"), "");
   assert.equal(backupFileGroup("home-inventory-2026-11-28-abc123.json"), "abc123");
   assert.equal(backupFileGroup("home-inventory-2026-11-27-deadbe.json"), "deadbe");
+});
+
+// ---------- 界面下拉那一行显示成什么 ----------
+// 文件名里的 6 位是唯一能区分「谁写的」的东西,但直接摆给用户看不懂
+// (家庭库那份被探针库顶掉时,界面上就是一条看着像随机后缀的名字)。
+
+test("下拉文案:本机那份写「本机」,另一份库那份把指纹写出来", () => {
+  assert.equal(backupFileOptionLabel("home-inventory-2026-11-28-8a4396.json", "8a4396", "8a4396"), "2026-11-28 · 本机");
+  assert.equal(backupFileOptionLabel("home-inventory-2026-11-28-c387a3.json", "c387a3", "8a4396"), "2026-11-28 · 另一份库(c387a3)");
+  // 名字里没有、内容里也没有 → 只能老实说「未标明来源」
+  assert.equal(backupFileOptionLabel("home-inventory-2026-11-27.json", null, "8a4396"), "2026-11-27 · 未标明来源");
+});
+
+test("库指纹的来源:文件名优先,没有就用服务端从内容里认出来的那个", () => {
+  const origins = { "home-inventory-2026-11-28.json": "26efcf" };
+  // 实测场景:先写的那份占着朴素名,名字上什么都没写,内容里是别的库 → 不能被标成「未标明来源」
+  assert.equal(backupFileSourceFingerprint("home-inventory-2026-11-28.json", origins), "26efcf");
+  assert.equal(
+    backupFileOptionLabel("home-inventory-2026-11-28.json", backupFileSourceFingerprint("home-inventory-2026-11-28.json", origins), "8a4396"),
+    "2026-11-28 · 另一份库(26efcf)",
+  );
+  // 名字里有指纹时不必再看内容(内容那份可能是空的/没读过)
+  assert.equal(backupFileSourceFingerprint("home-inventory-2026-11-27-abc123.json", origins), "abc123");
+  // 没有 fileOrigins(老接口/读不到)也不能炸
+  assert.equal(backupFileSourceFingerprint("home-inventory-2026-11-27.json", undefined), null);
+});
+
+test("只读文件末尾也能认出是谁写的(升级前的老备份认不出来 → null)", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "guiwu-backup-tail-"));
+  try {
+    // 136 起的落盘格式:`database` 是最后一个键(JSON.stringify({...payload, database}, null, 2))
+    const stamped = path.join(dir, "home-inventory-2026-11-28.json");
+    await writeFile(stamped, JSON.stringify({ version: 2, exportedAt: "2026-11-28T00:00:00.000Z", items: [{ name: "布洛芬缓释胶囊" }], database: "26efcf" }, null, 2), "utf8");
+    assert.equal(await readBackupTailOrigin(stamped), "26efcf");
+    assert.equal(await resolveBackupFingerprint(stamped, "home-inventory-2026-11-28.json"), "26efcf");
+
+    // 老备份:尾巴上只有 `]` 和 `}`,没有 database 字段
+    const legacy = path.join(dir, "home-inventory-2026-11-27.json");
+    await writeFile(legacy, JSON.stringify({ version: 2, exportedAt: "2026-11-27T00:00:00.000Z", items: [{ name: "青岛啤酒" }] }, null, 2), "utf8");
+    assert.equal(await readBackupTailOrigin(legacy), null);
+
+    // 名字里已经带指纹的,不去读内容也能认出来(collectFileOrigins 只处理没后缀的)
+    const origins = await collectFileOrigins(["home-inventory-2026-11-27-abc123.json", "home-inventory-2026-11-28.json", "home-inventory-2026-11-27.json"], dir);
+    assert.deepEqual(origins, { "home-inventory-2026-11-28.json": "26efcf", "home-inventory-2026-11-27.json": null });
+
+    // 文件不在(或读不动)时给 null,而不是抛
+    assert.equal(await readBackupTailOrigin(path.join(dir, "不存在的文件.json")), null);
+    assert.equal(await readBackupTailOrigin(dir), null);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("下拉文案:认不出的名字也好过编一个", () => {
+  assert.equal(backupFileOptionLabel("奇怪的名字.json", null, "8a4396"), "奇怪的名字.json · 未标明来源");
+  assert.equal(backupFileDate("home-inventory-2026-11-28.json"), "2026-11-28");
+  assert.equal(backupFileFingerprint("home-inventory-2026-11-28.json"), null);
+  assert.equal(backupFileFingerprint("home-inventory-2026-11-28-8a4396.json"), "8a4396");
 });
 
 test("读备份来源:文件不在 / 老文件 / 坏文件 / 字段类型不对,都不当成「本库的」", async () => {
