@@ -138,7 +138,7 @@ export function ItemsView({ locationFilter, onChangeLocationFilter, allItems, us
   // 类型筛选:桌面在工具行,移动端并入分类轨道,让「搜索 / 类型 / 分类」只占两行。
   const typeChips = TYPE_FILTERS.map(([id, label]) => <Chip key={id} active={filter === id} onClick={() => setFilter(id)}>{label}</Chip>);
   // 一键筛出该放冰箱的物品;数量来自后台规则引擎写入的 storage。
-  const coldCount = allItems.filter((item) => item.storage === "COLD" || item.storage === "COLD_AFTER_OPEN").length;
+  const coldCount = items.filter((item) => item.storage === "COLD" || item.storage === "COLD_AFTER_OPEN").length;
   // 已用完(0 件)的物品也要有入口:它们不在物品页、搜索、回收站里,于是空间删不掉、补货也无从下手。
   const usedUpChip = usedUpItems.length > 0 ? <Chip active={usedUpOnly} onClick={() => { setUsedUpOnly(!usedUpOnly); setColdOnly(false); }} ariaLabel={`已用完 ${usedUpItems.length} 件,只看已用完的物品`}>已用完 {usedUpItems.length}</Chip> : null;
   const coldChip = coldCount > 0 ? <Chip active={coldOnly} onClick={() => { setColdOnly(!coldOnly); setUsedUpOnly(false); }} ariaLabel={`需冷藏 ${coldCount},只看需冷藏的物品`}>需冷藏 {coldCount}</Chip> : null;

@@ -93,6 +93,20 @@ test("matchesItemFilters 只管条件,不管数量", () => {
   assert.equal(matchesItemFilters(item({ quantity: 0 }), { ...ALL, search: "不存在的东西" }), false);
 });
 
+test("源码级守卫:芯片上的数必须等于点下去看到的件数", () => {
+  // 2026-11-28 真机实测:初始 9 件时「需冷藏 3」;点「饮品 4」后屏幕「4 件」而芯片仍写 3,
+  // 再点它只出 2 件 —— 因为它按 allItems(全屋「还在用」那份)数,而点下去是在当前筛选之上再筛。
+  // 「已用完 N」是按当前筛选数的,两个并排的芯片口径必须一致:标签承诺什么,点下去就给什么。
+  const source = readFileSync(new URL("../../src/components/views/items-view.tsx", import.meta.url), "utf8");
+  const coldAt = source.indexOf("const coldCount = ");
+  assert.ok(coldAt > 0, "没找到 coldCount");
+  const coldLine = source.slice(coldAt, source.indexOf("\n", coldAt));
+  assert.match(coldLine, /\bitems\.filter\(/, "「需冷藏 N」必须按当前筛选(items)数,不是全屋(allItems)");
+  assert.doesNotMatch(coldLine, /allItems/, "不要再从 allItems 数 —— 那是全屋那份,点下去只在当前筛选里筛");
+  const usedAt = source.indexOf("const usedUpChip = ");
+  assert.ok(usedAt > 0, "没找到 usedUpChip");
+  assert.match(source.slice(usedAt, usedAt + 300), /usedUpItems\.length/, "「已用完 N」按当前筛选的已用完那份数");
+});
 test("源码级守卫:「导出当前筛选」导的必须是屏幕上那一份", () => {
   // 2026-11-28 探针库实测:点「已用完 1」后屏幕写「1 件」,导出提示条却说「已导出 9 件物品」——
   // 因为 exportCsv 用的是 items(还在用那份),而两个芯片只作用于 shownItems。
