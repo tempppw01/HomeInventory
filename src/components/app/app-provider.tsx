@@ -140,6 +140,17 @@ function useAppState() {
     return () => { window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); };
   }, [refresh]);
 
+  // Service Worker 刚接管时补拉一次数据。
+  // 首次访问的那次导航发生在它接管**之前**,那次 dashboard 请求它没经手、也就没缓存;于是
+  // 「第一次访问就断网」会看到外壳 + 快照横幅却没有数据(2026-11-28 CI 实测:离线页里没出现
+  // 在线时看得见的那件物品)。接管后再拉一次,快照就进了缓存 —— 这正是用户第二次打开时想要的东西。
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+    const onControllerChange = () => { void refresh(); };
+    navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
+    return () => navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
+  }, [refresh]);
+
   // Navigation, filtering and the focus/visibility wake-up used to each fire a
   // full dashboard refetch. Home servers answer slowly, so switching tabs felt
   // like a reload every time. Reuse a recent snapshot and collapse simultaneous

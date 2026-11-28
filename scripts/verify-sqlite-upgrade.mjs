@@ -173,6 +173,11 @@ const expectedAdded = [
   "table:AuditRecord",
   "table:SearchHistory",
   ...needIndexes.map((index) => `index:${index}`),
+  // v0.1.121 新增(离线待发队列的幂等凭据):升级路径会建它,参照清单也要跟着登记,
+  // 否则这条检查会把「按设计补上的对象」报成「多出来的意外对象」。
+  "table:SyncOperation",
+  "index:SyncOperation_opId_key",
+  "index:SyncOperation_createdAt_idx",
   // 两张新表各自带的索引(建表时一起建)
   "index:AuditRecord_finishedAt_idx",
   "index:SearchHistory_userId_idx",

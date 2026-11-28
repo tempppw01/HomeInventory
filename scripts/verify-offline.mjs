@@ -70,15 +70,22 @@ const offlineCacheState = async () => page.evaluate(async () => {
     const cache = await caches.open(name);
     if (await cache.match("/offline")) { hasOffline = true; break; }
   }
-  return { supported: true, names, hasOffline };
+  let hasDashboard = false;
+  for (const name of names) {
+    const cache = await caches.open(name);
+    if (await cache.match("/api/dashboard")) { hasDashboard = true; break; }
+  }
+  return { supported: true, names, hasOffline, hasDashboard };
 });
 
 let cacheState = await offlineCacheState();
-for (let attempt = 0; attempt < 10 && !cacheState.hasOffline; attempt += 1) {
+// 同时等 /api/dashboard 进缓存:断网时「看得见数据」全靠它(2026-11-28 CI 实测:只有外壳没有数据)。
+for (let attempt = 0; attempt < 10 && (!cacheState.hasOffline || !cacheState.hasDashboard); attempt += 1) {
   await page.waitForTimeout(500);
   cacheState = await offlineCacheState();
 }
 check("离线页已经进了 Service Worker 的缓存(断网导航才有东西可给)", cacheState.hasOffline, `缓存=${JSON.stringify(cacheState)}`);
+check("离线数据快照已经缓存(/api/dashboard)—— 断网时才看得见数据", cacheState.hasDashboard, `缓存=${JSON.stringify(cacheState)}`);
 
 // 记下一件在线时看得见的物品,断网后要确认它**不会**出现
 const itemName = await page.evaluate(() => {
