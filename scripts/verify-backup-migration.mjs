@@ -66,9 +66,23 @@ check("偏好设置进库", Number(report.preferences) === 1, `恢复=${report.p
 check("活动记录按窗口导入且如实说明未导条数", Number(report.activities) + Number(report.notImported?.activities ?? 0) <= (backup.activities?.length ?? 0) && Number.isFinite(Number(report.notImported?.activities)), `导入=${report.activities} 未导=${report.notImported?.activities}`);
 
 // ---------- 4 目标库实地核对 ----------
-const targetDash = await call(TARGET, "/api/dashboard", { cookie: targetCookie });
-const items = targetDash.json?.items ?? [];
-check("目标库读得到全部物品", items.length === (backup.items?.length ?? 0), `读回=${items.length}`);
+// 读物品要连**回收站**一起读:备份里本来就带着已删除的行(`deletedAt` 有值),而 v0.1.135 起
+// 恢复后它们老老实实留在回收站里 —— 这正是 v0.1.135 想要的;可这里原来读的是 /api/dashboard
+// (只给活物品),于是「恢复 12 件、读回 11 件」,2026-11-28 就这么让 CI 红了一整轮(v0.1.135 的
+// Release 也因此没发出来)。物品总数对不上时,下面还按「活 / 回收站」拆开报,免得下次又靠猜。
+const targetItems = await call(TARGET, "/api/items?includeDeleted=1", { cookie: targetCookie });
+const items = Array.isArray(targetItems.json) ? targetItems.json : [];
+const trashCount = items.filter((row) => row.deletedAt).length;
+check(
+  "目标库读得到全部物品(含回收站)",
+  items.length === (backup.items?.length ?? 0),
+  `读回=${items.length}(活 ${items.length - trashCount} · 回收站 ${trashCount}) 备份=${backup.items?.length} status=${targetItems.status}`,
+);
+check(
+  "备份里已删除的物品在目标库里也是已删除的(不是被救活成新物品)",
+  trashCount === (backup.items ?? []).filter((row) => row.deletedAt).length,
+  `目标回收站=${trashCount} 备份里已删除=${(backup.items ?? []).filter((row) => row.deletedAt).length}`,
+);
 const sourceItem = backup.items.find((item) => item.locationId) ?? backup.items[0];
 const restoredItem = items.find((item) => item.name === sourceItem?.name);
 check("物品名称能对上", Boolean(restoredItem), `找的是 ${sourceItem?.name}`);
@@ -81,6 +95,8 @@ if (sourceTask) {
   const same = (targetTasks.json?.tasks ?? []).find((task) => task.title === sourceTask.title);
   check("任务到期时间解析正确", Boolean(same) && Math.abs(new Date(same.dueAt).getTime() - new Date(sourceTask.dueAt).getTime()) < 1000, `源=${sourceTask.dueAt} 目标=${same?.dueAt ?? "(没找到)"}`);
 }
+// 偏好设置仍在 /api/dashboard 上(它给的是当前生效的偏好,而不是物品列表)
+const targetDash = await call(TARGET, "/api/dashboard", { cookie: targetCookie });
 check("偏好设置与源一致", Number(targetDash.json?.preferences?.expiryReminderDays) === Number(backup.preferences?.[0]?.expiryReminderDays), `目标=${targetDash.json?.preferences?.expiryReminderDays} 源=${backup.preferences?.[0]?.expiryReminderDays}`);
 
 // ---------- 5 再恢复一次:应当报告「重复」而不是再造一份 ----------
@@ -91,8 +107,9 @@ check(
   Number(again.json?.items ?? -1) === 0 && Number(again.json?.duplicated?.total ?? 0) >= (backup.items?.length ?? 0),
   JSON.stringify(again.json).slice(0, 200),
 );
-const afterAgain = await call(TARGET, "/api/dashboard", { cookie: targetCookie });
-check("物品总数没有被恢复两次而翻倍", (afterAgain.json?.items?.length ?? -1) === items.length, `${items.length} → ${afterAgain.json?.items?.length}`);
+const afterAgain = await call(TARGET, "/api/items?includeDeleted=1", { cookie: targetCookie });
+const afterRows = Array.isArray(afterAgain.json) ? afterAgain.json : [];
+check("物品总数没有被恢复两次而翻倍(含回收站)", afterRows.length === items.length, `${items.length} → ${afterRows.length}`);
 
 const failed = results.filter((entry) => !entry.ok);
 console.log(`\n${results.length - failed.length}/${results.length} 通过`);

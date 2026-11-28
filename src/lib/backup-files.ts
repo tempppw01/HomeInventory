@@ -3,8 +3,16 @@
 // 由来:目录解析此前在 auto 路由里写了两遍;而「从服务器上的备份恢复」这个新入口
 // 必须和写入端**完全同一份规则**,否则会出现「明明有备份却恢复不了」。
 // 同时这里只认 `home-inventory-YYYY-MM-DD.json` 这种纯文件名,天然挡掉路径穿越。
+//
+// 又一层由来(v0.1.136,实测):文件名里**没有库的标识**,而 BACKUP_DIR 是环境给的、
+// 一天又只有一个名字。同一台机器上跑第二份实例(探针库、另一份家庭库)而目录没分开时,
+// 后备份的那份会**静默覆盖**前一份 —— 实测家庭库 2026-11-28 的那份被探针库顶掉
+// (家庭库 9 件物品 → 变成探针库的 15 件「界面检查·…」),而且从文件名上完全看不出来。
+// 所以现在:备份负载里记下写它的库的指纹;同一天已有**别的库**(或来历不明的老文件)
+// 占着朴素名时,本库另存为 `home-inventory-YYYY-MM-DD-<指纹>.json`,绝不覆盖别人的那份。
 
-import { readdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
 /** 自动备份目录(与 docker 部署里的 /app/data/backups 对齐)。 */
@@ -12,18 +20,68 @@ export function backupDir() {
   return process.env.BACKUP_DIR || path.join(process.env.LOCAL_UPLOAD_DIR || path.join(process.cwd(), "data"), "backups");
 }
 
-/** 只认这种名字:不含路径分隔符、不含 ..,恢复入口据此挡路径穿越。 */
-export const BACKUP_FILE_PATTERN = /^home-inventory-\d{4}-\d{2}-\d{2}\.json$/;
+/**
+ * 只认这种名字:不含路径分隔符、不含 `..`,恢复入口据此挡路径穿越。
+ * `-<6 位十六进制库指纹>` 后缀是可选的(见文件头注释)。
+ */
+export const BACKUP_FILE_PATTERN = /^home-inventory-\d{4}-\d{2}-\d{2}(?:-[0-9a-f]{6})?\.json$/;
+
+/** 名字里的库指纹(朴素名与老文件没有 → 空串)。同一份目录里按它分组保留,多实例互不挤占。 */
+export function backupFileGroup(name: string): string {
+  return /^home-inventory-\d{4}-\d{2}-\d{2}-([0-9a-f]{6})\.json$/.exec(name)?.[1] ?? "";
+}
 
 export function isBackupFileName(name: unknown): name is string {
   return typeof name === "string" && BACKUP_FILE_PATTERN.test(name.trim());
 }
 
-/** 目录里现有的备份文件名(按日期升序)。目录不存在时返回空数组。 */
+/** 目录里现有的备份文件名(按名字升序,也就按日期升序)。目录不存在时返回空数组。 */
 export async function listBackupFiles(): Promise<string[]> {
   try {
     return (await readdir(backupDir())).filter((name) => BACKUP_FILE_PATTERN.test(name)).sort();
   } catch {
     return [];
   }
+}
+
+/**
+ * 库指纹:DATABASE_URL 的短哈希 —— 同一份库永远同一个值,不同库(含探针库)不同。
+ * 故意取哈希而不是原串:备份文件里/界面上都不该出现连接串(它带着口令)。
+ */
+export function databaseFingerprint(databaseUrl: string | undefined = process.env.DATABASE_URL): string {
+  return createHash("sha256").update(String(databaseUrl ?? "(未设置)")).digest("hex").slice(0, 6);
+}
+
+export type BackupOrigin = { exists: boolean; database: string | null };
+
+/**
+ * 看一份备份是哪个库写的。
+ * 文件不在 → `{exists:false}`;读不动 / 不是 JSON / 老文件里没有这个字段 → `database: null`
+ * (老备份没有指纹,只能当「不是本库的」,见 autoBackupFileName)。
+ */
+export async function readBackupOrigin(file: string): Promise<BackupOrigin> {
+  let text: string;
+  try {
+    text = await readFile(file, "utf8");
+  } catch {
+    return { exists: false, database: null };
+  }
+  try {
+    const parsed = JSON.parse(text) as { database?: unknown };
+    return { exists: true, database: typeof parsed.database === "string" ? parsed.database : null };
+  } catch {
+    return { exists: true, database: null };
+  }
+}
+
+/**
+ * 今天这份备份该写哪个名字。
+ * · 空位 → 朴素名(与历史行为一致,`home-inventory-2026-11-28.json`);
+ * · 今天这份本来就是本库写的 → 还是朴素名(覆盖自己的没问题);
+ * · 今天这份是别的库写的(或老文件/读不动,都算「不是本库的」)→ 带本库指纹另存,
+ *   原文件一个字节都不动 —— 宁可与别人并存,也不静默毁掉别人的当日备份。
+ */
+export function autoBackupFileName(today: string, fingerprint: string, origin: BackupOrigin): string {
+  if (!origin.exists || origin.database === fingerprint) return `home-inventory-${today}.json`;
+  return `home-inventory-${today}-${fingerprint}.json`;
 }

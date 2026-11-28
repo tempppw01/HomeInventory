@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     if (typeof parsedBody.fromFile === "string") {
       const name = parsedBody.fromFile.trim();
       if (!isBackupFileName(name)) {
-        return NextResponse.json({ error: "备份文件名不合法(只接受 home-inventory-年-月-日.json)" }, { status: 400 });
+        return NextResponse.json({ error: "备份文件名不合法(只接受 home-inventory-年-月-日.json,或带库指纹的 home-inventory-年-月-日-abcdef.json)" }, { status: 400 });
       }
       const file = path.join(backupDir(), name);
       const text = await readFile(file, "utf8").catch(() => null);
