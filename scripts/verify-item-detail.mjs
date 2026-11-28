@@ -241,6 +241,70 @@ await dismissBlockingDialogs(page);
   }
 }
 
+// ---------- 8 「AI 说」必须写清是何时算的、之后有没有改过 ----------
+// 由来(2026-11-29 实测):这一页原先从「最近 12 条变更记录」里找 AI_ANALYZE 的时间,
+// 窗口一满就找不到 → 「AI 什么时候看过这件」静默消失,连「结论已过时」也判不出来。
+// 而列表页走 /api/dashboard 的 groupBy,明明已经给同一件挂了「建议重新分析」——
+// 点进详情页却什么提示都没有,一条「当前有 3 盒」(实际 6 盒)的旧结论看起来像刚算的。
+{
+  const { PrismaClient } = await import("@prisma/client");
+  const prisma = new PrismaClient();
+  const seededIds = [];
+  const detailWithBust = () => `${BASE}/items/${created.id}?probe=${Date.now()}`;
+  try {
+    // 先清掉先前步骤(「重新分析」那条)可能写下的 AI_ANALYZE,保证夹具确定
+    await prisma.activityLog.deleteMany({ where: { itemId: created.id, action: "AI_ANALYZE" } });
+    const analyzedAt = new Date(Date.now() - 5 * 24 * 3600 * 1000);
+    seededIds.push((await prisma.activityLog.create({
+      data: { action: "AI_ANALYZE", itemId: created.id, itemName: "详情页验收饮品", detail: "详情页验收:AI 分析", createdAt: analyzedAt },
+      select: { id: true },
+    })).id);
+    // 13 条更晚的改动,足以把上面那条挤出「最近 12 条」
+    for (let index = 0; index < 13; index += 1) {
+      seededIds.push((await prisma.activityLog.create({
+        data: { action: "UPDATE", itemId: created.id, itemName: "详情页验收饮品", detail: `详情页验收:第 ${index + 1} 次改动`, createdAt: new Date(analyzedAt.getTime() + (index + 1) * 60_000) },
+        select: { id: true },
+      })).id);
+    }
+    // 有 AI 结论、且物品在那之后又被改过(update 会把 updatedAt 推到 now)
+    await prisma.item.update({ where: { id: created.id }, data: { aiSummary: "详情页验收:这是 AI 当时写的结论。" } });
+
+    const rowsForItem = await prisma.activityLog.count({ where: { itemId: created.id } });
+    check("(前置)AI 分析那条确实被挤出了最近 12 条窗口", rowsForItem > 12, `该物品变更记录共 ${rowsForItem} 条`);
+
+    await page.goto(detailWithBust(), { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2600);
+    const staleText = await page.evaluate(() => (document.querySelector("main")?.innerText || "").replace(/\s+/g, " "));
+    check(
+      "窗口满了也照样写出「AI 什么时候看过这件」",
+      staleText.includes("看过这件"),
+      staleText.slice(staleText.indexOf("AI 说"), staleText.indexOf("AI 说") + 160),
+    );
+    check(
+      "分析之后物品改过,详情页也明说结论可能已不准确(与列表页同一个判定)",
+      staleText.includes("可能已不准确"),
+      staleText.slice(staleText.indexOf("AI 说"), staleText.indexOf("AI 说") + 200),
+    );
+
+    // 没有 AI_ANALYZE 记录(录入时算的旧数据)时,不许装作「刚算的」,也不许装作有时间
+    await prisma.activityLog.deleteMany({ where: { itemId: created.id, action: "AI_ANALYZE" } });
+    await page.goto(detailWithBust(), { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2600);
+    const noTimeText = await page.evaluate(() => (document.querySelector("main")?.innerText || "").replace(/\s+/g, " "));
+    check(
+      "查不到分析时间时说「生成时间没有记录」,而不是留空让人以为是刚算的",
+      noTimeText.includes("生成时间没有记录") && !noTimeText.includes("看过这件"),
+      noTimeText.slice(noTimeText.indexOf("AI 说"), noTimeText.indexOf("AI 说") + 160),
+    );
+  } finally {
+    // 收尾必须删掉这些活动记录:ActivityLog.itemId 是 onDelete: SetNull,
+    // 删物品不会带走它们,会变成孤儿行留在库里(套件卫生检查会红)。
+    await prisma.activityLog.deleteMany({ where: { id: { in: seededIds } } }).catch(() => undefined);
+    await prisma.activityLog.deleteMany({ where: { itemId: created.id } }).catch(() => undefined);
+    await prisma.$disconnect();
+  }
+}
+
 // 清理探针物品
 await page.evaluate(async (id) => {
   await fetch(`/api/items/${id}`, { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({}) });

@@ -17,6 +17,7 @@ import { ItemPhotoSlot } from "@/components/item-photo-slot";
 import { AskAiAboutItem } from "@/components/ask-ai-about-item";
 import { ReanalyzeAiButton } from "@/components/reanalyze-ai-button";
 import { relativeTimeText } from "@/lib/relative-time";
+import { aiConclusionStale } from "@/lib/item-staleness";
 import { expiryStatusFor } from "@/lib/expiry-status";
 
 export const dynamic = "force-dynamic";
@@ -64,9 +65,22 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
   });
   // 变更记录只列最近 12 条,但总数要说清 —— 否则用户不知道「更早还有多少」。
   const historyTotal = await prisma.activityLog.count({ where: { itemId: item.id } });
-  // 「AI 说」是什么时候算的:history 已经按时间倒序取过了,直接找最近一条 AI 分析。
-  const aiAnalyzedAt = history.find((entry) => entry.action === "AI_ANALYZE")?.createdAt ?? null;
+  // 「AI 说」是什么时候算的:**单独查最近一条 AI_ANALYZE**。
+  //
+  // 这里原先是从上面那份「最近 12 条」的变更流水里找的,错了两次:
+  //   · 12 条窗口一满,AI_ANALYZE 就被挤出窗口,`aiAnalyzedAt` 变成 null,
+  //     「AI 什么时候看过这件」**静默消失**(实测:可口可乐罐装共 39 条变更记录,
+  //     唯一的 AI_ANALYZE 在 11-20,而最近 12 条全是 11-27 的 UPDATE);
+  //   · 于是「结论已过时」也判不出来 —— 列表页(走 /api/dashboard 的 groupBy)明明已经
+  //     给这件挂了「建议重新分析」,点进详情页却看不到任何提示,AI 结论像是刚刚算的。
+  const aiAnalyzedAt = (await prisma.activityLog.findFirst({
+    where: { itemId: item.id, action: "AI_ANALYZE" },
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true },
+  }))?.createdAt ?? null;
   const aiTimeText = relativeTimeText(aiAnalyzedAt);
+  // 与列表页同一个判定口径(lib/item-staleness):分析之后物品又被改过,结论就可能不准确。
+  const aiStale = aiConclusionStale({ updatedAt: item.updatedAt, aiAnalyzedAt });
   const code = item.itemCode || item.id;
   const typeLabel = item.type === "CONSUMABLE" ? "消耗品" : "耐用品";
   // 「AI 说」面板和页面底部那块「AI 识别信息」读的是同一批字段(aiSummary / aiStorageAdvice / …)。
@@ -156,9 +170,20 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
           </Panel>
           )}
 
-          {/* 后台自动分析的结果:保存物品时在后台生成,用户不需要点任何按钮 */}
+          {/* 后台自动分析的结果:保存物品时在后台生成,用户不需要点任何按钮。
+              描述句要说清两件事:什么时候算的、之后有没有被改过 —— 之前窗口一满就什么都不说,
+              于是一条「当前有 3 盒」(实际已 6 盒)的旧结论看起来像刚刚算的。 */}
           {item.aiSummary && (
-          <Panel title="AI 说" description={aiTimeText ? `AI ${aiTimeText}看过这件` : undefined}>
+          <Panel
+            title="AI 说"
+            description={
+              aiTimeText
+                ? `AI ${aiTimeText}看过这件${aiStale ? " · 之后物品改过,下面的结论可能已不准确" : ""}`
+                : ai.hasHighlights
+                  ? "这条结论的生成时间没有记录 · 请以页面上的当前数量与日期为准"
+                  : undefined
+            }
+          >
             <p className="mb-0 text-sm leading-6">{item.aiSummary}</p>
             <div className="mt-3 grid gap-2">
               {item.aiStorageAdvice && <AiRow label="怎么存放" text={item.aiStorageAdvice} />}
