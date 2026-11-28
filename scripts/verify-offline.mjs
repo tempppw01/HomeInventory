@@ -174,6 +174,86 @@ if (itemName) {
   console.log("      跳过「离线看得见那件物品」:在线时没抓到具体物品名(列表显示模式下没有卡片按钮)");
 }
 
+// ---------- 3b 离线点一个"还没接队列"的写操作:提示必须与事实一致 ----------
+//
+// 2026-11-28 真机实测:断网点「加入清单」,原来给的是
+//   「网络响应不完整,请重试;已保存的内容不会丢失」
+// 而浏览器的真实原因是 net::ERR_INTERNET_DISCONNECTED、请求根本没发出去、队列 0 条:
+// 原因说错(不是响应不完整,是没网)、承诺说过头(什么都没保存),还让人反复点一个必然失败的动作。
+//
+// 这里用 DOM 直接驱动:evaluate 里 querySelector 稳定命中,而 Playwright 的 locator 在这个弹窗内部
+// 实测拿不到元素(弹窗开着、querySelector 找得到,locator 一直等到超时),套件因此不用 locator 做这一步。
+{
+  const outboxRows = () => offlinePage.evaluate(async () => {
+    try {
+      const names = (await indexedDB.databases()).map((db) => db.name);
+      const name = names.find((it) => it && /outbox/i.test(it));
+      if (!name) return -1;
+      return await new Promise((resolve) => {
+        const request = indexedDB.open(name);
+        request.onsuccess = () => {
+          const db = request.result;
+          const store = [...db.objectStoreNames].find((it) => /op/i.test(it)) || db.objectStoreNames[0];
+          const all = db.transaction(store, "readonly").objectStore(store).getAll();
+          all.onsuccess = () => resolve(all.result.length);
+          all.onerror = () => resolve(-2);
+        };
+        request.onerror = () => resolve(-2);
+      });
+    } catch { return -3; }
+  });
+
+  const queuedBefore = await outboxRows();
+  let message = "";
+  let opened = false;
+  try {
+    opened = await offlinePage.evaluate(() => {
+      const button = Array.from(document.querySelectorAll("button")).find((node) => (node.textContent || "").includes("添加采购项"));
+      if (!button) return false;
+      button.click();
+      return true;
+    });
+    await offlinePage.waitForTimeout(900);
+    const submitted = await offlinePage.evaluate(() => {
+      const dialog = document.querySelector('[role="dialog"]');
+      if (!dialog) return false;
+      const input = dialog.querySelector('form input:not([type="number"])');
+      if (!input) return false;
+      // React 受控输入:必须走原生 setter + input 事件,否则组件读不到这个值
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+      setter.call(input, "离线写提示检查");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      const submit = Array.from(dialog.querySelectorAll("button")).find((node) => (node.textContent || "").includes("加入清单"));
+      if (!submit) return false;
+      submit.click();
+      return true;
+    });
+    if (!submitted) throw new Error("没找到弹窗里的输入框或提交按钮");
+    await offlinePage.waitForTimeout(2600);
+    message = await offlinePage.evaluate(() => {
+      const dialog = document.querySelector('[role="dialog"]');
+      return (dialog ? dialog.innerText : document.body.innerText).replace(/\s+/g, " ").slice(0, 300);
+    });
+  } catch (error) {
+    message = "没量到:" + (error instanceof Error ? error.message.slice(0, 90) : String(error).slice(0, 90));
+  }
+
+  check("离线时打得开写入口并提交(否则下面两条不可信)", opened && !message.startsWith("没量到"), message.slice(0, 150));
+  check("离线写失败时说清了是离线(不是含糊的「网络响应不完整」)", /离线/.test(message), message.slice(0, 170));
+  check("离线写失败时**没有**说「已保存」(说了就是骗人)", !/已保存/.test(message), message.slice(0, 170));
+  const queuedAfter = await outboxRows();
+  check("提示与事实一致:这一次确实什么都没存", queuedAfter === queuedBefore, `队列 ${queuedBefore} → ${queuedAfter}`);
+
+  // 收尾:关掉弹窗,别影响后面"恢复网络"那一段
+  await offlinePage.evaluate(() => {
+    const dialog = document.querySelector('[role="dialog"]');
+    const cancel = dialog ? Array.from(dialog.querySelectorAll("button")).find((node) => (node.textContent || "").replace(/\s+/g, "") === "取消") : null;
+    if (cancel) cancel.click();
+  });
+  await offlinePage.waitForTimeout(500);
+}
+
+
 // ---------- 4 恢复网络后回到可用状态 ----------
 await context.setOffline(false);
 await offlinePage.goto(`${BASE}/items`, { waitUntil: "domcontentloaded", timeout: 20000 });

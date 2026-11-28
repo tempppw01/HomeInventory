@@ -7,6 +7,7 @@ import type { Item, ItemType, Location } from "@/types";
 import { usageDays } from "@/lib/item-metrics";
 import { EXPIRING_SOON_DAYS } from "@/lib/expiry-status";
 import { APP_VERSION } from "@/lib/version";
+import { networkFailureMessage } from "@/lib/network-failure";
 import { isMedicineCategory, MEDICINE_CATEGORIES } from "@/lib/categories";
 import { normalizedPurchaseName } from "@/lib/shopping-list";
 
@@ -270,7 +271,10 @@ export async function request<T>(url: string, options?: RequestInit): Promise<T>
     } catch (error) {
       if (attempt === 0 && retryable) continue;
       const message = error instanceof Error ? error.message : "网络请求失败";
-      if (/content-length|network response|failed to fetch/i.test(message)) throw new Error("网络响应不完整，请重试；已保存的内容不会丢失");
+      // 断网 / 连不上 / 响应被截断:三种含义不同,交给纯函数翻译(见 src/lib/network-failure.ts)。
+      // 只重写"网络层失败"这几种;服务端返回的错误原样抛出,别弄丢 fromServer / status / code。
+      const translated = networkFailureMessage(message, typeof navigator === "undefined" ? true : navigator.onLine);
+      if (translated) throw new Error(translated);
       throw error;
     }
   }
