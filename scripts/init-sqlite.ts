@@ -168,6 +168,15 @@ const statements = [
     "finishedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`,
+  `CREATE TABLE IF NOT EXISTS "SyncOperation" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "opId" TEXT NOT NULL,
+    "action" TEXT NOT NULL,
+    "resultJson" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "SyncOperation_opId_key" ON "SyncOperation"("opId")`,
+  `CREATE INDEX IF NOT EXISTS "SyncOperation_createdAt_idx" ON "SyncOperation"("createdAt")`,
   `CREATE TABLE IF NOT EXISTS "SearchHistory" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "query" TEXT NOT NULL,

@@ -309,3 +309,19 @@ model SearchHistory {
   @@index([userId])
   @@index([createdAt])
 }
+
+/// 离线队列的幂等凭据:同一个 opId 只应用一次。
+///
+/// 为什么需要它:离线改动会在网络恢复时重放,而重放可能重复发送(网络抖一下、页面刷新、
+/// 用户手动重试)。对「消耗 1 件」这种操作,重复一次就是**多消耗一件**——数据真的少了。
+/// 先例是 ActivityLog.scanRequestId(扫码消耗就是用它去重的),这里把它推广成通用的一把钥匙:
+/// 客户端每个写操作带一个 opId,服务端见过就回上次的结果,不再落库。
+model SyncOperation {
+  id         String   @id @default(cuid())
+  opId       String   @unique
+  action     String
+  resultJson String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+}
