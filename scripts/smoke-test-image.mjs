@@ -1,13 +1,20 @@
 // 对**已发布的镜像**做端到端冒烟:不只是「服务起来了」,而是「真的能用」。
 //
-// 健康检查只能证明进程活着、数据库连上了;这里再多走三步:
-//   ① 初始化管理员(entrypoint 建表是否真的可用)
-//   ② 登录拿到会话(会话与鉴权链路)
-//   ③ 建一件物品并读回来(写入路径 + 读路径)
+// 健康检查只能证明进程活着、数据库连上了;这里再多走四步:
+//   1 健康检查可用,而且**自报的版本就是打标签的版本**
+//   2 初始化管理员(entrypoint 建表是否真的可用)
+//   3 登录拿到会话(会话与鉴权链路)
+//   4 建一件物品并读回来(写入路径 + 读路径)
 //
 // 之所以放进发布流程:发布产物能不能用,应该由 CI 回答,而不是等用户 docker run 才发现。
 //
-// 用法:node scripts/smoke-test-image.mjs --base http://127.0.0.1:3199 --user smoke --pass Smoke#2026x
+// 版本那一条是 2026-11-28 补的:发出去的镜像以前无法自证版本 —— 本地就发生过
+// 「界面显示 0.1.125,package.json 已是 0.1.126」这种构建早于改版本号的情况,
+// 而镜像里根本没有任何接口能问出这件事。现在 /api/health 会自报构建期写进去的版本,
+// 于是"打标签的版本"与"镜像里的版本"能直接对上。
+//
+// 用法:node scripts/smoke-test-image.mjs --base http://127.0.0.1:3199 --user smoke --pass Smoke#2026x [--expect-version 0.1.127]
+import { readFileSync } from "node:fs";
 
 const args = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -18,6 +25,8 @@ const arg = (name, fallback) => {
 const BASE = arg("base", "http://127.0.0.1:3000");
 const USER = arg("user", "smoke");
 const PASS = arg("pass", "Smoke#2026x");
+// 期望版本默认取当前检出的 package.json —— 发布流程里镜像就是从这份检出构建的。
+const EXPECTED_VERSION = arg("expect-version", JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version);
 
 // 每次请求都要有超时:没有超时的 fetch 既不返回也不报错,整脚本会挂死并以 exit 13 收场 ——
 // 发布流程只看到「Process completed with exit code 13」,一个版本就这么被无声拦下(2026-11-28 实测)。
@@ -35,7 +44,7 @@ const json = async (response) => {
   try { return JSON.parse(text); } catch { return { raw: text.slice(0, 200) }; }
 };
 
-// ① 健康检查
+// 1 健康检查(同时确认镜像自报的版本 == 检出/打标签的版本)
 {
   let health = null;
   const REQUEST_TIMEOUT_MS = 10000;
@@ -44,14 +53,23 @@ const json = async (response) => {
       const response = await fetch(`${BASE}/api/health`, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
       if (response.ok) { health = await json(response); break; }
     } catch { /* 还没起来 */ }
-    if ((attempt + 1) % 10 === 0) console.log(`… 健康检查还没过:已尝试 ${attempt + 1}/40 次`);
+    if ((attempt + 1) % 10 === 0) console.log(`... 健康检查还没过:已尝试 ${attempt + 1}/40 次`);
     await new Promise((resolve) => setTimeout(resolve, 3000));
   }
   step("健康检查可用", Boolean(health), JSON.stringify(health ?? {}).slice(0, 120));
   if (!health) process.exit(1);
+
+  console.log(`      期望版本(检出):${EXPECTED_VERSION},镜像自报:${health.version ?? "(没有这个字段)"}`);
+  step(
+    `镜像自报的版本就是打标签的版本(${EXPECTED_VERSION})`,
+    health.version === EXPECTED_VERSION,
+    health.version === undefined
+      ? "健康检查没有 version 字段 —— 这个镜像不是从本仓库本次检出的代码构建的"
+      : `镜像自报 ${health.version},期望 ${EXPECTED_VERSION}(镜像与标签不是同一份代码)`,
+  );
 }
 
-// ② 初始化管理员(容器首次启动时没有账号;已有则跳过)
+// 2 初始化管理员(容器首次启动时没有账号;已有则跳过)
 {
   const response = await fetch(`${BASE}/api/auth/setup`, { signal: AbortSignal.timeout(SMOKE_TIMEOUT_MS),
     method: "POST",
@@ -64,7 +82,7 @@ const json = async (response) => {
   if (!ok) process.exit(1);
 }
 
-// ③ 登录
+// 3 登录
 let cookie = "";
 {
   const response = await fetch(`${BASE}/api/auth/login`, { signal: AbortSignal.timeout(SMOKE_TIMEOUT_MS),
@@ -78,7 +96,7 @@ let cookie = "";
   if (!response.ok) process.exit(1);
 }
 
-// ④ 建一件物品,再读回来
+// 4 建一件物品,再读回来
 {
   const name = `冒烟测试物品 ${Date.now().toString().slice(-6)}`;
   const created = await fetch(`${BASE}/api/items`, { signal: AbortSignal.timeout(SMOKE_TIMEOUT_MS),

@@ -1,5 +1,7 @@
 // API 契约与数据完整性测试:直接打接口,逐项比对「实际 vs 期望」。
 // 用法:node output/experience/api-contract-test.mjs [--keep]
+import { readFileSync } from "node:fs";
+
 const BASE = process.env.BASE_URL || "http://127.0.0.1:3001";
 const USER = process.env.PROBE_USER || "bgs";
 const PASS = process.env.PROBE_PASS;
@@ -41,6 +43,16 @@ async function call(method, path, body) {
 }
 
 const created = { items: [], locations: [], shopping: [], tasks: [], prices: [] };
+
+// ============ 0. 服务自证版本:跑起来的这个构建,和检出里的 package.json 是同一版 ============
+// 起因(2026-11-28):本地实例界面显示 0.1.125,而 package.json 已经是 0.1.126 —— 先构建、后改版本号。
+// 这条在 CI 里看着"永远成立",但它守的是"你正在验收的那个构建到底是哪一版",本地跑套件时同样有用。
+{
+  const expected = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
+  const r = await fetchWithRetry(`${BASE}/api/health`);
+  const body = await r.json().catch(() => null);
+  record("版本", `健康检查自报版本 == package.json(${expected})`, body?.version === expected, `health.version=${body?.version ?? "(缺字段)"} status=${r.status}`);
+}
 
 // ============ 1. 未登录访问 ============
 {
