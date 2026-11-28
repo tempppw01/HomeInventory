@@ -52,6 +52,13 @@ const state = await page.evaluate(() => {
     sections: ["要到期了", "快用完了", "该放冰箱的", "该补货的"].filter((label) => text.includes(label)).length,
     chartBars: document.querySelectorAll('svg[viewBox^="0 0 100"] rect').length,
     shareAria: document.querySelector('[role="img"][aria-label^="本月消费分类占比"]')?.getAttribute("aria-label") ?? null,
+    // 这一排占比是**本月**的,而它所在的小节标题写的是「近 6 个月支出」。
+    // 把该小节的可见文字取出来:两个时间窗都得在**看得见的地方**说清楚(无障碍标签不算)。
+    shareSectionText: (() => {
+      const share = document.querySelector('[role="img"][aria-label^="本月消费分类占比"]');
+      const section = share?.closest("section");
+      return section ? (section.innerText || "").replace(/\s+/g, " ") : null;
+    })(),
     printButton: Array.from(document.querySelectorAll("button")).some((button) => (button.textContent || "").includes("打印")),
     monthLabel: /\d{4} 年 \d{1,2} 月/.test(text),
     text,
@@ -62,6 +69,12 @@ check("月报页返回 200 且没有落进错误边界", status === 200 && !stat
 check("月报页显示标题与四个小节", state.title && state.sections === 4, `title=${state.title} sections=${state.sections}`);
 check("月报页有月份标签", state.monthLabel, `monthLabel=${state.monthLabel}`);
 check("月报页图表正常渲染(柱状 + 占比)", state.chartBars > 0 && Boolean(state.shareAria), `bars=${state.chartBars} share=${state.shareAria}`);
+// 起因(2026-11-28,真浏览器 + 家庭库实测):这一排占比是**本月**的,而它所在小节标题写的是「近 6 个月支出」,
+// 页面上却没有一个字说明这一点(只有 aria-label 里写着「本月」)。
+// 实测差距:饮品本月 ¥38,6 个月 ¥258 —— 打印出来的人会把 ¥38 读成「6 个月只花了 38」。
+check("同一个小节里,「6 个月」和「本月」两个时间窗都在看得见的地方写明了",
+  /近 6 个月支出/.test(state.shareSectionText ?? "") && /本月花在哪/.test(state.shareSectionText ?? ""),
+  `该小节可见文字=${(state.shareSectionText ?? "(没读到该小节)").slice(0, 120)}`);
 
 // ---------- 数字要能和别的页面/接口对上 ----------
 // 由来(实测):月报的「物品 N 件」多了一个 `quantity > 0` 的过滤,而概览接口不过滤 ——

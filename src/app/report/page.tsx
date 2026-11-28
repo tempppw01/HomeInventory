@@ -154,7 +154,16 @@ export default async function ReportPage() {
           {monthly.some((row) => row.value > 0) && section(<Wallet size={14} />, "近 6 个月支出", (
             <div>
               <MonthlyBars points={monthly} ariaLabel="近 6 个月支出趋势" format="money" />
-              {byCategory.length > 0 && <div className="mt-3"><ShareBar rows={byCategory} ariaLabel="本月消费分类占比" format="money" /></div>}
+              {/* 这一排是**本月**的分类占比,上面那排柱子是 6 个月 —— 概览页早就有「本月花在哪」这行小标题
+                  (dashboard-view 里的同一句),月报漏了它。漏掉的后果在打印稿上很具体:
+                  读者只看到「近 6 个月支出」这个标题,往下读「家电 ¥5985 / 清洁 ¥2693 / 饮品 ¥38」,
+                  自然会当成 6 个月的分类。实测(2026-11-28,家庭库):饮品本月 ¥38,6 个月是 ¥258,差 6.8 倍。 */}
+              {byCategory.length > 0 && (
+                <div className="mt-3">
+                  <div className="mb-2 text-xs font-bold muted">本月花在哪</div>
+                  <ShareBar rows={byCategory} ariaLabel="本月消费分类占比" format="money" />
+                </div>
+              )}
             </div>
           ))}
 
