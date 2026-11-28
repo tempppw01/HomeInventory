@@ -99,12 +99,24 @@ function useAppState() {
   const lastLoadedAt = useRef(0);
   // 首屏/刷新失败的原因。有它在,界面才能给出「为什么读不到、该怎么办」,而不是崩成通用错误页。
   const [loadError, setLoadError] = useState<string | null>(null);
+  // 离线状态与「上次成功同步的时间」(阶段 1:离线看得见数据,但必须标明是快照)。
+  // 时间戳在**每次成功拉到数据时**写:它代表用户手里这份数据什么时候从服务器来的,
+  // 不是「我们什么时候联过网」—— 有网却一直没刷新时,两者能差很远。
+  const [offline, setOffline] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const pendingLoad = useRef<Promise<void> | null>(null);
+
+  const markSynced = useCallback(() => {
+    const now = new Date().toISOString();
+    setLastSyncedAt(now);
+    try { localStorage.setItem("guiwu:lastSyncedAt", now); } catch { /* 隐私模式写不了就算了 */ }
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
       const result = await request<DashboardData>("/api/dashboard");
       lastLoadedAt.current = Date.now();
+      markSynced();
       setData(result);
       setLoadError(null);
     } catch (error) {
@@ -114,7 +126,19 @@ function useAppState() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [markSynced]);
+
+  // 离线 / 在线:界面要能说清「你看的是快照」,并且**恢复网络后自动重新拉一次** ——
+  // 这就是「有网时自动同步」在读这一侧的第一步(写那一侧在阶段 2 的待发队列)。
+  useEffect(() => {
+    const sync = () => setOffline(!navigator.onLine);
+    sync();
+    const onOnline = () => { sync(); void refresh(); };
+    const onOffline = () => sync();
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => { window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); };
+  }, [refresh]);
 
   // Navigation, filtering and the focus/visibility wake-up used to each fire a
   // full dashboard refetch. Home servers answer slowly, so switching tabs felt
@@ -131,12 +155,12 @@ function useAppState() {
   useEffect(() => {
     let active = true;
     request<DashboardData>("/api/dashboard")
-      .then((result) => { if (active) { lastLoadedAt.current = Date.now(); setData(result); } })
+      .then((result) => { if (active) { lastLoadedAt.current = Date.now(); markSynced(); setData(result); } })
       .then((result) => { if (active) setLoadError(null); return result; })
       .catch((error) => { if (active) { const message = error instanceof Error ? error.message : "载入失败"; setLoadError(message); setToast(message); } })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [markSynced]);
   // 会话中途失效:任何写操作拿到 401 都会触发这个事件(见 components/shared.tsx 的 request)。
   // 以前用户只看到一句「请先登录」,弹窗停着、页面上却没有任何回到登录的入口 —— 只能自己猜要刷新。
   // 这里给一个明确的按钮:重新登录(整页跳转,未登录时首页就是登录表单)。
@@ -490,7 +514,7 @@ function useAppState() {
     expiryReminderDays,
     setToastAction,
     view, pathname, openView, beginNavigation,
-    search, setSearch, typeFilter, categoryFilter, changeTypeFilter, changeCategoryFilter, filteredItems, usedUpItems, itemsIgnoringCategory,
+    search, setSearch, typeFilter, categoryFilter, changeTypeFilter, changeCategoryFilter, filteredItems, usedUpItems, itemsIgnoringCategory, offline, lastSyncedAt,
     locationFilter, changeLocationFilter,
     readOnly, role, lowStock, pendingShopping, tasks, expiring, expired, totalValue, now,
     theme, setThemeMode, cycleTheme, density, setDensity, motionMode, setMotionMode,

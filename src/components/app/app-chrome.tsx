@@ -28,6 +28,7 @@ import { AuditView } from "@/components/views/audit-view";
 import { SettingsView } from "@/components/views/settings-view";
 import { AboutView } from "@/components/views/about-view";
 import { ItemModal } from "@/components/views/item-modal";
+import { OfflineBanner } from "@/components/offline-banner";
 
 /**
  * 应用外壳:桌面侧栏 / 顶栏 / 移动底部导航 / toast / 助手悬浮球 + 全部全局弹窗。
@@ -39,7 +40,7 @@ export function AppChrome({ children }: { children?: React.ReactNode }) {
   const app = useApp();
   const {
     data, loading, setLoading, refresh, loadError, view, openView, beginNavigation, search, setSearch, locationFilter, changeLocationFilter,
-    typeFilter, categoryFilter, changeTypeFilter, changeCategoryFilter, filteredItems, usedUpItems, itemsIgnoringCategory,
+    typeFilter, categoryFilter, changeTypeFilter, changeCategoryFilter, filteredItems, usedUpItems, itemsIgnoringCategory, offline, lastSyncedAt,
     readOnly, role, aiAvailable, lowStock, pendingShopping, tasks, expiring, expired, totalValue, now,
     theme, cycleTheme, setThemeMode, density, motionMode, setDensity, setMotionMode,
     sidebarCollapsed, toggleSidebar, modal, setModal, editing, editingLocation, setEditingLocation, closeModal,
@@ -139,6 +140,7 @@ export function AppChrome({ children }: { children?: React.ReactNode }) {
         <AnimatePresence mode="wait">
           <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: .22 }}>
             {children}
+            {offline && <OfflineBanner lastSyncedAt={lastSyncedAt} now={now} />}
             {readOnly && <div className="mb-4 rounded-2xl px-3 py-2 text-xs font-bold" style={{ background: "var(--surface-soft)", color: "var(--muted)" }}>只读账号:可以查看和搜索,不能新增或修改数据。</div>}
             {loading ? <LoadingView /> : !data ? (
               <LoadFailedView message={loadError} onRetry={() => { setLoading(true); void refresh(); }} />
