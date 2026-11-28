@@ -29,7 +29,12 @@ export async function GET(request: NextRequest) {
       prisma.priceRecord.findMany({ where: { purchasedAt: { gte: sixMonthStart } }, orderBy: { purchasedAt: "desc" } }),
       prisma.activityLog.findMany({ where: { action: "CONSUME", undoneAt: null }, select: { itemId: true, itemName: true, createdAt: true }, orderBy: { createdAt: "desc" }, take: 500 }),
       prisma.householdPreference.upsert({ where: { id: "default" }, create: {}, update: {} }),
-      prisma.householdTask.findMany({ where: { status: "OPEN" }, orderBy: { dueAt: "asc" }, take: 8 }),
+      // 任务:只给未完成的(任务页列的就是它们)。
+      // 这里原先还带 `take: 8` —— 而任务页标题写的正是「共 {tasks.length} 项」:
+      // 家里有 13 项待办时,页面写「共 8 项」,另外 5 项用户**既看不到也点不了「完成」**
+      // (2026-11-29 实测:探针库 OPEN 13 条,/api/dashboard 只给 8 条,/tasks 显示「共 8 项」)。
+      // 未完成任务本身很小(每行百来字节),而且这是它唯一的消费者,不再截断。
+      prisma.householdTask.findMany({ where: { status: "OPEN" }, orderBy: { dueAt: "asc" } }),
     ]);
 
     // 每件物品最近一次 AI 分析的时间:物品列表据此提示「结论已过时」。

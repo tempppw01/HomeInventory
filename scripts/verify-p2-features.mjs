@@ -379,6 +379,69 @@ console.log("已清理");
   await ctx.close();
 }
 
+// ---------- 任务页的总数必须是真的(不能被接口上限截断) ----------
+// 由来(2026-11-29 实测):/tasks 的「共 {tasks.length} 项」用的是 /api/dashboard 给的 tasks,
+// 而那条查询带着 `take: 8` —— 家里有 13 项待办时页面写「共 8 项」,
+// 另外 5 项**既看不到也点不了「完成」**。这里造到 11 条以上再对账。
+{
+  const openBefore = await page.evaluate(async () => {
+    const all = await fetch("/api/tasks", { cache: "no-store" }).then((r) => r.json());
+    return all.tasks.filter((task) => task.status === "OPEN").length;
+  });
+  const createdIds = [];
+  const need = Math.max(0, 12 - openBefore);
+  for (let index = 1; index <= need; index += 1) {
+    const created = await page.evaluate(async (payload) => {
+      const response = await fetch("/api/tasks", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+      const body = await response.json().catch(() => null);
+      return { status: response.status, id: body?.id ?? null };
+    }, { title: `P2-任务上限探针 ${index}`, dueAt: new Date(Date.now() + (900 + index) * 86400000).toISOString(), recurrence: "NONE" });
+    if (created.id) createdIds.push(created.id);
+  }
+  try {
+    await page.goto(`${BASE}/tasks`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(3000);
+    const view = await page.evaluate(async () => {
+      const text = (document.querySelector("main")?.innerText || "").replace(/\s+/g, " ");
+      const all = await fetch("/api/tasks", { cache: "no-store" }).then((r) => r.json());
+      const open = all.tasks.filter((task) => task.status === "OPEN");
+      return {
+        headerTotal: Number((text.match(/共 (\d+) 项/) || [])[1] ?? -1),
+        serverOpen: open.length,
+        probeRows: (text.match(/P2-任务上限探针 \d+/g) || []).length,
+      };
+    });
+    record(
+      "(前置)任务页出现了 ≥12 项待办(足以触发旧上限 8)",
+      view.serverOpen >= 12,
+      `服务器 OPEN=${view.serverOpen}(造了 ${createdIds.length} 条)`,
+    );
+    record(
+      "任务页的「共 N 项」等于服务器上的待办数(不被上限截断)",
+      view.headerTotal === view.serverOpen,
+      `页面=${view.headerTotal} 服务器=${view.serverOpen}`,
+    );
+    record(
+      "排在最后的那几条任务也在页面上(不是只给了前 8 条)",
+      view.probeRows === createdIds.length,
+      `页面上的探针行=${view.probeRows} 造了 ${createdIds.length} 条`,
+    );
+  } finally {
+    // 删除任务的入口是 `PATCH /api/tasks {id, action:"delete"}` —— 没有 DELETE /api/tasks/:id。
+    // 第一版写的 `DELETE /api/tasks/${id}` 返回 404 又被 .catch 吞掉,12 条探针原样留在库里。
+    for (const id of createdIds) {
+      await page.evaluate(async (taskId) => {
+        await fetch("/api/tasks", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: taskId, action: "delete" }) }).catch(() => undefined);
+      }, id);
+    }
+    const leftover = await page.evaluate(async () => {
+      const all = await fetch("/api/tasks", { cache: "no-store" }).then((r) => r.json());
+      return all.tasks.filter((task) => String(task.title).startsWith("P2-任务上限探针")).length;
+    });
+    record("探针任务已清理干净(否则会留在库里)", leftover === 0, `残留=${leftover}`);
+  }
+}
+
 await browser.close();
 
 const failed = results.filter((row) => !row.ok);
