@@ -11,7 +11,7 @@ export function OfflineBanner({ lastSyncedAt, now }: { lastSyncedAt: string | nu
   const { ageText, clock } = offlineSnapshotLabel(lastSyncedAt, now);
   return (
     <div className="mb-4 rounded-2xl px-3 py-2 text-sm font-bold" style={{ background: "var(--warning-soft)", color: "var(--warning)" }} role="status">
-      离线 · 显示的是{ageText}数据快照{clock ? `(上次同步 ${clock})` : ""} · 恢复网络后会自动刷新
+      离线 · 显示的是 {ageText}数据快照{clock ? `(上次同步 ${clock})` : ""} · 恢复网络后会自动刷新
     </div>
   );
 }

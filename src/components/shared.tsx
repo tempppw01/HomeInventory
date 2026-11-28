@@ -236,7 +236,12 @@ export function expiryGroupLabel(date: string, now = Date.now()) {
   return target.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric", weekday: "short" });
 }
 
-export async function request<T>(url: string, options?: RequestInit): Promise<T> {
+/**
+ * `onResponse` 是给「离线快照」用的:响应是 SW 从缓存里端出来的时候,头里带着它真正的抓取时刻
+ * (见 lib/offline-snapshot 与 public/sw.js)。调用方只在成功响应上收到回调,
+ * 免得拿一个失败响应的头去冒充「刚同步过」。
+ */
+export async function request<T>(url: string, options?: RequestInit, onResponse?: (response: Response) => void): Promise<T> {
   const retryable = !options?.method || ["GET", "PATCH", "DELETE"].includes(options.method.toUpperCase());
   for (let attempt = 0; attempt < (retryable ? 2 : 1); attempt++) {
     try {
@@ -267,6 +272,7 @@ export async function request<T>(url: string, options?: RequestInit): Promise<T>
         }
         throw failure;
       }
+      onResponse?.(response);
       return result as T;
     } catch (error) {
       if (attempt === 0 && retryable) continue;

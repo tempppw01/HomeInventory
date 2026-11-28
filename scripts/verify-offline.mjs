@@ -124,6 +124,11 @@ console.log(`      在线时列表里有:${itemName ?? "(没抓到物品名)"};�
 // 关键:**另开一页**来导航。复用刚加载完的那一页会测到别的东西 ——
 // 离线后那个页面自己的数据刷新会失败并触发错误边界,于是看到的是通用错误页,
 // 而用户离线时真正做的是「重新打开应用」,也就是新开一页。
+//
+// 先故意等 2 秒再断网:下面那条「上次同步记的是缓存抓取时刻」的断言要能抓住旧行为
+// (旧行为把**打开页面的时刻**记成同步时刻,两者差得越多越能证明它错;只差几百毫秒时
+// 断言会时红时绿 —— 那种检查等于没检查)。
+await page.waitForTimeout(2000);
 await context.setOffline(true);
 const offlinePage = await context.newPage();
 let offline = null;
@@ -157,6 +162,19 @@ try {
     })(),
     url: location.pathname,
     text: (document.body.innerText || "").replace(/\n+/g, " | ").slice(0, 300),
+    // 「上次同步」到底记的是哪一刻:缓存副本上的抓取戳 vs 应用自己记下来的值。
+    // 阶段 5 就是靠这两个数在真实浏览器里抓到缺陷的(缓存 06:33:53 拉的,却记成 06:39:20)。
+    cachedAt: await (async () => {
+      try {
+        for (const name of await caches.keys()) {
+          const cache = await caches.open(name);
+          const hit = await cache.match("/api/dashboard");
+          if (hit) return hit.headers.get("x-guiwu-cached-at");
+        }
+      } catch { return null; }
+      return null;
+    })(),
+    lastSyncedAt: (() => { try { return localStorage.getItem("guiwu:lastSyncedAt"); } catch { return null; } })(),
     hasReload: Boolean(Array.from(document.querySelectorAll("button, a")).find((node) => (node.textContent || "").includes("重新加载"))),
   }));
 } catch (error) {
@@ -171,6 +189,21 @@ check("断网后仍留在这一页(不再跳到离线页)", offline?.url === "/i
 check("离线时看到了数据快照横幅", Boolean(offline?.text && /快照/.test(offline.text)), (offline?.text ?? "").slice(0, 200));
 check("横幅说清了数据是多久之前的(不许假装新鲜)", Boolean(offline?.text && /上次同步/.test(offline.text)), (offline?.text ?? "").slice(0, 200));
 check("横幅说明了恢复网络后会自动刷新", Boolean(offline?.text && /会自动刷新/.test(offline.text)), (offline?.text ?? "").slice(0, 200));
+
+// 阶段 5 的红线(真实浏览器实测抓到的缺陷,不是推测):
+// 断网重开页面时,「上次同步」曾经按**打开页面的那一刻**记 ——
+// 实测现场:缓存副本是 06:33:53 拉的,06:39:20 重开,横幅写着「刚刚同步的数据快照(上次同步 14:39)」,
+// 那份数字其实已经旧了 5 分 27 秒。这条检查要的就是:**记的必须是缓存上的真实抓取时刻**。
+// 它在旧构建上会红(差 ≈2000ms),在新构建上差 0ms —— 上面那个 2 秒等待就是为了这个。
+const stampGapMs = (() => {
+  const stamp = Date.parse(offline?.cachedAt ?? "");
+  const recorded = Date.parse(offline?.lastSyncedAt ?? "");
+  if (!Number.isFinite(stamp) || !Number.isFinite(recorded)) return null;
+  return Math.abs(recorded - stamp);
+})();
+check("断网重开后「上次同步」= 缓存的真实抓取时刻(不是打开页面的时刻)",
+  stampGapMs !== null && stampGapMs <= 1000,
+  `缓存戳=${offline?.cachedAt ?? "读不到"} 记下的=${offline?.lastSyncedAt ?? "读不到"} 相差=${stampGapMs === null ? "?" : `${stampGapMs}ms`}`);
 
 // ---------- 3 关键承诺(新契约):离线时**看得见**数据,但必须标明是快照 ----------
 //

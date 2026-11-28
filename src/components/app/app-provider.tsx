@@ -16,6 +16,7 @@ import { isLowStock } from "@/lib/low-stock";
 import { findPendingPurchase } from "@/lib/shopping-list";
 import { locationSubtreeIds } from "@/lib/location-tree";
 import { isExpiredDays, isExpiringSoonDays } from "@/lib/expiry-status";
+import { cachedAtFromHeaders, syncedAtFromResponse } from "@/lib/offline-snapshot";
 import { PREFERENCE_LIMITS } from "@/lib/preference-limits";
 
 export type ModalKind = "item" | "shopping" | "location" | "task" | "notifications" | "recycle" | "batch-ai" | null;
@@ -110,17 +111,23 @@ function useAppState() {
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const pendingLoad = useRef<Promise<void> | null>(null);
 
-  const markSynced = useCallback(() => {
-    const now = new Date().toISOString();
-    setLastSyncedAt(now);
-    try { localStorage.setItem("guiwu:lastSyncedAt", now); } catch { /* 隐私模式写不了就算了 */ }
+  const markSynced = useCallback((serverCachedAt?: string | null) => {
+    // 直连服务器时 serverCachedAt 是 null(响应头里没有戳)——那就是现在;
+    // 断网时数据来自 SW 缓存,必须记**那份缓存的真实抓取时刻**,
+    // 否则重开页面会把 5 分钟前的缓存说成「刚刚同步的」(阶段 5 真实浏览器实测到的坑)。
+    const value = syncedAtFromResponse(serverCachedAt);
+    setLastSyncedAt(value);
+    try { localStorage.setItem("guiwu:lastSyncedAt", value); } catch { /* 隐私模式写不了就算了 */ }
   }, []);
 
   const refresh = useCallback(async () => {
     try {
-      const result = await request<DashboardData>("/api/dashboard");
+      let cachedAt: string | null = null;
+      const result = await request<DashboardData>("/api/dashboard", undefined, (response) => {
+        cachedAt = cachedAtFromHeaders(response.headers);
+      });
       lastLoadedAt.current = Date.now();
-      markSynced();
+      markSynced(cachedAt);
       setData(result);
       setLoadError(null);
     } catch (error) {
@@ -169,8 +176,11 @@ function useAppState() {
 
   useEffect(() => {
     let active = true;
-    request<DashboardData>("/api/dashboard")
-      .then((result) => { if (active) { lastLoadedAt.current = Date.now(); markSynced(); setData(result); } })
+    let cachedAt: string | null = null;
+    request<DashboardData>("/api/dashboard", undefined, (response) => {
+      cachedAt = cachedAtFromHeaders(response.headers);
+    })
+      .then((result) => { if (active) { lastLoadedAt.current = Date.now(); markSynced(cachedAt); setData(result); } })
       .then((result) => { if (active) setLoadError(null); return result; })
       .catch((error) => { if (active) { const message = error instanceof Error ? error.message : "载入失败"; setLoadError(message); setToast(message); } })
       .finally(() => { if (active) setLoading(false); });
