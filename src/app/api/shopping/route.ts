@@ -3,12 +3,17 @@ import { prisma } from "@/lib/prisma";
 import { shoppingSchema } from "@/lib/validation";
 import { apiError, requireWritableUser } from "@/lib/api";
 import { normalizedPurchaseName } from "@/lib/shopping-list";
+import { normalizeOpId, runOnce } from "@/lib/idempotency";
 
 export async function POST(request: NextRequest) {
   try {
     const user = await requireWritableUser();
     const data = shoppingSchema.parse(await request.json());
-    const result = await prisma.$transaction(async (tx) => {
+    // 客户端(含离线队列重放)带的唯一操作号:同一个号只建一次。
+    // 这条路径尤其需要它 —— 离线时记下的采购项会在恢复网络后重放,
+    // 而"加一条采购项"重复一次就是清单里多一条,用户得自己去删。
+    const opId = normalizeOpId(request.headers.get("x-guiwu-op-id"));
+    const outcome = await runOnce(opId, "shopping.create", () => prisma.$transaction(async (tx) => {
       // A shopping list should stay useful at a glance. Merge only entries
       // with the same normalised name *and* unit, so "2 bottles" is never
       // accidentally combined with "2 boxes".
@@ -32,8 +37,14 @@ export async function POST(request: NextRequest) {
       const item = await tx.shoppingItem.create({ data });
       await tx.activityLog.create({ data: { action: "SHOPPING_CREATE", itemName: item.name, userId: user.id, detail: "添加采购项" } });
       return { item, merged: false };
-    });
-    return NextResponse.json(result, { status: result.merged ? 200 : 201 });
+    }));
+    if (outcome.replay) {
+      // 重放:上次已经做过。有结果就原样回他(多一个 deduplicated 标记),
+      // 结果还没写回来就说清楚 —— **绝不重复建一条**。
+      if (outcome.result) return NextResponse.json({ ...outcome.result, deduplicated: true });
+      return NextResponse.json({ error: "这条采购项已经在添加了,请稍后刷新", deduplicated: true }, { status: 503 });
+    }
+    return NextResponse.json(outcome.result, { status: outcome.result.merged ? 200 : 201 });
   } catch (error) {
     return apiError(error);
   }

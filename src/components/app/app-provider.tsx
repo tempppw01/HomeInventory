@@ -9,7 +9,7 @@ import { ReadOnlyContext, View, ThemeMode, ItemQuickFilter, compressImage, retur
 import { pathForTarget, pathForView, viewForPath } from "@/components/app/routes";
 import { isCountUnit, isLiquidConsumable } from "@/lib/item-metrics";
 import { pickVisibleItems } from "@/lib/item-visibility";
-import { isRetryable, makeOperation, oldest, type OutboxOperation } from "@/lib/outbox-core";
+import { isRetryable, makeOperation, oldest, shouldQueue, type OutboxOperation } from "@/lib/outbox-core";
 import { deleteOperation, listOperations, putOperation } from "@/lib/outbox-idb";
 import { localDateString } from "@/lib/local-date";
 import { isLowStock } from "@/lib/low-stock";
@@ -526,6 +526,37 @@ function useAppState() {
     } catch (error) { setToast(error instanceof Error ? error.message : "加入采购清单失败"); }
   };
 
+  /**
+   * 加入采购清单 —— 离线也能记下来(队列接的第二个动作,第一个是「用掉」)。
+   *
+   * 和「用掉」不同的一点:这一条必须把**服务端的校验错误原样交给弹窗**显示,
+   * 所以不是无条件"先入队",而是:先带着同一把 opId 直发;只有**拿不到响应**
+   * (status === null,即断网/连接被掐)才入队。
+   *
+   * 关键是那个 opId **直发和入队用的是同一个** —— 万一响应在路上丢了
+   * (服务端其实已经建好了),重放时服务端认得出这个号,不会多建一条。
+   * 「点一次、清单里多两条」这种正是幂等要挡的事。
+   */
+  const addShoppingItem = async (input: { name: string; quantity: number; unit: string }) => {
+    const body = { name: input.name, quantity: input.quantity, unit: input.unit, priority: 1, source: "manual" };
+    const operation = makeOperation({ method: "POST", url: "/api/shopping", body, label: `加入采购清单 · ${input.name}` });
+    try {
+      await request(operation.url, { method: "POST", body: JSON.stringify(body), headers: { "x-guiwu-op-id": operation.opId } });
+      setToast(`「${input.name}」已加入采购清单`);
+      await refresh();
+      return { ok: true as const };
+    } catch (error) {
+      const status = typeof (error as { status?: number })?.status === "number" ? (error as { status: number }).status : null;
+      // 拿不到响应才算"离线待发";服务端明确拒绝(校验不过等)把原话交给弹窗,别入队
+      if (!shouldQueue(status)) return { ok: false as const, message: error instanceof Error ? error.message : "加入清单失败" };
+      await putOperation(operation);
+      setToast(`「${input.name}」已记下,联网后自动加入采购清单`);
+      setToastAction(null);
+      await refreshQueue();
+      return { ok: true as const };
+    }
+  };
+
   const toggleShopping = async (item: ShoppingItem) => {
     const status = item.status === "PENDING" ? "PURCHASED" : "PENDING";
     let replenishItemId: string | undefined;
@@ -594,7 +625,7 @@ function useAppState() {
     chatOpen, setChatOpen, chatSeed, setChatSeed, openChatWith, showWelcome, dismissWelcome,
     toast, toastAction, setToast,
     openEdit, openDetail, uploadItemImage, duplicateItem, copyText, removeShopping, consume, pending,
-    updateRemaining, removeItem, mergeItems, pauseRestock, addRestockSuggestion, toggleShopping, toggleFavoriteShopping,
+    updateRemaining, removeItem, mergeItems, pauseRestock, addRestockSuggestion, addShoppingItem, toggleShopping, toggleFavoriteShopping,
     toggleTask, deleteTask,
   };
 }

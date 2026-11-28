@@ -318,6 +318,33 @@ const baseItem = { name: "T-基础物品", category: "日用", type: "CONSUMABLE
   const manual = await call("POST", "/api/shopping", { name: "T-手动采购", quantity: 1, unit: "个" });
   record("shopping", "手动创建采购项", manual.status === 201 || manual.status === 200, `status=${manual.status}`);
   if (manual.body?.id) created.shopping.push(manual.body.id);
+
+  // 同一次操作重放:断网时记下的采购项,联网后可能被重发(网络抖、刷新页面、用户手点重试)。
+  // 服务端必须认得出同一把 opId,**只建一次** —— 否则清单里会凭空多一条,用户得自己去删。
+  // 这条同时守住"响应丢了但服务端已经建好"的情形:重放会命中同一个结果,而不是再建一条。
+  {
+    const opId = `contract-shopping-${Date.now().toString(36)}`;
+    const payload = JSON.stringify({ name: "T-幂等采购", quantity: 1, unit: "个", priority: 1, source: "manual" });
+    const headers = { cookie: cookies, "content-type": "application/json", "x-guiwu-op-id": opId };
+    const first = await fetchWithRetry(`${BASE}/api/shopping`, { method: "POST", headers, body: payload });
+    const firstBody = await first.json().catch(() => null);
+    const firstId = firstBody?.item?.id;
+    if (firstId) created.shopping.push(firstId);
+    record("shopping", "带 opId 创建采购项", first.status === 201 || first.status === 200, `status=${first.status} ${JSON.stringify(firstBody).slice(0, 100)}`);
+
+    const second = await fetchWithRetry(`${BASE}/api/shopping`, { method: "POST", headers, body: payload });
+    const secondBody = await second.json().catch(() => null);
+    record(
+      "shopping",
+      "同一个 opId 重放:服务端认得出,回的是上次那条",
+      secondBody?.deduplicated === true && Boolean(firstId) && secondBody?.item?.id === firstId,
+      `第一次=${first.status}/${firstId ?? "?"} 第二次=${second.status}/${JSON.stringify(secondBody).slice(0, 140)}`,
+    );
+
+    const after = await call("GET", "/api/dashboard");
+    const mine = (after.body?.shopping ?? []).filter((row) => row.name === "T-幂等采购");
+    record("shopping", "重放没有多建一条、也没有翻倍", mine.length === 1 && mine[0]?.quantity === 1, `命中=${mine.length} 数量=${mine.map((row) => row.quantity).join(",")}`);
+  }
 }
 
 // ============ 5b. 采购完成 → 入库(精确核对数量)============

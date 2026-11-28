@@ -174,85 +174,141 @@ if (itemName) {
   console.log("      跳过「离线看得见那件物品」:在线时没抓到具体物品名(列表显示模式下没有卡片按钮)");
 }
 
-// ---------- 3b 离线点一个"还没接队列"的写操作:提示必须与事实一致 ----------
-//
-// 2026-11-28 真机实测:断网点「加入清单」,原来给的是
-//   「网络响应不完整,请重试;已保存的内容不会丢失」
-// 而浏览器的真实原因是 net::ERR_INTERNET_DISCONNECTED、请求根本没发出去、队列 0 条:
-// 原因说错(不是响应不完整,是没网)、承诺说过头(什么都没保存),还让人反复点一个必然失败的动作。
-//
-// 这里用 DOM 直接驱动:evaluate 里 querySelector 稳定命中,而 Playwright 的 locator 在这个弹窗内部
-// 实测拿不到元素(弹窗开着、querySelector 找得到,locator 一直等到超时),套件因此不用 locator 做这一步。
-{
-  const outboxRows = () => offlinePage.evaluate(async () => {
-    try {
-      const names = (await indexedDB.databases()).map((db) => db.name);
-      const name = names.find((it) => it && /outbox/i.test(it));
-      if (!name) return -1;
-      return await new Promise((resolve) => {
-        const request = indexedDB.open(name);
-        request.onsuccess = () => {
-          const db = request.result;
-          const store = [...db.objectStoreNames].find((it) => /op/i.test(it)) || db.objectStoreNames[0];
-          const all = db.transaction(store, "readonly").objectStore(store).getAll();
-          all.onsuccess = () => resolve(all.result.length);
-          all.onerror = () => resolve(-2);
-        };
-        request.onerror = () => resolve(-2);
-      });
-    } catch { return -3; }
-  });
+/** 这一轮离线新建的采购项名字(同步后要核对、并清理掉)。 */
+let shoppingNameForCleanup = "";
 
-  const queuedBefore = await outboxRows();
-  let message = "";
-  let opened = false;
+/** 队列里现在有几条(离线队列存在 IndexedDB,套件直接读它 —— 比看徽章更硬)。 */
+const outboxRows = () => offlinePage.evaluate(async () => {
   try {
-    opened = await offlinePage.evaluate(() => {
-      const button = Array.from(document.querySelectorAll("button")).find((node) => (node.textContent || "").includes("添加采购项"));
-      if (!button) return false;
-      button.click();
-      return true;
+    const names = (await indexedDB.databases()).map((db) => db.name);
+    const name = names.find((it) => it && /outbox/i.test(it));
+    if (!name) return -1;
+    return await new Promise((resolve) => {
+      const request = indexedDB.open(name);
+      request.onsuccess = () => {
+        const db = request.result;
+        const store = [...db.objectStoreNames].find((it) => /op/i.test(it)) || db.objectStoreNames[0];
+        const all = db.transaction(store, "readonly").objectStore(store).getAll();
+        all.onsuccess = () => resolve(all.result.length);
+        all.onerror = () => resolve(-2);
+      };
+      request.onerror = () => resolve(-2);
     });
-    await offlinePage.waitForTimeout(900);
-    const submitted = await offlinePage.evaluate(() => {
-      const dialog = document.querySelector('[role="dialog"]');
-      if (!dialog) return false;
-      const input = dialog.querySelector('form input:not([type="number"])');
-      if (!input) return false;
-      // React 受控输入:必须走原生 setter + input 事件,否则组件读不到这个值
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
-      setter.call(input, "离线写提示检查");
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      const submit = Array.from(dialog.querySelectorAll("button")).find((node) => (node.textContent || "").includes("加入清单"));
-      if (!submit) return false;
-      submit.click();
-      return true;
-    });
-    if (!submitted) throw new Error("没找到弹窗里的输入框或提交按钮");
-    await offlinePage.waitForTimeout(2600);
-    message = await offlinePage.evaluate(() => {
-      const dialog = document.querySelector('[role="dialog"]');
-      return (dialog ? dialog.innerText : document.body.innerText).replace(/\s+/g, " ").slice(0, 300);
-    });
-  } catch (error) {
-    message = "没量到:" + (error instanceof Error ? error.message.slice(0, 90) : String(error).slice(0, 90));
-  }
+  } catch { return -3; }
+});
 
-  check("离线时打得开写入口并提交(否则下面两条不可信)", opened && !message.startsWith("没量到"), message.slice(0, 150));
-  check("离线写失败时说清了是离线(不是含糊的「网络响应不完整」)", /离线/.test(message), message.slice(0, 170));
-  check("离线写失败时**没有**说「已保存」(说了就是骗人)", !/已保存/.test(message), message.slice(0, 170));
-  const queuedAfter = await outboxRows();
-  check("提示与事实一致:这一次确实什么都没存", queuedAfter === queuedBefore, `队列 ${queuedBefore} → ${queuedAfter}`);
+/**
+ * toast 要"收集"而不是"某一刻读一眼":它是 2~4 秒就走的浮层,
+ * 断言晚一点点就会读到空 —— 那是把自己骗过去(2026-11-28 实测:就因为这个误判过一次)。
+ * 装一个 role=status/alert 的观察器,把出现过的文字都留下来。
+ */
+const startToastCollector = () => offlinePage.evaluate(() => {
+  window.__guiwuToasts = [];
+  const collect = () => {
+    document.querySelectorAll('[role="status"],[role="alert"]').forEach((node) => {
+      const text = (node.innerText || "").replace(/\s+/g, " ").trim();
+      if (text && !window.__guiwuToasts.includes(text)) window.__guiwuToasts.push(text);
+    });
+  };
+  collect();
+  if (window.__guiwuToastObserver) window.__guiwuToastObserver.disconnect();
+  window.__guiwuToastObserver = new MutationObserver(collect);
+  window.__guiwuToastObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+});
+const collectedToasts = () => offlinePage.evaluate(() => (window.__guiwuToasts || []).join(" ｜ "));
 
-  // 收尾:关掉弹窗,别影响后面"恢复网络"那一段
+/** 页面正文,但把 toast 的文字剔掉 —— 判"清单里有没有它"时不能把提示自己的话算进来。 */
+const pageTextWithoutToasts = () => offlinePage.evaluate(() => {
+  let text = (document.body.innerText || "").replace(/\s+/g, " ");
+  (window.__guiwuToasts || []).forEach((toast) => { text = text.split(toast).join(" "); });
+  return text;
+});
+
+/** 在弹窗里填第一个文本输入,并点**指定的那个**按钮(按文字精确匹配)。 */
+const submitDialog = (name, exactButtonText) => offlinePage.evaluate(({ value, label }) => {
+  const dialog = document.querySelector('[role="dialog"]');
+  if (!dialog) return false;
+  const input = dialog.querySelector('form input:not([type="number"])') || dialog.querySelector("input:not([type='number'])");
+  if (!input) return false;
+  // React 受控输入:必须走原生 setter + input 事件,否则组件读不到这个值
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+  setter.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  const target = Array.from(dialog.querySelectorAll("button")).find((node) => (node.textContent || "").replace(/\s+/g, "") === label);
+  if (!target) return false;
+  target.click();
+  return true;
+}, { value: name, label: exactButtonText });
+
+/** 关掉当前弹窗(取消/关闭),别影响后面的步骤。 */
+const closeDialog = async () => {
   await offlinePage.evaluate(() => {
     const dialog = document.querySelector('[role="dialog"]');
-    const cancel = dialog ? Array.from(dialog.querySelectorAll("button")).find((node) => (node.textContent || "").replace(/\s+/g, "") === "取消") : null;
-    if (cancel) cancel.click();
+    if (!dialog) return;
+    const button = Array.from(dialog.querySelectorAll("button")).find((node) => ["取消", "关闭"].includes((node.textContent || "").replace(/\s+/g, "")) || node.getAttribute("aria-label") === "关闭");
+    if (button) button.click();
   });
-  await offlinePage.waitForTimeout(500);
-}
+  await offlinePage.waitForTimeout(400);
+};
 
+/** 打开一个入口按钮(按文字精确匹配)。 */
+const clickByText = (label) => offlinePage.evaluate((text) => {
+  const button = Array.from(document.querySelectorAll("button, a")).find((node) => (node.textContent || "").replace(/\s+/g, "") === text);
+  if (!button) return false;
+  button.click();
+  return true;
+}, label);
+
+// ---------- 3b 离线写:接进队列的动作要"记得住、能同步";没接的动作不许假装成功 ----------
+//
+// 两条路必须说**不同的话**,而且都要与事实对得上:
+//   · 「录入物品」还没接队列(2026-11-28 只接了「用掉」与「加入采购清单」)——
+//     离线时必须说"这一项还没保存",队列不许增加,列表里不许出现。
+//     以前它说的是「网络响应不完整,请重试;已保存的内容不会丢失」:原因说错(是没网)、承诺说过头(什么都没存)。
+//   · 「加入采购清单」已接队列 —— 离线时要说"已记下,联网后自动加入",队列必须**真的 +1**,
+//     而且离线期间**不许**假装它已经进了清单;恢复网络后必须**恰好一条**(重放不能多建、也不许翻倍)。
+await startToastCollector();
+{
+  const queuedBefore = await outboxRows();
+
+  // ---- 3b-1 没接队列的动作:录入物品(保存按钮的文字是「快速保存」,别用 /保存/ 去模糊匹配) ----
+  const offlineItemName = `离线验收物品-${Date.now().toString().slice(-6)}`;
+  let itemMessage = "";
+  try {
+    if (!(await clickByText("录入物品"))) throw new Error("没找到「录入物品」入口");
+    await offlinePage.waitForTimeout(1400);
+    if (!(await submitDialog(offlineItemName, "快速保存"))) throw new Error("没找到录入弹窗里的名称输入框或「快速保存」按钮");
+    await offlinePage.waitForTimeout(2500);
+    itemMessage = await offlinePage.evaluate(() => (document.querySelector('[role="dialog"]')?.innerText ?? document.body.innerText).replace(/\s+/g, " ").slice(0, 400));
+  } catch (error) {
+    itemMessage = "没量到:" + (error instanceof Error ? error.message.slice(0, 90) : String(error).slice(0, 90));
+  }
+  check("离线录入:提示说清了是离线(不是含糊的「网络响应不完整」)", /离线/.test(itemMessage), itemMessage.slice(0, 200));
+  check("离线录入:没有说「已保存」(说了就是骗人)", !/已保存/.test(itemMessage), itemMessage.slice(0, 200));
+  const queuedAfterItem = await outboxRows();
+  check("离线录入:队列没有偷偷多一条(它还没接队列)", queuedAfterItem === queuedBefore, `队列 ${queuedBefore} → ${queuedAfterItem}`);
+  await closeDialog();
+
+  // ---- 3b-2 已接队列的动作:加入采购清单 ----
+  const offlineShoppingName = `离线验收采购-${Date.now().toString().slice(-6)}`;
+  shoppingNameForCleanup = offlineShoppingName;
+  let shoppingMessage = "";
+  try {
+    if (!(await clickByText("添加采购项"))) throw new Error("没找到「添加采购项」入口");
+    await offlinePage.waitForTimeout(1100);
+    if (!(await submitDialog(offlineShoppingName, "加入清单"))) throw new Error("没找到采购弹窗里的名称输入框或「加入清单」按钮");
+    await offlinePage.waitForTimeout(2600);
+    shoppingMessage = await collectedToasts();
+  } catch (error) {
+    shoppingMessage = "没量到:" + (error instanceof Error ? error.message.slice(0, 90) : String(error).slice(0, 90));
+  }
+  check("离线加入采购清单:说清了「已记下,联网后自动加入」", /已记下/.test(shoppingMessage), (await collectedToasts()).slice(0, 220));
+  check("离线加入采购清单:没有说「已保存」(它只是记在了本机队列)", !/已保存/.test(shoppingMessage), shoppingMessage.slice(0, 220));
+  const queuedAfterShopping = await outboxRows();
+  check("离线加入采购清单:队列真的多了一条(话与事实一致)", queuedAfterShopping === queuedBefore + 1, `队列 ${queuedBefore} → ${queuedAfterShopping}`);
+  const listedOffline = (await pageTextWithoutToasts()).includes(offlineShoppingName);
+  check("离线期间没有假装它已经在清单里", !listedOffline, "离线时页面(提示之外)不该出现这条");
+}
 
 // ---------- 4 恢复网络后回到可用状态 ----------
 await context.setOffline(false);
@@ -267,6 +323,42 @@ check("恢复网络后能正常加载列表", online.hasItems || /物品|库存/
 if (itemName) {
   check("恢复网络后数据回来了", online.text.includes(itemName), `没看到「${itemName}」`);
 }
+
+// ---------- 4b 恢复网络后:队列自己清空,采购项恰好一条(重放不能多建、也不能翻倍) ----------
+{
+  let rows = -1;
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    rows = await outboxRows();
+    if (rows === 0) break;
+    await offlinePage.waitForTimeout(1000);
+  }
+  check("恢复网络后队列自动清空(离线记下的改动都发出去了)", rows === 0, `队列还剩 ${rows} 条`);
+
+  const snapshot = await offlinePage.evaluate(async () => {
+    const response = await fetch("/api/dashboard", { cache: "no-store" });
+    const body = await response.json();
+    return (body.shopping ?? []).map((row) => ({ id: row.id, name: row.name, quantity: row.quantity, unit: row.unit }));
+  });
+  const mine = snapshot.filter((row) => row.name === shoppingNameForCleanup);
+  check("同步后采购清单里**恰好一条**(重放没有多建)", mine.length === 1, `名字=${shoppingNameForCleanup} 命中=${JSON.stringify(mine).slice(0, 160)}`);
+  check("同步后数量还是 1(重放没有翻倍)", mine.length === 1 && mine[0].quantity === 1, JSON.stringify(mine[0] ?? {}).slice(0, 120));
+
+  // 收尾:删掉这次验收造的那条,别留给后面的套件(CI 有「跑完不留数据」这一关)
+  if (mine.length === 1) {
+    const status = await offlinePage.evaluate(async (id) => {
+      const response = await fetch(`/api/shopping/${id}`, { method: "DELETE" });
+      return response.status;
+    }, mine[0].id);
+    check("验收数据已清理(删掉那条采购项)", status === 200 || status === 204, `status=${status}`);
+    const after = await offlinePage.evaluate(async (name) => {
+      const response = await fetch("/api/dashboard", { cache: "no-store" });
+      const body = await response.json();
+      return (body.shopping ?? []).filter((row) => row.name === name).length;
+    }, shoppingNameForCleanup);
+    check("清理干净:清单里已经没有那条了", after === 0, `还剩 ${after} 条`);
+  }
+}
+
 
 await offlinePage.close();
 await context.close();

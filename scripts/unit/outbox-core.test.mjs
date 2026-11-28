@@ -6,7 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { isRetryable, makeOpId, makeOperation, nextDelayMs, oldest, pendingCount } from "../../src/lib/outbox-core.ts";
+import { isRetryable, makeOpId, makeOperation, nextDelayMs, oldest, pendingCount, shouldQueue } from "../../src/lib/outbox-core.ts";
 import { normalizeOpId } from "../../src/lib/idempotency.ts";
 
 test("opId 必须能被服务端的 normalizeOpId 收下(否则幂等白做)", () => {
@@ -57,4 +57,21 @@ test("重放按最老的一条先来(先建后改不能乱序)", () => {
   assert.equal(oldest([b, a])?.url, "/a");
   assert.equal(oldest([]), null);
   assert.equal(pendingCount([a, b]), 2);
+});
+
+test("只有拿不到响应才收进队列(断网正是这一种)", () => {
+  assert.equal(shouldQueue(null), true);
+});
+
+test("服务端明确拒绝不进队列 —— 否则一条 400 会把后面的操作全堵住", () => {
+  for (const status of [400, 401, 403, 404, 409, 422]) {
+    assert.equal(shouldQueue(status), false, `status=${status} 不该进队列`);
+  }
+});
+
+test("5xx/429 与「要不要收进队列」是两件事:它们值得重试,但不是「没拿到响应」", () => {
+  for (const status of [500, 502, 503, 429]) {
+    assert.equal(isRetryable(status), true, `status=${status} 该重试`);
+    assert.equal(shouldQueue(status), false, `status=${status} 却是"服务端已经答复了",不该当成本地待发`);
+  }
 });

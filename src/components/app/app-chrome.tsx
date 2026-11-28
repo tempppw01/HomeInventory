@@ -47,7 +47,7 @@ export function AppChrome({ children }: { children?: React.ReactNode }) {
     qrItem, setQrItem, aiItem, setAiItem, printItems, setPrintItems, chatOpen, setChatOpen, chatSeed, setChatSeed,
     showWelcome, dismissWelcome, toast, toastAction, setToast, setToastAction,
     openEdit, openDetail, uploadItemImage, duplicateItem, copyText, removeShopping, consume,
-    updateRemaining, removeItem, mergeItems, pauseRestock, addRestockSuggestion, toggleShopping, toggleFavoriteShopping,
+    updateRemaining, removeItem, mergeItems, pauseRestock, addRestockSuggestion, addShoppingItem, toggleShopping, toggleFavoriteShopping,
     toggleTask, deleteTask,
   } = app;
 
@@ -174,7 +174,7 @@ export function AppChrome({ children }: { children?: React.ReactNode }) {
 
       <AnimatePresence>
         {modal === "item" && <ItemModal locations={data?.locations ?? []} allItems={data?.items ?? []} item={editing} aiAvailable={aiAvailable} canConfigureAi={!readOnly && role === "ADMIN"} onConfigureAi={() => { closeModal(); openView("settings"); }} onClose={closeModal} onSaved={async () => { closeModal(); setToast(editing ? "物品已更新" : "物品已录入"); await refresh(); }} />}
-        {modal === "shopping" && <ShoppingModal onClose={closeModal} onSaved={async () => { closeModal(); setToast("已加入采购清单"); await refresh(); }} />}
+        {modal === "shopping" && <ShoppingModal onClose={closeModal} onAdd={addShoppingItem} />}
         {modal === "task" && <TaskModal onClose={closeModal} onSaved={async () => { closeModal(); setToast("任务已安排"); await refresh(); }} />}
         {modal === "location" && <LocationModal location={editingLocation} locations={data?.locations ?? []} onClose={closeModal} onSaved={async () => { const wasEditing = Boolean(editingLocation); closeModal(); setToast(wasEditing ? "空间已更新" : "新空间已创建"); await refresh(); }} />}
         {modal === "notifications" && <NotificationsModal lowStock={lowStock} expiring={expiring} expired={expired} onClose={closeModal} onOpenItem={(item) => { closeModal(); openEdit(item); }} onOpenDetail={(item) => { closeModal(); openDetail(item); }} onDispose={removeItem} weeklyReview={data?.preferences} onStartReview={() => { closeModal(); openView("audit"); }} onShopping={() => { closeModal(); openView("items"); }} />}

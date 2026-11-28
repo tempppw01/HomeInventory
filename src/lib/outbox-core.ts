@@ -73,6 +73,21 @@ export function pendingCount(queue: readonly OutboxOperation[]): number {
   return queue.length;
 }
 
+/**
+ * 这次失败该不该**记进队列等下次**?
+ *
+ * 只有"根本没拿到响应"(`status === null`:断网、连接被掐)才记。
+ * 服务端明确拒绝(校验不过、没权限、重复)记下来没有意义 —— 恢复网络后重放一次还是被拒,
+ * 而它会把队列里后面的操作一起堵在第一位。
+ *
+ * 注意这与 {@link isRetryable} 不是一回事:那个管的是"已经在队列里的一条,下次还要不要再试"
+ * (5xx / 429 / 408 值得再试),这个管的是"要不要把它收进队列"(只有网络层失败才收)。
+ * 两种判断混用会出两种错:把 400 收进队列 → 队列卡死;把断网当拒绝 → 用户的改动直接丢。
+ */
+export function shouldQueue(status: number | null): boolean {
+  return status === null;
+}
+
 /** 队列里最老的一条:重放要按顺序来,不然「先建后改」会乱。 */
 export function oldest(queue: readonly OutboxOperation[]): OutboxOperation | null {
   return queue.reduce<OutboxOperation | null>((best, row) => (!best || row.createdAt < best.createdAt ? row : best), null);
