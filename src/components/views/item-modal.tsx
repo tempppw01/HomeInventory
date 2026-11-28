@@ -23,7 +23,7 @@ import { guessItemType, ItemTypeGuess } from "@/lib/item-type-guess";
 import { ItemDraft, SavedItemTemplate, emptyDraft, compressImage, categories, units, itemTemplateStorageKey, dateInputValue, purchaseDatePresets, expiryDatePresets, purchaseAgeLabel, isMoneyInput, moneyValue, normalizedItemName, findCommonItemTemplate, request } from "../shared";
 import { Modal, ImageLightbox } from "./modals";
 import { localDateString, localDateOf } from "@/lib/local-date";
-export function ItemModal({ locations, allItems, item, onClose, onSaved, aiAvailable = true, canConfigureAi = false, onConfigureAi }: { locations: Location[]; allItems: Item[]; item: Item | null; onClose: () => void; onSaved: () => void; aiAvailable?: boolean; canConfigureAi?: boolean; onConfigureAi?: () => void }) {
+export function ItemModal({ locations, allItems, item, onClose, onSaved, onCreate, aiAvailable = true, canConfigureAi = false, onConfigureAi }: { locations: Location[]; allItems: Item[]; item: Item | null; onClose: () => void; onSaved: (info?: { queued?: boolean }) => void; onCreate?: (payload: Record<string, unknown>, name: string) => Promise<{ ok: boolean; queued?: boolean; message?: string }>; aiAvailable?: boolean; canConfigureAi?: boolean; onConfigureAi?: () => void }) {
   // A second click could still fire before the `saving` state renders, so the
   // guard is a ref: the first call wins and the duplicate returns immediately.
   const submittingRef = useRef(false);
@@ -182,7 +182,21 @@ export function ItemModal({ locations, allItems, item, onClose, onSaved, aiAvail
     setSaving(true); setError("");
     try {
       const payload = { ...(draft.type === "DURABLE" ? { ...draft, expiryDate: "" } : draft), quantity, price: parsedPrice };
-      await request(item ? `/api/items/${item.id}` : "/api/items", { method: item ? "PATCH" : "POST", body: JSON.stringify({ ...payload, recordPurchase, purchaseStore }) });
+      const body = { ...payload, recordPurchase, purchaseStore };
+      // 录入物品走 provider 的动作:在线时它带同一把 opId 直发,断网时记进离线队列。
+      // (编辑物品仍是直发 —— 那是"覆盖类"动作,冲突策略还没定,先不动。)
+      if (!item && onCreate) {
+        const result = await onCreate(body, draft.name);
+        if (!result.ok) {
+          submittingRef.current = false;
+          setSaving(false);
+          setError(result.message ?? "保存失败");
+          return;
+        }
+        onSaved({ queued: result.queued });
+        return;
+      }
+      await request(`/api/items/${item?.id}`, { method: "PATCH", body: JSON.stringify(body) });
     } catch (e) {
       // 只有失败才释锁:成功时弹层正在退场,提前释锁会让第二次点击重复提交(P1-2)。
       submittingRef.current = false;
@@ -191,8 +205,7 @@ export function ItemModal({ locations, allItems, item, onClose, onSaved, aiAvail
       return;
     }
     onSaved();
-  };
-  const dailyCostPreview = dailyUsageCost({ type: draft.type, price: draft.price === "" ? null : moneyValue(draft.price), purchaseDate: draft.purchaseDate || null });
+  };  const dailyCostPreview = dailyUsageCost({ type: draft.type, price: draft.price === "" ? null : moneyValue(draft.price), purchaseDate: draft.purchaseDate || null });
   const draftAi = itemAiHighlights(draft);
   // 药品的有效期是最关键的一项,但「快速保存」路径会跳过它。这里在保存前给出就地引导。
   const isMedicine = isMedicineCategory(draft.category);

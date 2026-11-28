@@ -9,6 +9,7 @@ import { itemInsightFields } from "@/lib/item-insight";
 import { enqueueItemAnalysis } from "@/lib/ai-queue";
 import { ensureRestockSuggestion } from "@/lib/restock-suggestion";
 import { compressedJson } from "@/lib/next-json";
+import { normalizeOpId, runOnce } from "@/lib/idempotency";
 
 export async function GET(request: NextRequest) {
   try {
@@ -41,7 +42,10 @@ export async function POST(request: NextRequest) {
     const { recordPurchase, purchaseStore, ...parsed } = itemSchema.parse(await request.json());
     const normalized = { ...parsed, quantity: normalizeItemQuantity(parsed.quantity, parsed.unit) };
     const data = normalized.type === "DURABLE" ? { ...normalized, expiryDate: null } : normalized;
-    const item = await prisma.$transaction(async (tx) => {
+    // 客户端(含离线队列重放)带的唯一操作号:同一个号只录入一次。
+    // 断网时记下的「录入物品」会在恢复网络后重放,而重放多一次就是家里凭空多一件东西。
+    const opId = normalizeOpId(request.headers.get("x-guiwu-op-id"));
+    const outcome = await runOnce(opId, "item.create", () => prisma.$transaction(async (tx) => {
       // 后台自动洞察:不依赖任何用户操作,保存时就把存放建议与标签算好。
       const created = await tx.item.create({ data: { ...data, itemCode: createItemCode(), ...itemInsightFields({ name: data.name, category: data.category, unit: data.unit, type: data.type as unknown as "DURABLE" | "CONSUMABLE" }) }, include: { location: true } });
       if (recordPurchase && data.price != null) {
@@ -49,7 +53,14 @@ export async function POST(request: NextRequest) {
       }
       await tx.activityLog.create({ data: { action: "CREATE", itemId: created.id, itemName: created.name, userId: user.id, detail: "录入物品" } });
       return created;
-    });
+    }));
+    if (outcome.replay) {
+      // 重放:上次已经录进去了。有结果就把上次那条原样回给他(多一个 deduplicated 标记);
+      // 结果还没写回来时说清「在处理」,**绝不重复建一件**。
+      if (outcome.result) return NextResponse.json({ ...outcome.result, deduplicated: true }, { status: 201 });
+      return NextResponse.json({ error: "这件物品正在录入,请稍后刷新", deduplicated: true }, { status: 503 });
+    }
+    const item = outcome.result;
 
     // 放进事务里:此前是「先查后建」,并发请求会各建一条(实测 6 个并发 → 6 条重复建议)
     await prisma.$transaction((tx) => ensureRestockSuggestion(tx, item));

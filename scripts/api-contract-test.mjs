@@ -345,6 +345,31 @@ const baseItem = { name: "T-基础物品", category: "日用", type: "CONSUMABLE
     const mine = (after.body?.shopping ?? []).filter((row) => row.name === "T-幂等采购");
     record("shopping", "重放没有多建一条、也没有翻倍", mine.length === 1 && mine[0]?.quantity === 1, `命中=${mine.length} 数量=${mine.map((row) => row.quantity).join(",")}`);
   }
+
+  // 录入物品的同一次操作重放:离线时记下的「录入物品」,联网后可能被重发。
+  // 服务端必须认得出同一把 opId —— 否则家里会凭空多一件东西(而且两件看起来一模一样)。
+  {
+    const opId = `contract-item-${Date.now().toString(36)}`;
+    const payload = JSON.stringify({ ...baseItem, name: "T-幂等物品", quantity: 1 });
+    const headers = { cookie: cookies, "content-type": "application/json", "x-guiwu-op-id": opId };
+    const first = await fetchWithRetry(`${BASE}/api/items`, { method: "POST", headers, body: payload });
+    const firstBody = await first.json().catch(() => null);
+    if (firstBody?.id) created.items.push(firstBody.id);
+    record("items", "带 opId 创建物品", first.status === 201 || first.status === 200, `status=${first.status} id=${firstBody?.id ?? "?"}`);
+
+    const second = await fetchWithRetry(`${BASE}/api/items`, { method: "POST", headers, body: payload });
+    const secondBody = await second.json().catch(() => null);
+    record(
+      "items",
+      "同一个 opId 重放:服务端认得出,回的是上次那条",
+      secondBody?.deduplicated === true && Boolean(firstBody?.id) && secondBody?.id === firstBody.id,
+      `第一次=${first.status}/${firstBody?.id ?? "?"} 第二次=${second.status}/${JSON.stringify(secondBody).slice(0, 120)}`,
+    );
+
+    const listed = await call("GET", "/api/items?includeDeleted=1");
+    const rows = (Array.isArray(listed.body) ? listed.body : (listed.body?.items ?? [])).filter((row) => row.name === "T-幂等物品");
+    record("items", "重放没有多录一件", rows.length === 1, `命中=${rows.length}`);
+  }
 }
 
 // ============ 5b. 采购完成 → 入库(精确核对数量)============

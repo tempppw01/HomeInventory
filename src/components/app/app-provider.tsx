@@ -537,6 +537,33 @@ function useAppState() {
    * (服务端其实已经建好了),重放时服务端认得出这个号,不会多建一条。
    * 「点一次、清单里多两条」这种正是幂等要挡的事。
    */
+  /**
+   * 录入物品 —— 离线也能记下来(队列接的第三个动作)。
+   *
+   * 与「加入采购清单」同一套规矩:在线时带**同一把 opId 直发**,只有拿不到响应才入队 ——
+   * 校验类的错误(名称不合法等)必须原样回到弹窗:入队重放一次还是被拒,而它会把队列里
+   * 后面的操作一起堵住。opId 两边共用,则保证"响应在路上丢了"不会变成"家里多一件"。
+   *
+   * 这里**不做乐观插入**:离线时列表里不会先冒出一件半成品。那会让人以为自己已经录进去了;
+   * 横幅会如实说「有 N 条改动还没同步」,联网后它自己出现。
+   */
+  const addItem = async (payload: Record<string, unknown>, name: string) => {
+    const operation = makeOperation({ method: "POST", url: "/api/items", body: payload, label: `录入物品 · ${name}` });
+    try {
+      await request(operation.url, { method: "POST", body: JSON.stringify(payload), headers: { "x-guiwu-op-id": operation.opId } });
+      await refresh();
+      return { ok: true as const, queued: false };
+    } catch (error) {
+      const status = typeof (error as { status?: number })?.status === "number" ? (error as { status: number }).status : null;
+      if (!shouldQueue(status)) return { ok: false as const, message: error instanceof Error ? error.message : "保存失败" };
+      await putOperation(operation);
+      setToast(`「${name}」已记下,联网后自动录入`);
+      setToastAction(null);
+      await refreshQueue();
+      return { ok: true as const, queued: true };
+    }
+  };
+
   const addShoppingItem = async (input: { name: string; quantity: number; unit: string }) => {
     const body = { name: input.name, quantity: input.quantity, unit: input.unit, priority: 1, source: "manual" };
     const operation = makeOperation({ method: "POST", url: "/api/shopping", body, label: `加入采购清单 · ${input.name}` });
@@ -625,7 +652,7 @@ function useAppState() {
     chatOpen, setChatOpen, chatSeed, setChatSeed, openChatWith, showWelcome, dismissWelcome,
     toast, toastAction, setToast,
     openEdit, openDetail, uploadItemImage, duplicateItem, copyText, removeShopping, consume, pending,
-    updateRemaining, removeItem, mergeItems, pauseRestock, addRestockSuggestion, addShoppingItem, toggleShopping, toggleFavoriteShopping,
+    updateRemaining, removeItem, mergeItems, pauseRestock, addRestockSuggestion, addItem, addShoppingItem, toggleShopping, toggleFavoriteShopping,
     toggleTask, deleteTask,
   };
 }
