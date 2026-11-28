@@ -2,7 +2,10 @@
 //
 // 这是此前「已知未覆盖」清单里的一条。产品的承诺写在 public/sw.js 与 /offline 页面里:
 //   · 只缓存「页面外壳 + 静态资源」,**不缓存 /api 响应**
-//   · 断网时给出说明页,而不是让人看到过期的库存数字
+//   · 断网时给出**带时间戳的快照**(v0.1.120 起;此前是「只给说明页、不给任何数据」)。
+//     这条契约在 2026-11-28 被有意改掉:用户要求「没网时能离线缓存」。底线换成另一种形式 ——
+//     看得见,但必须标明是快照、是多久之前的;套件因此同时守两件事:数据在 **且** 标着时间。
+//   · 什么都没有缓存(或缓存被清掉)时才退回 /offline 说明页。
 //     (家庭账目最忌讳拿旧数据做决定)
 // 这里从用户视角验证:断网后能看到说明页、看不到旧数据、恢复网络后一切正常。
 //
@@ -85,7 +88,7 @@ const itemName = await page.evaluate(() => {
 });
 console.log(`      在线时列表里有:${itemName ?? "(没抓到物品名)"}`);
 
-// ---------- ② 断网后导航:应落到离线说明页 ----------
+// ---------- 2 断网后导航:应留在这一页,并标出「这是快照」 ----------
 //
 // 关键:**另开一页**来导航。复用刚加载完的那一页会测到别的东西 ——
 // 离线后那个页面自己的数据刷新会失败并触发错误边界,于是看到的是通用错误页,
@@ -106,14 +109,21 @@ try {
 }
 
 check("断网后仍能看到页面(不是浏览器错误页)", Boolean(offline?.text || offline?.hasReload), JSON.stringify(offline).slice(0, 160));
-check("断网后落到离线说明页(地址变成 /offline)", offline?.url === "/offline", `实际地址=${offline?.url ?? "?"}`);
-check("说明页解释了为什么看不到数据", Boolean(offline?.text && /没有网络|离线/.test(offline.text)), (offline?.text ?? "").slice(0, 160));
-check("提供了重新加载的入口", Boolean(offline?.hasReload), (offline?.text ?? "").slice(0, 160));
+// 新契约:断网后**保持这一页**(缓存整页 + 缓存的数据),不再跳到 /offline。
+// 旧断言是 `url === "/offline"` —— 它守的是改掉之前的行为;改契约就得同步改断言,
+// 否则 CI 会用一条「正确的旧断言」把新行为判成错的(2026-11-28 实测:v0.1.120 就是这么红掉的)。
+check("断网后仍留在这一页(不再跳到离线页)", offline?.url === "/items", `实际地址=${offline?.url ?? "?"}`);
+check("离线时看到了数据快照横幅", Boolean(offline?.text && /快照/.test(offline.text)), (offline?.text ?? "").slice(0, 200));
+check("横幅说清了数据是多久之前的(不许假装新鲜)", Boolean(offline?.text && /上次同步/.test(offline.text)), (offline?.text ?? "").slice(0, 200));
+check("横幅说明了恢复网络后会自动刷新", Boolean(offline?.text && /会自动刷新/.test(offline.text)), (offline?.text ?? "").slice(0, 200));
 
-// ---------- ③ 关键承诺:离线时不显示过期数据 ----------
+// ---------- 3 关键承诺(新契约):离线时**看得见**数据,但必须标明是快照 ----------
+//
+// 旧契约是「离线时不显示库存数据」;v0.1.120 有意改成「看得见 + 横幅标明时间」。
+// 这条断言因此反过来了 —— 但它守的东西没变:不许让人**不知道**自己看的是旧数字。
 if (itemName) {
-  const showsStale = Boolean(offline?.text && offline.text.includes(itemName));
-  check("离线时不显示库存数据(避免拿旧数字做决定)", !showsStale, `离线页里出现了「${itemName}」`);
+  const showsItems = Boolean(offline?.text && offline.text.includes(itemName));
+  check("离线时看得见缓存的数据(这是本版有意改掉的行为)", showsItems, `离线页里没有出现「${itemName}」`);
 } else {
   console.log("      跳过「离线不显示库存数据」:在线时没抓到物品名,无法比对");
 }
