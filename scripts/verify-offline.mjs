@@ -88,12 +88,21 @@ check("离线页已经进了 Service Worker 的缓存(断网导航才有东西�
 check("离线数据快照已经缓存(/api/dashboard)—— 断网时才看得见数据", cacheState.hasDashboard, `缓存=${JSON.stringify(cacheState)}`);
 
 // 记下一件在线时看得见的物品,断网后要确认它**不会**出现
-const itemName = await page.evaluate(() => {
+// 在线时看得见什么:**件数**当主依据(卡片/列表两种显示模式下都有「N 件」),
+// 名字只从**真实渲染出来的行**取 —— 整页文本里可能混进「已用完」物品的名字,
+// 而它们按设计不显示,拿它做断言必然失败(2026-11-28 CI 实测:抓到「已过期酸奶」,
+// 而缓存快照 11 件、页面列表 9 件,正是那两件已用完的)。
+const captured = await page.evaluate(() => {
   const text = document.querySelector("main")?.innerText || "";
-  const match = text.match(/[\u4e00-\u9fa5]{2,8}(胶囊|口罩|鲜奶|啤酒|汽水|山泉|酸奶|气雾剂)/);
-  return match ? match[0] : null;
+  const countMatch = text.match(/(\d+)\s*件/);
+  const button = document.querySelector('button[aria-label^="上传「"]');
+  const label = button?.getAttribute("aria-label") || "";
+  const name = label.replace(/^上传「/, "").replace(/」的照片$/, "").trim();
+  return { count: countMatch ? countMatch[1] : null, name: name || null };
 });
-console.log(`      在线时列表里有:${itemName ?? "(没抓到物品名)"}`);
+const itemName = captured.name;
+const listCount = captured.count;
+console.log(`      在线时列表里有:${itemName ?? "(没抓到物品名)"};计数=${listCount ?? "(没抓到 N 件)"}`);
 
 // ---------- 2 断网后导航:应留在这一页,并标出「这是快照」 ----------
 //
@@ -152,14 +161,20 @@ check("横幅说明了恢复网络后会自动刷新", Boolean(offline?.text && 
 //
 // 旧契约是「离线时不显示库存数据」;v0.1.120 有意改成「看得见 + 横幅标明时间」。
 // 这条断言因此反过来了 —— 但它守的东西没变:不许让人**不知道**自己看的是旧数字。
+const showsCount = Boolean(listCount && offline?.text && offline.text.includes(`${listCount} 件`));
+// 主断言:断网后列表里**仍是同样的件数** —— 与「卡片显示 / 列表显示」无关,也不依赖具体是哪一件。
+check(
+  `离线时列表里仍是 ${listCount ?? "?"} 件(数据看得见)`,
+  showsCount,
+  `online=${offline?.online} · 缓存快照件数=${offline?.cachedItems} · 页面=${(offline?.text ?? "").slice(0, 220)}`,
+);
 if (itemName) {
-  const showsItems = Boolean(offline?.text && offline.text.includes(itemName));
-  check("离线时看得见缓存的数据(这是本版有意改掉的行为)", showsItems, `离线页里没有出现「${itemName}」 · online=${offline?.online} · 缓存快照件数=${offline?.cachedItems} · 页面=${(offline?.text ?? "").slice(0, 200)}`);
+  check("离线时看得见在线时那件物品", Boolean(offline?.text && offline.text.includes(itemName)), `没出现「${itemName}」`);
 } else {
-  console.log("      跳过「离线不显示库存数据」:在线时没抓到物品名,无法比对");
+  console.log("      跳过「离线看得见那件物品」:在线时没抓到具体物品名(列表显示模式下没有卡片按钮)");
 }
 
-// ---------- ④ 恢复网络后回到可用状态 ----------
+// ---------- 4 恢复网络后回到可用状态 ----------
 await context.setOffline(false);
 await offlinePage.goto(`${BASE}/items`, { waitUntil: "domcontentloaded", timeout: 20000 });
 await offlinePage.waitForTimeout(2800);
